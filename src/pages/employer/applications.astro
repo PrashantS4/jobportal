@@ -1,0 +1,758 @@
+---
+import { getResumeViewerUrl } from '../../lib/resume-helper';
+import DashboardLayout from '../../layouts/DashboardLayout.astro';
+import { getDb } from '../../lib/db';
+import { applications, jobPostings, users } from '../../db/schema';
+import { eq, desc, and } from 'drizzle-orm';
+
+const payload = Astro.locals.user;
+if (!payload || payload.userType !== 'employer') {
+  return Astro.redirect('/login');
+}
+
+const statusFilter = Astro.url.searchParams.get('status') || '';
+const jobFilter = Astro.url.searchParams.get('jobId') || '';
+
+const db = getDb();
+
+let query = db.select({
+  id: applications.id,
+  status: applications.status,
+  appliedAt: applications.appliedAt,
+  jobTitle: jobPostings.jobTitle,
+  jobId: jobPostings.id,
+  applicantFirstName: users.firstName,
+  applicantLastName: users.lastName,
+  applicantEmail: users.email,
+  resumeUrl: applications.resumeUrl,
+  aiScore: applications.aiScore
+})
+.from(applications)
+.innerJoin(jobPostings, eq(applications.jobPostingId, jobPostings.id))
+.innerJoin(users, eq(applications.applicantId, users.id))
+.where(eq(applications.employerId, payload.userId));
+
+const allEmployerApps = await query.orderBy(desc(applications.appliedAt)).all();
+
+const jobSpecificApps = jobFilter ? allEmployerApps.filter(a => a.jobId === jobFilter) : allEmployerApps;
+const currentJobTitle = jobSpecificApps[0]?.jobTitle || (jobFilter ? 'Selected Job' : '');
+
+// Filter in-memory if query params provided
+let filteredApps = jobSpecificApps;
+if (statusFilter) {
+  filteredApps = filteredApps.filter(a => a.status === statusFilter);
+}
+
+const counts = {
+  all: jobSpecificApps.length,
+  received: jobSpecificApps.filter(a => a.status === 'received').length,
+  under_review: jobSpecificApps.filter(a => a.status === 'under_review').length,
+  shortlisted: jobSpecificApps.filter(a => a.status === 'shortlisted').length,
+  accepted: jobSpecificApps.filter(a => a.status === 'accepted').length,
+  rejected: jobSpecificApps.filter(a => a.status === 'rejected').length,
+};
+
+const getTabUrl = (status?: string) => {
+  const params = new URLSearchParams();
+  if (jobFilter) params.set('jobId', jobFilter);
+  if (status) params.set('status', status);
+  const qs = params.toString();
+  return `/employer/applications${qs ? `?${qs}` : ''}`;
+};
+---
+
+<DashboardLayout title="Applications Management" userType="employer" activePath="/employer/applications">
+  <div class="header-content mb-4">
+    <div>
+      <span class="badge-tag">Recruiter Workspace</span>
+      <h1>Received Applications</h1>
+      <p class="subtitle">
+        {jobFilter ? `Viewing candidates who applied for "${currentJobTitle}"` : 'Review applicant submissions, compatibility scores, and update candidate hiring stages.'}
+      </p>
+    </div>
+    <a href={jobFilter ? `/employer/screening?jobId=${jobFilter}` : '/employer/screening'} class="btn btn-primary btn-sm btn-header-ai">
+      ⚡ AI Smart Screening & Ranking
+    </a>
+  </div>
+
+  {jobFilter && (
+    <div class="active-filter-banner mb-4">
+      <div class="active-filter-info">
+        <span class="filter-icon">💼</span>
+        <span>Filtered by Job: <strong>{currentJobTitle}</strong> ({jobSpecificApps.length} applicants)</span>
+      </div>
+      <a href="/employer/applications" class="clear-filter-btn" title="View all applications across all jobs">
+        ✕ Show All Jobs ({allEmployerApps.length})
+      </a>
+    </div>
+  )}
+
+  <!-- Status Filter Pills Tabs -->
+  <div class="filter-tabs mb-4">
+    <a href={getTabUrl()} class={`tab-pill ${!statusFilter ? 'active' : ''}`}>
+      All Applications <span class="tab-count">{counts.all}</span>
+    </a>
+    <a href={getTabUrl('received')} class={`tab-pill ${statusFilter === 'received' ? 'active' : ''}`}>
+      Received <span class="tab-count">{counts.received}</span>
+    </a>
+    <a href={getTabUrl('under_review')} class={`tab-pill ${statusFilter === 'under_review' ? 'active' : ''}`}>
+      Under Review <span class="tab-count">{counts.under_review}</span>
+    </a>
+    <a href={getTabUrl('shortlisted')} class={`tab-pill ${statusFilter === 'shortlisted' ? 'active' : ''}`}>
+      Shortlisted <span class="tab-count">{counts.shortlisted}</span>
+    </a>
+    <a href={getTabUrl('accepted')} class={`tab-pill ${statusFilter === 'accepted' ? 'active' : ''}`}>
+      Hired / Accepted <span class="tab-count">{counts.accepted}</span>
+    </a>
+    <a href={getTabUrl('rejected')} class={`tab-pill ${statusFilter === 'rejected' ? 'active' : ''}`}>
+      Rejected <span class="tab-count">{counts.rejected}</span>
+    </a>
+  </div>
+
+  <div class="applications-container">
+    {filteredApps.length === 0 ? (
+      <div class="empty-state">
+        <div class="empty-icon">📂</div>
+        <h3>No applications match this filter</h3>
+        <p>There are no candidate applications currently under "{statusFilter ? statusFilter.replace('_', ' ') : 'All'}".</p>
+        <a href="/employer/applications" class="btn btn-outline mt-3">View All Applications</a>
+      </div>
+    ) : (
+      <div class="table-responsive">
+        <table class="data-table" id="applications-table">
+          <thead>
+            <tr>
+              <th>Applicant Name</th>
+              <th>Applied Role</th>
+              <th style="cursor: pointer;" title="Sort by AI Match">AI Match ↕️</th>
+              <th>Status</th>
+              <th>Submitted Date</th>
+              <th class="col-actions">Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {filteredApps.map((app) => (
+              <tr data-score={app.aiScore || 0} class="app-row">
+                <td class="col-applicant">
+                  <div class="applicant-cell">
+                    <div class="applicant-avatar">
+                      {(app.applicantFirstName?.[0] || 'C').toUpperCase()}
+                    </div>
+                    <div>
+                      <strong class="applicant-name">{app.applicantFirstName} {app.applicantLastName}</strong>
+                      <span class="applicant-email">{app.applicantEmail}</span>
+                    </div>
+                  </div>
+                </td>
+                <td class="col-role">
+                  <span class="job-role-text">💼 {app.jobTitle}</span>
+                </td>
+                <td class="col-match">
+                  <div class="mobile-badges-wrapper">
+                    {app.aiScore !== null ? (
+                      <span class="match-score-pill" style={`background: ${app.aiScore >= 80 ? 'rgba(16, 185, 129, 0.12)' : app.aiScore >= 50 ? 'rgba(245, 158, 11, 0.12)' : 'rgba(239, 68, 68, 0.12)'}; color: ${app.aiScore >= 80 ? '#10b981' : app.aiScore >= 50 ? '#f59e0b' : '#ef4444'}; border: 1px solid ${app.aiScore >= 80 ? 'rgba(16, 185, 129, 0.3)' : app.aiScore >= 50 ? 'rgba(245, 158, 11, 0.3)' : 'rgba(239, 68, 68, 0.3)'};`}>
+                        ✨ {app.aiScore}% Match
+                      </span>
+                    ) : (
+                      <div class="match-calc-wrap">
+                        <span class="badge-na">N/A</span>
+                        <button class="btn-icon btn-recalculate" data-id={app.id} title="Calculate AI Match">
+                          <span class="icon">⟳</span>
+                        </button>
+                      </div>
+                    )}
+                    <span class={`status-pill status-${app.status} desktop-status-pill`}>
+                      {app.status.replace('_', ' ').toUpperCase()}
+                    </span>
+                  </div>
+                </td>
+                <td class="col-status">
+                  <span class={`status-pill status-${app.status} mobile-only-status`}>
+                    {app.status.replace('_', ' ').toUpperCase()}
+                  </span>
+                </td>
+                <td class="col-date">
+                  <span class="date-text">
+                    📅 {app.appliedAt ? new Date(app.appliedAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : '—'}
+                  </span>
+                </td>
+                <td class="col-actions">
+                  <div class="mobile-footer-line">
+                    <span class="mobile-date-val">
+                      📅 {app.appliedAt ? new Date(app.appliedAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : '—'}
+                    </span>
+                  </div>
+                  <div class="actions">
+                    {app.resumeUrl && (
+                      <a href={getResumeViewerUrl(app.resumeUrl, Astro.url.origin)} target="_blank" class="btn-action-icon" title="View Resume PDF">
+                        <svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
+                      </a>
+                    )}
+                    <a
+                      href={`/employer/interviews?appId=${app.id}&action=schedule`}
+                      class="btn btn-outline btn-sm btn-schedule"
+                      title="Schedule Interview Round"
+                    >
+                      <span>📅</span> Schedule
+                    </a>
+                    <a href={`/employer/applications/${app.id}`} class="btn btn-primary btn-sm btn-review" title="View & Review Application">
+                      Review &rarr;
+                    </a>
+                  </div>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    )}
+  </div>
+</DashboardLayout>
+
+<script>
+  // Simple client-side sorting for AI Match score
+  document.addEventListener('DOMContentLoaded', () => {
+    const table = document.getElementById('applications-table');
+    if (!table) return;
+    
+    const thead = table.querySelector('thead');
+    const tbody = table.querySelector('tbody');
+    if (!thead || !tbody) return;
+    
+    const ths = thead.querySelectorAll('th');
+    if (ths.length < 3) return;
+    
+    const sortBtn = ths[2]; // AI Match header
+    let sortDesc = true;
+    
+    sortBtn.addEventListener('click', () => {
+      const rows = Array.from(tbody.querySelectorAll('tr'));
+      
+      rows.sort((a, b) => {
+        const scoreA = parseInt(a.getAttribute('data-score') || '0', 10);
+        const scoreB = parseInt(b.getAttribute('data-score') || '0', 10);
+        return sortDesc ? scoreB - scoreA : scoreA - scoreB;
+      });
+      
+      sortDesc = !sortDesc;
+      sortBtn.textContent = `AI Match ${sortDesc ? '⬇️' : '⬆️'}`;
+      
+      rows.forEach(r => tbody.appendChild(r));
+    });
+
+    // Handle recalculating AI Match button
+    const recalcBtns = document.querySelectorAll('.btn-recalculate');
+    recalcBtns.forEach(btn => {
+      btn.addEventListener('click', async (e) => {
+        e.preventDefault();
+        const appId = btn.getAttribute('data-id');
+        if (!appId) return;
+
+        btn.classList.add('spinning');
+        try {
+          const res = await fetch('/api/employer/recalculate-match', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ applicationId: appId })
+          });
+          const data = await res.json();
+          if (res.ok && data.success) {
+            // @ts-ignore
+            if (window.showToast) window.showToast('AI Match Score calculated successfully!');
+            window.location.reload();
+          } else {
+            // @ts-ignore
+            if (window.showToast) window.showToast(data.error || 'Failed to calculate match score', 'error');
+          }
+        } catch (err) {
+          // @ts-ignore
+          if (window.showToast) window.showToast('Network error while calculating match', 'error');
+        } finally {
+          btn.classList.remove('spinning');
+        }
+      });
+    });
+  });
+</script>
+
+<style>
+  .mb-4 { margin-bottom: 1.5rem; }
+  .mt-3 { margin-top: 1rem; }
+
+  .header-content {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-end;
+    flex-wrap: wrap;
+    gap: 1rem;
+  }
+
+  .badge-tag {
+    display: inline-block;
+    padding: 0.25rem 0.75rem;
+    background: rgba(99, 102, 241, 0.15);
+    color: var(--color-primary);
+    border-radius: 9999px;
+    font-size: 0.75rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin-bottom: 0.4rem;
+  }
+
+  .header-content h1 {
+    margin: 0 0 0.3rem 0;
+    font-size: 1.75rem;
+    font-weight: 800;
+    color: var(--color-text-main);
+  }
+
+  .subtitle {
+    margin: 0;
+    font-size: 0.95rem;
+    color: var(--color-text-muted);
+  }
+
+  .btn-header-ai {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    text-decoration: none;
+    font-weight: 700;
+  }
+
+  .active-filter-banner {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.75rem 1.25rem;
+    background: rgba(99, 102, 241, 0.08);
+    border: 1px solid rgba(99, 102, 241, 0.2);
+    border-radius: var(--border-radius-md);
+    font-size: 0.88rem;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+
+  .active-filter-info {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    color: var(--color-text-main);
+  }
+
+  .clear-filter-btn {
+    color: var(--color-primary);
+    text-decoration: none;
+    font-size: 0.82rem;
+    font-weight: 700;
+  }
+  .clear-filter-btn:hover { text-decoration: underline; }
+
+  .filter-tabs {
+    display: flex;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+  }
+
+  .tab-pill {
+    padding: 0.55rem 1rem;
+    border-radius: 9999px;
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    color: var(--color-text-muted);
+    font-size: 0.85rem;
+    font-weight: 600;
+    text-decoration: none;
+    transition: all 0.2s ease;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+  }
+  .tab-pill:hover {
+    border-color: var(--color-primary);
+    color: var(--color-text-main);
+  }
+  .tab-pill.active {
+    background: var(--color-primary);
+    color: white;
+    border-color: var(--color-primary);
+    box-shadow: 0 4px 12px rgba(99, 102, 241, 0.25);
+  }
+  .tab-pill.active .tab-count {
+    background: rgba(255, 255, 255, 0.25);
+    color: white;
+  }
+
+  .tab-count {
+    padding: 0.15rem 0.45rem;
+    border-radius: 9999px;
+    background: var(--color-bg);
+    color: var(--color-text-muted);
+    font-size: 0.75rem;
+    font-weight: 700;
+  }
+
+  .empty-state {
+    padding: 5rem 2rem;
+    text-align: center;
+    background: var(--color-surface);
+    backdrop-filter: blur(16px);
+    border-radius: var(--border-radius-lg);
+    border: 1px solid var(--color-border);
+  }
+  .empty-icon { font-size: 3rem; margin-bottom: 0.75rem; }
+  .empty-state h3 { margin: 0 0 0.5rem 0; font-size: 1.3rem; }
+  .empty-state p { color: var(--color-text-muted); margin: 0; }
+
+  .table-responsive {
+    overflow-x: auto;
+    background: var(--color-surface);
+    backdrop-filter: blur(16px);
+    border-radius: var(--border-radius-lg);
+    border: 1px solid var(--color-border);
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.04);
+  }
+
+  .data-table {
+    width: 100%;
+    border-collapse: collapse;
+    text-align: left;
+  }
+
+  .data-table th {
+    padding: 1.1rem 1.5rem;
+    font-weight: 700;
+    color: var(--color-text-muted);
+    font-size: 0.8rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    border-bottom: 1px solid var(--color-border);
+    background: rgba(255, 255, 255, 0.02);
+  }
+
+  .data-table td {
+    padding: 1.15rem 1.5rem;
+    border-bottom: 1px solid var(--color-border);
+    vertical-align: middle;
+  }
+
+  .app-row:hover {
+    background: rgba(99, 102, 241, 0.03);
+  }
+
+  .applicant-cell {
+    display: flex;
+    align-items: center;
+    gap: 0.85rem;
+  }
+
+  .applicant-avatar {
+    width: 38px;
+    height: 38px;
+    border-radius: 10px;
+    background: linear-gradient(135deg, #6366f1, #8b5cf6);
+    color: white;
+    font-weight: 800;
+    font-size: 1rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+  }
+
+  .applicant-name {
+    display: block;
+    font-size: 0.95rem;
+    color: var(--color-text-main);
+  }
+
+  .applicant-email {
+    font-size: 0.78rem;
+    color: var(--color-text-muted);
+  }
+
+  .job-role-text {
+    font-size: 0.92rem;
+    font-weight: 600;
+    color: var(--color-text-main);
+  }
+
+  .mobile-badges-wrapper {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+  }
+
+  .match-score-pill {
+    padding: 0.25rem 0.65rem;
+    border-radius: 9999px;
+    font-size: 0.75rem;
+    font-weight: 700;
+    display: inline-block;
+  }
+
+  .match-calc-wrap {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+  }
+
+  .badge-na {
+    padding: 0.2rem 0.5rem;
+    background: var(--color-bg);
+    border: 1px solid var(--color-border);
+    border-radius: 6px;
+    font-size: 0.75rem;
+    color: var(--color-text-muted);
+  }
+
+  .status-pill {
+    padding: 0.25rem 0.75rem;
+    border-radius: 9999px;
+    font-size: 0.72rem;
+    font-weight: 700;
+    display: inline-block;
+  }
+  .status-received { background: rgba(59, 130, 246, 0.15); color: #3b82f6; border: 1px solid rgba(59, 130, 246, 0.3); }
+  .status-under_review { background: rgba(245, 158, 11, 0.15); color: #f59e0b; border: 1px solid rgba(245, 158, 11, 0.3); }
+  .status-shortlisted { background: rgba(250, 204, 21, 0.15); color: #ca8a04; border: 1px solid rgba(250, 204, 21, 0.3); }
+  .status-accepted { background: rgba(16, 185, 129, 0.15); color: #10b981; border: 1px solid rgba(16, 185, 129, 0.3); }
+  .status-rejected { background: rgba(239, 68, 68, 0.15); color: #ef4444; border: 1px solid rgba(239, 68, 68, 0.3); }
+
+  .mobile-only-status {
+    display: none;
+  }
+
+  .mobile-footer-line {
+    display: none;
+  }
+
+  .date-text {
+    font-size: 0.85rem;
+    color: var(--color-text-muted);
+  }
+
+  .col-actions {
+    white-space: nowrap !important;
+    min-width: 240px;
+  }
+
+  .actions {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    white-space: nowrap !important;
+  }
+
+  .btn-schedule, .btn-review {
+    white-space: nowrap !important;
+    flex-shrink: 0 !important;
+    font-size: 0.82rem !important;
+    font-weight: 600 !important;
+    padding: 0.45rem 0.85rem !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    gap: 0.35rem !important;
+    line-height: 1.2 !important;
+  }
+
+  .btn-action-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 34px;
+    height: 34px;
+    border-radius: 8px;
+    background: var(--color-bg);
+    border: 1px solid var(--color-border);
+    transition: all 0.2s ease;
+    text-decoration: none;
+    flex-shrink: 0;
+  }
+  .btn-action-icon:hover {
+    background: var(--color-primary);
+    border-color: var(--color-primary);
+    color: white;
+    transform: translateY(-2px);
+  }
+
+  .btn-recalculate {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 26px;
+    height: 26px;
+    border-radius: 6px;
+    background: var(--color-bg);
+    border: 1px solid var(--color-border);
+    cursor: pointer;
+    color: var(--color-text-muted);
+    transition: all 0.2s ease;
+  }
+  .btn-recalculate:hover {
+    color: var(--color-primary);
+    border-color: var(--color-primary);
+  }
+
+  /* Responsive Mobile Layout Overhaul */
+  @media (max-width: 768px) {
+    .header-content {
+      flex-direction: column !important;
+      align-items: flex-start !important;
+      gap: 0.85rem !important;
+    }
+    .header-content h1 {
+      font-size: 1.35rem !important;
+    }
+    .btn-header-ai {
+      width: 100% !important;
+      justify-content: center !important;
+      text-align: center !important;
+      padding: 0.6rem 1rem !important;
+      font-size: 0.85rem !important;
+    }
+
+    .filter-tabs {
+      display: flex !important;
+      overflow-x: auto !important;
+      flex-wrap: nowrap !important;
+      gap: 0.4rem !important;
+      padding-bottom: 0.4rem !important;
+      touch-action: pan-x !important;
+      -webkit-overflow-scrolling: touch !important;
+      scrollbar-width: none !important;
+    }
+    .filter-tabs::-webkit-scrollbar {
+      display: none !important;
+    }
+    .tab-pill {
+      white-space: nowrap !important;
+      flex-shrink: 0 !important;
+      font-size: 0.78rem !important;
+      padding: 0.45rem 0.75rem !important;
+    }
+
+    .table-responsive {
+      background: transparent !important;
+      border: none !important;
+      box-shadow: none !important;
+      overflow: visible !important;
+    }
+
+    .data-table,
+    .data-table thead,
+    .data-table tbody {
+      display: block !important;
+      width: 100% !important;
+      box-sizing: border-box !important;
+    }
+
+    .data-table thead {
+      display: none !important;
+    }
+
+    .app-row {
+      background: var(--color-surface) !important;
+      backdrop-filter: blur(16px) !important;
+      border: 1px solid var(--color-border) !important;
+      border-radius: var(--border-radius-md) !important;
+      padding: 1.15rem 1rem !important;
+      margin-bottom: 1rem !important;
+      display: flex !important;
+      flex-direction: column !important;
+      gap: 0.65rem !important;
+      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.04) !important;
+    }
+
+    .data-table td {
+      padding: 0 !important;
+      border: none !important;
+    }
+
+    .applicant-cell {
+      gap: 0.75rem !important;
+    }
+    .applicant-name {
+      font-size: 0.95rem !important;
+      word-break: break-word !important;
+    }
+    .applicant-email {
+      font-size: 0.78rem !important;
+      word-break: break-all !important;
+    }
+
+    .col-role {
+      font-size: 0.9rem !important;
+      font-weight: 700 !important;
+      color: var(--color-primary) !important;
+    }
+
+    /* Wrap Match Pill & Status Pill in a clean horizontal flex row */
+    .mobile-badges-wrapper {
+      display: flex !important;
+      align-items: center !important;
+      gap: 0.5rem !important;
+      flex-wrap: wrap !important;
+      width: 100% !important;
+    }
+
+    .col-match {
+      width: 100% !important;
+      display: block !important;
+    }
+
+    .col-status {
+      display: none !important;
+    }
+
+    .desktop-status-pill {
+      display: inline-block !important;
+    }
+
+    .data-table td.col-date {
+      display: none !important;
+    }
+
+    .col-actions {
+      width: 100% !important;
+      display: flex !important;
+      flex-direction: column !important;
+      gap: 0.65rem !important;
+      padding-top: 0.75rem !important;
+      border-top: 1px solid var(--color-border) !important;
+      margin-top: 0.25rem !important;
+    }
+
+    .mobile-footer-line {
+      display: flex !important;
+      justify-content: space-between !important;
+      align-items: center !important;
+      width: 100% !important;
+    }
+
+    .mobile-date-val {
+      font-size: 0.8rem !important;
+      color: var(--color-text-muted) !important;
+      font-weight: 600 !important;
+    }
+
+    .actions {
+      width: 100% !important;
+      display: flex !important;
+      align-items: center !important;
+      gap: 0.5rem !important;
+    }
+
+    .btn-schedule, .btn-review {
+      flex: 1 !important;
+      text-align: center !important;
+      justify-content: center !important;
+      padding: 0.5rem 0.65rem !important;
+      font-size: 0.8rem !important;
+      white-space: nowrap !important;
+    }
+  }
+</style>

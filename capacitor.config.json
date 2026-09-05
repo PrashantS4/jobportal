@@ -1,0 +1,9 @@
+{
+  "appId": "com.recruitnest.app",
+  "appName": "RecruitNest",
+  "webDir": "dist",
+  "server": {
+    "url": "https://recruitnest.prashantsinghstd.workers.dev",
+    "cleartext": true
+  }
+}

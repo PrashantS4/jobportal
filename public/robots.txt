@@ -1,0 +1,19 @@
+# Robots.txt for RecruitNest
+User-agent: *
+Allow: /
+Allow: /jobs
+Allow: /pricing
+Allow: /about
+Allow: /privacy
+
+# Disallow private user & administrative dashboards
+Disallow: /dashboard
+Disallow: /settings
+Disallow: /employer/
+Disallow: /employee/
+Disallow: /admin/
+Disallow: /superadmin/
+Disallow: /api/
+
+# Dynamic Sitemap Location
+Sitemap: https://recruitnest.prashantsinghstd.workers.dev/sitemap.xml

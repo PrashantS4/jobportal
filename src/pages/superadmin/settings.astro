@@ -1,0 +1,433 @@
+---
+import DashboardLayout from '../../layouts/DashboardLayout.astro';
+import { getDb } from '../../lib/db';
+import { users } from '../../db/schema';
+import { desc, ne } from 'drizzle-orm';
+
+const user = Astro.locals.user;
+if (!user || user.userType !== "superadmin") {
+  return Astro.redirect("/login");
+}
+
+const db = getDb();
+const allUsers = await db.select().from(users).where(ne(users.userType, 'external_applicant')).orderBy(desc(users.createdAt));
+---
+
+<DashboardLayout title="User Settings - SuperAdmin" userType="superadmin" activePath="/superadmin/settings">
+  <div class="dashboard-header">
+    <div class="header-content">
+      <div class="title-with-icon">
+        <div class="header-icon-box">
+          <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="3"></circle>
+            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+          </svg>
+        </div>
+        <div>
+          <h1>User Settings</h1>
+          <p class="subtitle">Manage user settings, credentials, and accounts across the platform.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="admin-content-grid">
+    <div class="card table-container">
+      <div class="table-responsive">
+        <table class="table">
+          <thead>
+            <tr>
+              <th>Name</th>
+              <th>Email</th>
+              <th>Type</th>
+              <th>Status</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {allUsers.length === 0 ? (
+              <tr>
+                <td colspan="5" style="text-align: center; color: var(--color-text-muted); padding: 2rem;">No users found.</td>
+              </tr>
+            ) : (
+              allUsers.map((u) => (
+                <tr>
+                  <td>
+                    <div class="user-cell">
+                      <div class="avatar-small">{u.firstName?.charAt(0).toUpperCase() || 'U'}</div>
+                      <span>{u.firstName} {u.lastName}</span>
+                    </div>
+                  </td>
+                  <td>{u.email}</td>
+                  <td><span class={`badge ${u.userType === 'employer' ? 'bg-primary-light text-primary' : 'bg-surface-hover text-muted'}`}>{u.userType}</span></td>
+                  <td>
+                    {u.isActive ? (
+                      <span class="badge bg-success-light text-success">Active</span>
+                    ) : (
+                      <span class="badge bg-danger-light text-danger">Suspended</span>
+                    )}
+                  </td>
+                  <td>
+                    {u.userType === 'masteradmin' ? (
+                      <span class="badge bg-warning-light text-warning" title="MasterAdmin account is protected from superadmin edits">🛡️ Protected</span>
+                    ) : (
+                      <button 
+                        type="button" 
+                        class="btn btn-sm btn-outline btn-edit" 
+                        data-id={u.id}
+                        data-firstname={u.firstName || ''}
+                        data-lastname={u.lastName || ''}
+                        data-usertype={u.userType || 'employee'}
+                        data-verifiedstatus={u.verifiedStatus || 'pending'}
+                        data-isactive={u.isActive ? 'true' : 'false'}
+                      >Edit Account</button>
+                    )}
+                  </td>
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- Edit Modal (inside DashboardLayout) -->
+  <div id="editModal" class="modal-backdrop hidden">
+    <div class="modal">
+      <div class="modal-header">
+        <h2>Edit User Account</h2>
+        <button type="button" class="btn-close" id="closeModal">&times;</button>
+      </div>
+      <div class="modal-body">
+        <form id="editUserForm">
+          <input type="hidden" id="editUserId" name="userId" />
+          
+          <div class="form-group">
+            <label for="editFirstName">First Name</label>
+            <input type="text" id="editFirstName" name="firstName" required />
+          </div>
+          
+          <div class="form-group">
+            <label for="editLastName">Last Name</label>
+            <input type="text" id="editLastName" name="lastName" required />
+          </div>
+          
+          <div class="form-group">
+            <label for="editUserType">User Type</label>
+            <select id="editUserType" name="userType">
+              <option value="employee">Employee</option>
+              <option value="employer">Employer</option>
+              <option value="admin">Admin</option>
+              <option value="superadmin">Superadmin</option>
+            </select>
+          </div>
+          
+          <div class="form-group">
+            <label for="editVerifiedStatus">Verification Status</label>
+            <select id="editVerifiedStatus" name="verifiedStatus">
+              <option value="pending">Pending</option>
+              <option value="verified">Verified</option>
+              <option value="rejected">Rejected</option>
+            </select>
+          </div>
+
+          <div class="form-group toggle-group">
+            <label for="editIsActive">Account Active</label>
+            <input type="checkbox" id="editIsActive" name="isActive" />
+          </div>
+          
+          <div class="modal-footer">
+            <button type="button" class="btn btn-outline" id="cancelEdit">Cancel</button>
+            <button type="submit" class="btn btn-primary" id="saveEdit">Save Changes</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+</DashboardLayout>
+
+<script is:inline>
+  document.addEventListener('DOMContentLoaded', () => {
+    const modal = document.getElementById('editModal');
+    const form = document.getElementById('editUserForm');
+
+    function openEditModal(btn) {
+      document.getElementById('editUserId').value = btn.getAttribute('data-id') || '';
+      document.getElementById('editFirstName').value = btn.getAttribute('data-firstname') || '';
+      document.getElementById('editLastName').value = btn.getAttribute('data-lastname') || '';
+      document.getElementById('editUserType').value = btn.getAttribute('data-usertype') || 'employee';
+      document.getElementById('editVerifiedStatus').value = btn.getAttribute('data-verifiedstatus') || 'pending';
+      document.getElementById('editIsActive').checked = btn.getAttribute('data-isactive') === 'true';
+      
+      modal?.classList.remove('hidden');
+      document.body.style.overflow = 'hidden';
+    }
+
+    function closeEditModal() {
+      modal?.classList.add('hidden');
+      document.body.style.overflow = '';
+    }
+
+    // Delegated click handler
+    document.addEventListener('click', (e) => {
+      const editBtn = e.target.closest('.btn-edit');
+      if (editBtn) {
+        e.preventDefault();
+        openEditModal(editBtn);
+        return;
+      }
+
+      if (e.target.closest('#closeModal') || e.target.closest('#cancelEdit')) {
+        e.preventDefault();
+        closeEditModal();
+        return;
+      }
+
+      if (e.target === modal) {
+        closeEditModal();
+      }
+    });
+
+    form?.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const btn = document.getElementById('saveEdit');
+      btn.disabled = true;
+      btn.textContent = 'Saving...';
+
+      const payload = {
+        userId: document.getElementById('editUserId').value,
+        firstName: document.getElementById('editFirstName').value,
+        lastName: document.getElementById('editLastName').value,
+        userType: document.getElementById('editUserType').value,
+        verifiedStatus: document.getElementById('editVerifiedStatus').value,
+        isActive: document.getElementById('editIsActive').checked
+      };
+
+      try {
+        const res = await fetch('/api/superadmin/update-user', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+        const data = await res.json().catch(() => ({}));
+        if (res.ok) {
+          if (typeof window.showToast === 'function') {
+            window.showToast('User updated successfully!');
+          }
+          closeEditModal();
+          setTimeout(() => window.location.reload(), 400);
+        } else {
+          alert(data.error || 'Failed to update user.');
+        }
+      } catch (err) {
+        console.error(err);
+        alert(err.message || 'Error updating user.');
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'Save Changes';
+      }
+    });
+  });
+</script>
+
+<style>
+  .dashboard-header {
+    margin-bottom: 2rem;
+  }
+
+  .header-content {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+
+  .title-with-icon {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+  }
+
+  .header-icon-box {
+    width: 48px;
+    height: 48px;
+    border-radius: var(--border-radius-md);
+    background: rgba(124, 58, 237, 0.12);
+    border: 1px solid rgba(124, 58, 237, 0.25);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--color-primary);
+    flex-shrink: 0;
+  }
+
+  .title-with-icon h1 {
+    font-size: 1.75rem;
+    color: var(--color-text-main);
+    margin: 0;
+  }
+
+  .admin-content-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 1.5rem;
+  }
+
+  .table-container {
+    padding: 1.5rem;
+  }
+
+  .table-responsive {
+    overflow-x: auto;
+  }
+
+  .table {
+    width: 100%;
+    min-width: 800px;
+    border-collapse: collapse;
+  }
+
+  .table th, .table td {
+    padding: 1rem;
+    text-align: left;
+    border-bottom: 1px solid var(--color-border);
+  }
+
+  .table th {
+    color: var(--color-text-muted);
+    font-weight: 500;
+    font-size: 0.875rem;
+  }
+
+  .user-cell {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+  }
+  
+  .avatar-small {
+    width: 32px;
+    height: 32px;
+    background: var(--color-surface-hover);
+    color: var(--color-text-main);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 600;
+    font-size: 0.875rem;
+  }
+
+  /* Modal Styles */
+  .modal-backdrop {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.65);
+    backdrop-filter: blur(4px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+    padding: 1rem;
+    box-sizing: border-box;
+  }
+  
+  .modal-backdrop.hidden {
+    display: none;
+  }
+  
+  .modal {
+    background: var(--color-surface);
+    padding: 1.5rem 1.75rem;
+    border-radius: var(--border-radius-lg);
+    width: 100%;
+    max-width: 460px;
+    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
+    border: 1px solid var(--color-border);
+    box-sizing: border-box;
+    margin: auto;
+  }
+  
+  .modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1.25rem;
+    padding-bottom: 0.75rem;
+    border-bottom: 1px solid var(--color-border);
+  }
+  
+  .modal-header h2 {
+    margin: 0;
+    font-size: 1.25rem;
+    font-weight: 700;
+    color: var(--color-text-main);
+  }
+  
+  .btn-close {
+    background: none;
+    border: none;
+    font-size: 1.25rem;
+    cursor: pointer;
+    color: var(--color-text-muted);
+    padding: 0.25rem;
+    line-height: 1;
+  }
+  .btn-close:hover {
+    color: var(--color-text-main);
+  }
+
+  .form-group {
+    margin-bottom: 0.85rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+  }
+
+  .toggle-group {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    margin-top: 0.75rem;
+    margin-bottom: 0.75rem;
+    padding: 0.5rem 0.75rem;
+    background: var(--color-bg);
+    border-radius: var(--border-radius-md);
+    border: 1px solid var(--color-border);
+  }
+  
+  .form-group label {
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--color-text-main);
+  }
+  
+  .form-group input[type="text"], .form-group select {
+    padding: 0.6rem 0.75rem;
+    border: 1px solid var(--color-border);
+    border-radius: var(--border-radius-md);
+    background: var(--color-bg);
+    color: var(--color-text-main);
+    font-size: 0.9rem;
+    outline: none;
+    transition: border-color 0.2s;
+  }
+  .form-group input[type="text"]:focus, .form-group select:focus {
+    border-color: var(--color-primary);
+  }
+  
+  .modal-footer {
+    display: flex;
+    justify-content: flex-end;
+    gap: 0.75rem;
+    margin-top: 1.25rem;
+  }
+
+  @media (max-width: 768px) {
+    .header-content {
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 1rem;
+    }
+  }
+</style>

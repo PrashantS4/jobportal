@@ -1,0 +1,929 @@
+---
+import { getResumeViewerUrl } from '../../lib/resume-helper';
+import DashboardLayout from "../../layouts/DashboardLayout.astro";
+import { getDb } from "../../lib/db";
+import { applications, jobPostings, users } from "../../db/schema";
+import { eq } from "drizzle-orm";
+
+// @ts-ignore
+const payload = Astro.locals.user;
+if (!payload || payload.userType !== "employee") {
+  return Astro.redirect("/login");
+}
+
+const { id } = Astro.params;
+if (!id) {
+  return Astro.redirect("/applications");
+}
+
+const db = getDb();
+let appDetails = null;
+
+try {
+  // Query application details with job posting and candidate user profile
+  appDetails = await db
+    .select({
+      appId: applications.id,
+      status: applications.status,
+      coverLetter: applications.coverLetter,
+      resumeUrl: applications.resumeUrl,
+      appliedAt: applications.appliedAt,
+      aiScore: applications.aiScore,
+      aiSummary: applications.aiSummary,
+      
+      // Job Info
+      jobId: jobPostings.id,
+      jobTitle: jobPostings.jobTitle,
+      locationCity: jobPostings.locationCity,
+      locationRemote: jobPostings.locationRemote,
+      employmentType: jobPostings.employmentType,
+      experienceLevel: jobPostings.experienceLevel,
+      salaryMin: jobPostings.salaryMin,
+      salaryMax: jobPostings.salaryMax,
+      salaryCurrency: jobPostings.salaryCurrency,
+      applicationFormConfig: jobPostings.applicationFormConfig,
+
+      // Employer / Company Info
+      companyName: users.companyName,
+      companyWebsite: users.companyWebsite,
+
+      // Candidate Profile Info (stored in users table)
+      candidateFirstName: users.firstName,
+      candidateLastName: users.lastName,
+      candidateEmail: users.email,
+      candidatePhone: users.phone,
+      candidatePhotoUrl: users.avatarUrl,
+      candidateLinkedinUrl: users.linkedinUrl,
+      candidatePortfolioUrl: users.portfolioUrl,
+    })
+    .from(applications)
+    .leftJoin(jobPostings, eq(applications.jobPostingId, jobPostings.id))
+    .leftJoin(users, eq(applications.applicantId, users.id)) // Join applicant details
+    .where(eq(applications.id, id))
+    .get();
+
+  // If application doesn't exist, redirect
+  if (!appDetails) {
+    return Astro.redirect("/applications");
+  }
+} catch (e) {
+  console.error("Error loading application details:", e);
+  return Astro.redirect("/applications");
+}
+
+function statusBadge(status: string) {
+  const map: Record<string, { label: string; cls: string }> = {
+    received: { label: 'Received', cls: 'badge-info' },
+    under_review: { label: 'Under Review', cls: 'badge-warning' },
+    shortlisted: { label: 'Shortlisted', cls: 'badge-yellow' },
+    accepted: { label: 'Accepted', cls: 'badge-success' },
+    rejected: { label: 'Rejected', cls: 'badge-danger' },
+  };
+  return map[status] || { label: status, cls: 'badge-info' };
+}
+
+const status = statusBadge(appDetails.status);
+const appliedDate = appDetails.appliedAt 
+  ? new Date(appDetails.appliedAt * 1000).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+  : '—';
+
+const pipelineInfo = (() => {
+  const currentStatus = appDetails.status || 'received';
+  if (currentStatus === 'rejected') {
+    return {
+      activeStep: 0,
+      isRejected: true,
+      currentLabel: 'Application Not Selected',
+      progressPercent: 100,
+      stageNote: 'The hiring team decided not to move forward with this application at this time.',
+    };
+  }
+  if (currentStatus === 'accepted') {
+    return {
+      activeStep: 5,
+      isRejected: false,
+      currentLabel: 'Hired / Offer Extended 🎉',
+      progressPercent: 100,
+      stageNote: 'Congratulations! An official employment offer has been extended for this role.',
+    };
+  }
+  if (currentStatus === 'shortlisted') {
+    return {
+      activeStep: 4,
+      isRejected: false,
+      currentLabel: 'Shortlisted for Interview Round 🎯',
+      progressPercent: 75,
+      stageNote: 'Your profile was shortlisted! Check your Messages & Interviews tab for interview round updates.',
+    };
+  }
+  if (currentStatus === 'under_review') {
+    return {
+      activeStep: 3,
+      isRejected: false,
+      currentLabel: 'Recruiter Profile & Resume Review 🔍',
+      progressPercent: 50,
+      stageNote: 'The hiring manager and recruitment team are reviewing your background and credentials.',
+    };
+  }
+  return {
+    activeStep: 2,
+    isRejected: false,
+    currentLabel: 'Application Received & AI Screening 📥',
+    progressPercent: 25,
+    stageNote: 'Your application has been received and registered in the candidate review pipeline.',
+  };
+})();
+
+// Custom or default hiring stages configured by employer
+let customStages = null;
+if (appDetails.applicationFormConfig) {
+  try {
+    const cfg = typeof appDetails.applicationFormConfig === 'string'
+      ? JSON.parse(appDetails.applicationFormConfig)
+      : appDetails.applicationFormConfig;
+    if (Array.isArray(cfg.hiringStages) && cfg.hiringStages.length > 0) {
+      customStages = cfg.hiringStages.map((st: any, idx: number) => ({
+        step: idx + 1,
+        title: st.title || `Stage #${idx + 1}`,
+        icon: st.icon || '🎯',
+        desc: st.desc || 'Evaluation stage',
+      }));
+    }
+  } catch (e) {}
+}
+
+const pipelineStages = customStages || [
+  { step: 1, title: 'Applied', icon: '📥', desc: 'Submitted on ' + appliedDate },
+  { step: 2, title: 'AI Screening', icon: '✨', desc: appDetails.aiScore !== null ? `AI Score: ${appDetails.aiScore}%` : 'Screening complete' },
+  { step: 3, title: 'Recruiter Review', icon: '🔍', desc: 'Profile evaluation' },
+  { step: 4, title: 'Interview Round', icon: '🎯', desc: 'Shortlisted evaluation' },
+  { step: 5, title: 'Hiring Decision', icon: '🏆', desc: 'Final offer' },
+];
+---
+
+<DashboardLayout title="Application Details" userType="employee" activePath="/applications">
+  <div class="application-details-wrapper">
+    <div class="back-nav mb-5">
+      <a href="/applications" class="back-link">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <line x1="19" y1="12" x2="5" y2="12"></line>
+          <polyline points="12 19 5 12 12 5"></polyline>
+        </svg>
+        Back to Applications
+      </a>
+    </div>
+
+    <div class="card detail-card-main">
+      <div class="card-header-status">
+        <div class="header-info">
+          <h1>Application Details</h1>
+          <p class="subtitle">Applied on {appliedDate} for <strong>{appDetails.jobTitle}</strong> at {appDetails.companyName || 'Company'}</p>
+        </div>
+        <div class="status-wrap">
+          <span class={`badge ${status.cls}`}>{status.label}</span>
+        </div>
+      </div>
+
+      <hr class="divider mt-6 mb-6" />
+
+      <!-- Section: Interactive Hiring Journey Stage Tracker -->
+      <div class="section-group pipeline-journey-card mb-6">
+        <div class="pipeline-header-row">
+          <div>
+            <h3 class="pipeline-heading">
+              <span class="sparkle-icon">📍</span> Hiring Stage Journey
+            </h3>
+            <p class="pipeline-sub">Track your live hiring pipeline progress for this position</p>
+          </div>
+          <div class="pipeline-progress-badge">
+            <span class="progress-txt">{pipelineInfo.progressPercent}% Progress</span>
+            <div class="progress-bar-bg">
+              <div class="progress-bar-fill" style={`width: ${pipelineInfo.progressPercent}%;`}></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Stage Stepper Timeline -->
+        <div class="stage-stepper-container">
+          {pipelineStages.map((stage) => {
+            const isCompleted = !pipelineInfo.isRejected && stage.step < pipelineInfo.activeStep;
+            const isActive = !pipelineInfo.isRejected && stage.step === pipelineInfo.activeStep;
+            let stateClass = 'pending';
+            if (isCompleted) stateClass = 'completed';
+            if (isActive) stateClass = 'active';
+            if (pipelineInfo.isRejected && stage.step === 1) stateClass = 'completed';
+            if (pipelineInfo.isRejected && stage.step === 2) stateClass = 'rejected';
+
+            return (
+              <div class={`stepper-node ${stateClass}`}>
+                <div class="node-circle-wrap">
+                  <div class="node-circle">
+                    {isCompleted ? '✓' : (pipelineInfo.isRejected && stage.step === 2 ? '✕' : stage.icon)}
+                  </div>
+                  {stage.step < 5 && <div class="node-connector"></div>}
+                </div>
+                <div class="node-details">
+                  <div class="node-title-row">
+                    <span class="node-title">{stage.title}</span>
+                    {isActive && <span class="active-pulse-tag">Current Stage</span>}
+                    {isCompleted && <span class="completed-tag">Passed ✓</span>}
+                    {pipelineInfo.isRejected && stage.step === 2 && <span class="rejected-tag">Closed</span>}
+                  </div>
+                  <p class="node-desc">{stage.desc}</p>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+
+        <!-- Active Stage Note Banner -->
+        <div class={`pipeline-active-note ${pipelineInfo.isRejected ? 'note-rejected' : 'note-active'}`}>
+          <div class="note-icon">{pipelineInfo.isRejected ? '⚠️' : '⚡'}</div>
+          <div class="note-text">
+            <strong>{pipelineInfo.currentLabel}:</strong> {pipelineInfo.stageNote}
+          </div>
+        </div>
+      </div>
+
+      <!-- Section: Job Applied For -->
+      <div class="section-group">
+        <h3>Position Details</h3>
+        <div class="job-summary-box">
+          <div>
+            <h4>{appDetails.jobTitle}</h4>
+            <p class="company">{appDetails.companyName || 'Company'}</p>
+            <div class="tags mt-2">
+              {appDetails.locationRemote && <span class="tag tag-green">🌐 Remote</span>}
+              {appDetails.locationCity && !appDetails.locationRemote && <span class="tag">📍 {appDetails.locationCity}</span>}
+              {appDetails.employmentType && <span class="tag">⏱ {appDetails.employmentType}</span>}
+              {appDetails.experienceLevel && <span class="tag">🎯 {appDetails.experienceLevel}</span>}
+            </div>
+          </div>
+          <a href={`/jobs/${appDetails.jobId}`} class="btn btn-outline">View Job Posting</a>
+        </div>
+      </div>
+
+      <!-- Section: AI Screening Score if evaluated -->
+      {appDetails.aiScore !== null && (
+        <div class="section-group mt-6">
+          <h3>AI Resume Screening Analysis</h3>
+          <div class="ai-analysis-box">
+            <div class="score-radial">
+              <span class="score-val">{appDetails.aiScore}%</span>
+              <span class="score-lbl">MATCH</span>
+            </div>
+            <div class="ai-summary-text">
+              <h4>AI Fit Summary</h4>
+              <p>{appDetails.aiSummary || 'Analysis generated upon application submission.'}</p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <!-- Section: Candidate Submission details -->
+      <div class="section-group mt-6">
+        <h3>Information Submitted</h3>
+        <div class="candidate-submission-details">
+          <div class="profile-avatar-row">
+            {appDetails.candidatePhotoUrl ? (
+              <img src={appDetails.candidatePhotoUrl} alt="Candidate Profile" class="candidate-photo-view" />
+            ) : (
+              <div class="candidate-photo-fallback">
+                {(appDetails.candidateFirstName || '?').charAt(0)}
+              </div>
+            )}
+            <div class="candidate-name-info">
+              <h4>{appDetails.candidateFirstName} {appDetails.candidateLastName}</h4>
+              <p>{appDetails.candidateEmail} • {appDetails.candidatePhone || 'No Phone provided'}</p>
+            </div>
+          </div>
+
+          <div class="submission-grid mt-4">
+            <div class="submission-item">
+              <span class="label">Resume (PDF)</span>
+              <div class="item-action">
+                <a href={getResumeViewerUrl(appDetails.resumeUrl, Astro.url.origin)} target="_blank" rel="noopener noreferrer" class="btn btn-outline btn-sm">
+                  📄 View Resume
+                </a>
+              </div>
+            </div>
+
+            <div class="submission-item">
+              <span class="label">LinkedIn Profile</span>
+              <div class="item-action">
+                {appDetails.candidateLinkedinUrl ? (
+                  <a href={appDetails.candidateLinkedinUrl} target="_blank" rel="noopener noreferrer" class="btn btn-outline btn-sm">
+                    🔗 View Profile
+                  </a>
+                ) : (
+                  <span class="none-text">Not provided</span>
+                )}
+              </div>
+            </div>
+
+            <div class="submission-item">
+              <span class="label">Portfolio / Website</span>
+              <div class="item-action">
+                {appDetails.candidatePortfolioUrl ? (
+                  <a href={appDetails.candidatePortfolioUrl} target="_blank" rel="noopener noreferrer" class="btn btn-outline btn-sm">
+                    🌐 View Portfolio
+                  </a>
+                ) : (
+                  <span class="none-text">Not provided</span>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {appDetails.coverLetter && (
+            <div class="cover-letter-view mt-5">
+              <h4>Cover Letter</h4>
+              <p class="cover-letter-text">{appDetails.coverLetter}</p>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  </div>
+</DashboardLayout>
+
+<style>
+  .application-details-wrapper {
+    padding: 1.5rem 2rem 3rem 2.5rem;
+    max-width: 900px;
+    margin: 0 auto;
+  }
+
+  .back-nav {
+    display: flex;
+    align-items: center;
+    margin-bottom: 1.5rem;
+  }
+
+  .back-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    color: var(--color-text-muted);
+    text-decoration: none;
+    font-weight: 500;
+    transition: color 0.2s;
+  }
+
+  .back-link:hover {
+    color: var(--color-primary);
+  }
+
+  .detail-card-main {
+    padding: 2.5rem;
+    background: var(--color-surface);
+    backdrop-filter: blur(12px);
+    border: 1px solid var(--color-border);
+    border-radius: var(--border-radius-lg);
+  }
+
+  .card-header-status {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 1.5rem;
+  }
+
+  .header-info h1 {
+    font-size: 1.75rem;
+    font-weight: 800;
+    margin: 0 0 0.5rem 0;
+    color: var(--color-text-main);
+  }
+
+  .subtitle {
+    margin: 0;
+    color: var(--color-text-muted);
+    font-size: 0.95rem;
+  }
+
+  .status-wrap .badge {
+    padding: 0.4rem 1rem;
+    font-size: 0.85rem;
+    font-weight: 700;
+    border-radius: 2rem;
+    text-transform: uppercase;
+  }
+  .badge-info { background: rgba(59, 130, 246, 0.15); color: #3b82f6; border: 1px solid rgba(59, 130, 246, 0.3); }
+  .badge-warning { background: rgba(245, 158, 11, 0.15); color: #f59e0b; border: 1px solid rgba(245, 158, 11, 0.3); }
+  .badge-yellow { background: rgba(250, 204, 21, 0.15); color: #ca8a04; border: 1px solid rgba(250, 204, 21, 0.3); }
+  .badge-success { background: rgba(16, 185, 129, 0.15); color: #10b981; border: 1px solid rgba(16, 185, 129, 0.3); }
+  .badge-danger { background: rgba(239, 68, 68, 0.15); color: #ef4444; border: 1px solid rgba(239, 68, 68, 0.3); }
+
+  .divider {
+    border: none;
+    border-top: 1px solid var(--color-border);
+    margin: 1.75rem 0;
+  }
+
+  .section-group h3 {
+    font-size: 1.15rem;
+    font-weight: 700;
+    margin: 0 0 1rem 0;
+    color: var(--color-text-main);
+  }
+
+  .job-summary-box {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: var(--color-bg);
+    border: 1px solid var(--color-border);
+    padding: 1.25rem 1.5rem;
+    border-radius: var(--border-radius-md);
+    gap: 1.5rem;
+  }
+
+  .job-summary-box h4 {
+    margin: 0 0 0.25rem 0;
+    font-size: 1.1rem;
+    color: var(--color-text-main);
+  }
+
+  .job-summary-box .company {
+    margin: 0;
+    color: var(--color-text-muted);
+    font-size: 0.95rem;
+  }
+
+  .tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+
+  .tag {
+    font-size: 0.78rem;
+    font-weight: 600;
+    padding: 0.25rem 0.65rem;
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: 6px;
+    color: var(--color-text-main);
+  }
+  .tag-green { background: rgba(16, 185, 129, 0.1); color: #10b981; border-color: rgba(16, 185, 129, 0.2); }
+
+  /* AI Screening Box */
+  .ai-analysis-box {
+    display: flex;
+    align-items: center;
+    background: rgba(99, 102, 241, 0.05);
+    border: 1px solid rgba(99, 102, 241, 0.2);
+    padding: 1.5rem;
+    border-radius: var(--border-radius-md);
+    gap: 1.5rem;
+  }
+
+  .score-radial {
+    flex-shrink: 0;
+    width: 90px;
+    height: 90px;
+    box-sizing: border-box;
+    border-radius: 50%;
+    border: 4px solid var(--color-primary);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    background: var(--color-surface);
+    padding: 4px;
+    overflow: hidden;
+  }
+
+  .score-val {
+    font-weight: 800;
+    font-size: 1.35rem;
+    color: var(--color-primary);
+    line-height: 1.1;
+  }
+
+  .score-lbl {
+    font-size: 0.65rem;
+    text-transform: uppercase;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    color: var(--color-text-muted);
+    margin-top: 2px;
+  }
+
+  .ai-summary-text {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .ai-summary-text h4 {
+    margin: 0 0 0.4rem 0;
+    font-size: 1.05rem;
+    font-weight: 700;
+    color: var(--color-primary);
+  }
+
+  .ai-summary-text p {
+    margin: 0;
+    font-size: 0.95rem;
+    color: var(--color-text-muted);
+    line-height: 1.6;
+  }
+
+  /* Candidate details */
+  .profile-avatar-row {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+  }
+
+  .candidate-photo-view {
+    width: 56px;
+    height: 56px;
+    border-radius: 50%;
+    object-fit: cover;
+    border: 2px solid var(--color-border);
+  }
+
+  .candidate-photo-fallback {
+    width: 56px;
+    height: 56px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #6366f1, #8b5cf6);
+    color: white;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.5rem;
+    font-weight: 700;
+  }
+
+  .candidate-name-info h4 {
+    margin: 0 0 0.25rem 0;
+    font-size: 1.15rem;
+    color: var(--color-text-main);
+  }
+
+  .candidate-name-info p {
+    margin: 0;
+    color: var(--color-text-muted);
+    font-size: 0.9rem;
+  }
+
+  .submission-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 1.5rem;
+  }
+
+  .submission-item {
+    background: var(--color-bg);
+    border: 1px solid var(--color-border);
+    padding: 1rem 1.25rem;
+    border-radius: var(--border-radius-md);
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+
+  .submission-item .label {
+    font-size: 0.8rem;
+    text-transform: uppercase;
+    font-weight: 600;
+    color: var(--color-text-muted);
+  }
+
+  .submission-item .none-text {
+    font-size: 0.95rem;
+    color: var(--color-text-muted);
+    font-style: italic;
+  }
+
+  .cover-letter-view h4 {
+    font-size: 1.05rem;
+    margin: 0 0 0.5rem 0;
+    color: var(--color-text-main);
+  }
+
+  .cover-letter-text {
+    white-space: pre-wrap;
+    line-height: 1.6;
+    color: var(--color-text-muted);
+    font-size: 0.95rem;
+    background: var(--color-bg);
+    padding: 1.25rem;
+    border-radius: var(--border-radius-md);
+    border: 1px solid var(--color-border);
+    margin: 0;
+  }
+
+  @media (max-width: 768px) {
+    .submission-grid {
+      grid-template-columns: 1fr;
+    }
+    .card-header-status {
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 1rem;
+    }
+    .job-summary-box {
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 1rem;
+    }
+    .ai-analysis-box {
+      flex-direction: column;
+      align-items: flex-start;
+    }
+    .application-details-wrapper {
+      padding: 1rem 1rem 2rem 1.5rem;
+    }
+  }
+
+  /* Hiring Pipeline Journey Styles */
+  .pipeline-journey-card {
+    background: linear-gradient(135deg, rgba(99, 102, 241, 0.04) 0%, rgba(168, 85, 247, 0.04) 100%);
+    border: 1.5px solid rgba(99, 102, 241, 0.2);
+    border-radius: var(--border-radius-md);
+    padding: 1.75rem;
+  }
+  .pipeline-header-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 1.5rem;
+    margin-bottom: 1.75rem;
+  }
+  .pipeline-heading {
+    font-size: 1.25rem;
+    font-weight: 800;
+    margin: 0 0 0.25rem 0;
+    color: var(--color-text-main);
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+  .sparkle-icon {
+    font-size: 1.25rem;
+  }
+  .pipeline-sub {
+    margin: 0;
+    font-size: 0.88rem;
+    color: var(--color-text-muted);
+  }
+  .pipeline-progress-badge {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 0.35rem;
+    min-width: 140px;
+  }
+  .progress-txt {
+    font-size: 0.8rem;
+    font-weight: 700;
+    color: var(--color-primary);
+  }
+  .progress-bar-bg {
+    width: 100%;
+    height: 8px;
+    background: rgba(99, 102, 241, 0.15);
+    border-radius: 9999px;
+    overflow: hidden;
+  }
+  .progress-bar-fill {
+    height: 100%;
+    background: linear-gradient(90deg, #6366f1, #a855f7);
+    border-radius: 9999px;
+    transition: width 0.4s ease;
+  }
+
+  .stage-stepper-container {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    position: relative;
+    margin-bottom: 1.75rem;
+    gap: 0.75rem;
+  }
+  .stepper-node {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    flex: 1;
+    text-align: center;
+    position: relative;
+  }
+  .node-circle-wrap {
+    display: flex;
+    align-items: center;
+    width: 100%;
+    justify-content: center;
+    position: relative;
+    margin-bottom: 0.75rem;
+  }
+  .node-circle {
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.1rem;
+    font-weight: 700;
+    z-index: 2;
+    transition: all 0.3s ease;
+  }
+  .node-connector {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 100%;
+    height: 3px;
+    background: var(--color-border);
+    z-index: 1;
+    transform: translateY(-50%);
+  }
+
+  /* Node States */
+  .stepper-node.completed .node-circle {
+    background: #10b981;
+    color: white;
+    box-shadow: 0 4px 12px rgba(16, 185, 129, 0.35);
+  }
+  .stepper-node.completed .node-connector {
+    background: #10b981;
+  }
+  .stepper-node.active .node-circle {
+    background: linear-gradient(135deg, #6366f1, #a855f7);
+    color: white;
+    box-shadow: 0 0 0 6px rgba(99, 102, 241, 0.2), 0 4px 14px rgba(99, 102, 241, 0.4);
+    animation: pulseActive 2s infinite alternate;
+  }
+  @keyframes pulseActive {
+    0% { box-shadow: 0 0 0 4px rgba(99, 102, 241, 0.2), 0 4px 14px rgba(99, 102, 241, 0.3); }
+    100% { box-shadow: 0 0 0 8px rgba(99, 102, 241, 0.35), 0 6px 20px rgba(168, 85, 247, 0.5); }
+  }
+  .stepper-node.pending .node-circle {
+    background: var(--color-bg);
+    border: 2px solid var(--color-border);
+    color: var(--color-text-muted);
+  }
+  .stepper-node.rejected .node-circle {
+    background: #ef4444;
+    color: white;
+    box-shadow: 0 4px 12px rgba(239, 68, 68, 0.35);
+  }
+
+  .node-details {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.2rem;
+  }
+  .node-title-row {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.2rem;
+  }
+  .node-title {
+    font-size: 0.88rem;
+    font-weight: 700;
+    color: var(--color-text-main);
+  }
+  .node-desc {
+    font-size: 0.72rem;
+    color: var(--color-text-muted);
+    margin: 0;
+    line-height: 1.3;
+  }
+
+  .active-pulse-tag {
+    font-size: 0.65rem;
+    font-weight: 800;
+    text-transform: uppercase;
+    background: rgba(99, 102, 241, 0.15);
+    color: var(--color-primary);
+    border: 1px solid rgba(99, 102, 241, 0.3);
+    padding: 0.1rem 0.45rem;
+    border-radius: 9999px;
+  }
+  .completed-tag {
+    font-size: 0.65rem;
+    font-weight: 700;
+    color: #10b981;
+  }
+  .rejected-tag {
+    font-size: 0.65rem;
+    font-weight: 700;
+    color: #ef4444;
+  }
+
+  .pipeline-active-note {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.875rem;
+    padding: 1rem 1.25rem;
+    border-radius: var(--border-radius-md);
+    font-size: 0.9rem;
+    line-height: 1.5;
+  }
+  .note-active {
+    background: rgba(99, 102, 241, 0.08);
+    border: 1px solid rgba(99, 102, 241, 0.2);
+    color: var(--color-text-main);
+  }
+  .note-rejected {
+    background: rgba(239, 68, 68, 0.08);
+    border: 1px solid rgba(239, 68, 68, 0.2);
+    color: #b91c1c;
+  }
+  .note-icon {
+    font-size: 1.25rem;
+    flex-shrink: 0;
+  }
+  .note-text strong {
+    color: var(--color-primary);
+  }
+
+  @media (max-width: 768px) {
+    .application-details-wrapper {
+      padding: 0.75rem 0.5rem !important;
+    }
+    .detail-card-main {
+      padding: 1.25rem 0.85rem !important;
+    }
+    .pipeline-journey-card {
+      padding: 1.15rem 0.85rem !important;
+    }
+    .pipeline-header-row {
+      flex-direction: column !important;
+      align-items: flex-start !important;
+      gap: 0.75rem !important;
+    }
+    .pipeline-progress-badge {
+      width: 100% !important;
+      align-items: flex-start !important;
+    }
+    .stage-stepper-container {
+      flex-direction: column !important;
+      align-items: flex-start !important;
+      gap: 1.25rem !important;
+    }
+    .stepper-node {
+      flex-direction: row !important;
+      align-items: flex-start !important;
+      gap: 0.75rem !important;
+      text-align: left !important;
+      width: 100% !important;
+    }
+    .node-circle-wrap {
+      width: auto !important;
+      margin-bottom: 0 !important;
+    }
+    .node-connector {
+      width: 3px !important;
+      height: 100% !important;
+      top: 100% !important;
+      left: 50% !important;
+      transform: translateX(-50%) !important;
+    }
+    .node-details {
+      align-items: flex-start !important;
+      min-width: 0 !important;
+      flex: 1 !important;
+    }
+    .node-title-row {
+      flex-direction: row !important;
+      flex-wrap: wrap !important;
+      align-items: center !important;
+      gap: 0.35rem !important;
+    }
+    .node-title {
+      font-size: 0.85rem !important;
+      word-break: break-word !important;
+    }
+    .active-pulse-tag, .completed-tag, .rejected-tag {
+      font-size: 0.62rem !important;
+      white-space: nowrap !important;
+    }
+    .submission-grid {
+      grid-template-columns: 1fr !important;
+    }
+    .card-header-status {
+      flex-direction: column !important;
+      align-items: flex-start !important;
+      gap: 1rem !important;
+    }
+    .job-summary-box {
+      flex-direction: column !important;
+      align-items: flex-start !important;
+      gap: 1rem !important;
+    }
+    .ai-analysis-box {
+      flex-direction: column !important;
+      align-items: flex-start !important;
+    }
+  }
+</style>

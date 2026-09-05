@@ -1,0 +1,549 @@
+---
+import DashboardLayout from '../../../../layouts/DashboardLayout.astro';
+import { getDb } from '../../../../lib/db';
+import { users, plans, jobPostings } from '../../../../db/schema';
+import { eq, count } from 'drizzle-orm';
+
+const payload = Astro.locals.user;
+if (!payload || (payload.userType !== 'admin' && payload.userType !== 'superadmin')) {
+  return Astro.redirect('/login');
+}
+
+const { id } = Astro.params;
+if (!id) {
+  return Astro.redirect('/admin/employers');
+}
+
+const db = getDb();
+const employer = await db.select().from(users).where(eq(users.id, id)).get();
+
+if (!employer || employer.userType !== 'employer') {
+  return Astro.redirect('/admin/employers');
+}
+
+const activePlans = await db.select().from(plans).all();
+const postedJobsResult = await db.select({ count: count() }).from(jobPostings).where(eq(jobPostings.employerId, employer.id));
+const totalPostedJobs = postedJobsResult[0]?.count || 0;
+---
+
+<DashboardLayout title={`Edit Employer: ${employer.companyName || employer.firstName}`} userType="admin" activePath="/admin/employers">
+  <div class="dashboard-header mb-4">
+    <div class="back-link-wrap mb-3">
+      <a href="/admin/employers" class="back-link">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline></svg>
+        Back to Employer Directory
+      </a>
+    </div>
+    <div class="header-titles">
+      <span class="badge-tag">Admin Moderation</span>
+      <h1>Edit Employer Profile</h1>
+      <p class="subtitle">Update company branding, recruiter details, subscription status, and access permissions.</p>
+    </div>
+  </div>
+
+  <div class="admin-edit-grid">
+    <div class="edit-main-col">
+      <form id="admin-edit-employer-form" class="card form-card">
+        <input type="hidden" name="userId" value={employer.id} />
+        
+        <!-- Account Status & Verification Header Section -->
+        <div class="form-section">
+          <div class="section-title-row">
+            <h3>Account Access & Verification Status</h3>
+            <span class="user-id-pill">ID: {employer.id}</span>
+          </div>
+
+          <div class="form-grid mt-3">
+            <div class="form-group">
+              <label for="isActive">Account Standing / Status <span class="req">*</span></label>
+              <select id="isActive" name="isActive">
+                <option value="true" selected={employer.isActive === true}>🟢 Active Account (Full Access)</option>
+                <option value="false" selected={employer.isActive === false}>🔴 Blocked / Suspended (No Job Posting Access)</option>
+              </select>
+            </div>
+
+            <div class="form-group">
+              <label for="verifiedStatus">Employer Verification <span class="req">*</span></label>
+              <select id="verifiedStatus" name="verifiedStatus">
+                <option value="verified" selected={employer.verifiedStatus === 'verified'}>✓ Verified Company</option>
+                <option value="pending" selected={employer.verifiedStatus === 'pending'}>⏳ Pending Review</option>
+                <option value="rejected" selected={employer.verifiedStatus === 'rejected'}>✕ Rejected Company</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <div class="form-divider"></div>
+
+        <!-- Recruiter Contact Details -->
+        <div class="form-section">
+          <h3>Recruiter Contact Information</h3>
+
+          <div class="form-grid mt-3">
+            <div class="form-group">
+              <label for="firstName">First Name <span class="req">*</span></label>
+              <input type="text" id="firstName" name="firstName" required value={employer.firstName} />
+            </div>
+            <div class="form-group">
+              <label for="lastName">Last Name <span class="req">*</span></label>
+              <input type="text" id="lastName" name="lastName" required value={employer.lastName} />
+            </div>
+          </div>
+
+          <div class="form-grid mt-3">
+            <div class="form-group">
+              <label for="email">Email Address (Read-only)</label>
+              <input type="email" id="email" value={employer.email} disabled class="disabled-input" />
+            </div>
+            <div class="form-group">
+              <label for="phone">Direct Phone</label>
+              <input type="tel" id="phone" name="phone" value={employer.phone || ''} placeholder="+1 (555) 000-0000" />
+            </div>
+          </div>
+        </div>
+
+        <div class="form-divider"></div>
+
+        <!-- Company Details Section -->
+        <div class="form-section">
+          <h3>Company Information & Branding</h3>
+
+          <div class="form-grid mt-3">
+            <div class="form-group">
+              <label for="companyName">Company Name</label>
+              <input type="text" id="companyName" name="companyName" value={employer.companyName || ''} placeholder="e.g. Acme Corporation" />
+            </div>
+            <div class="form-group">
+              <label for="companyWebsite">Official Website</label>
+              <input type="url" id="companyWebsite" name="companyWebsite" value={employer.companyWebsite || ''} placeholder="https://company.com" />
+            </div>
+          </div>
+
+          <div class="form-grid mt-3">
+            <div class="form-group">
+              <label for="companyIndustry">Industry / Field</label>
+              <input type="text" id="companyIndustry" name="companyIndustry" value={employer.companyIndustry || ''} placeholder="e.g. Software, Finance, Healthcare" />
+            </div>
+            <div class="form-group">
+              <label for="companySize">Company Size</label>
+              <select id="companySize" name="companySize">
+                <option value="" selected={!employer.companySize}>Select size...</option>
+                <option value="1-10" selected={employer.companySize === '1-10'}>1-10 Employees</option>
+                <option value="11-50" selected={employer.companySize === '11-50'}>11-50 Employees</option>
+                <option value="51-200" selected={employer.companySize === '51-200'}>51-200 Employees</option>
+                <option value="201-500" selected={employer.companySize === '201-500'}>201-500 Employees</option>
+                <option value="500+" selected={employer.companySize === '500+'}>500+ Employees</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="form-group full-width mt-3">
+            <label for="companyBio">Company Overview & Biography</label>
+            <textarea id="companyBio" name="companyBio" rows="4" placeholder="Brief summary of company culture, mission, and background...">{employer.companyBio || ''}</textarea>
+          </div>
+        </div>
+
+        <div class="form-divider"></div>
+
+        <!-- Subscription Tier Section -->
+        <div class="form-section">
+          <h3>Subscription & Plan Tier</h3>
+          <div class="form-group full-width mt-3">
+            <label for="planId">Assigned Subscription Tier <span class="req">*</span></label>
+            <select id="planId" name="planId">
+              {activePlans.map(plan => (
+                <option value={plan.planId} selected={employer.planId === plan.planId}>
+                  {plan.planId} - {plan.planName} (${plan.price}/mo, Max Jobs: {plan.jobPostingLimit >= 99999 ? 'Unlimited' : plan.jobPostingLimit})
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
+
+        <div class="form-actions-bar mt-4">
+          <a href="/admin/employers" class="btn btn-outline">Cancel</a>
+          <button type="submit" class="btn btn-primary btn-glow" id="save-employer-btn">
+            Save & Update Employer Account
+          </button>
+        </div>
+      </form>
+    </div>
+
+    <!-- Summary Sidebar -->
+    <div class="edit-sidebar-col">
+      <div class="card sidebar-card">
+        <h3>Employer Overview</h3>
+        <div class="emp-summary-box">
+          <div class="emp-logo">🏢</div>
+          <div>
+            <strong>{employer.companyName || 'No Company Name'}</strong>
+            <p>{employer.firstName} {employer.lastName}</p>
+            <span class="emp-email-txt">{employer.email}</span>
+          </div>
+        </div>
+
+        <div class="sidebar-divider"></div>
+
+        <div class="meta-item-row">
+          <span class="meta-lbl">Joined Date</span>
+          <span class="meta-val">{employer.createdAt ? new Date(employer.createdAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : '—'}</span>
+        </div>
+        <div class="meta-item-row">
+          <span class="meta-lbl">Posted Jobs</span>
+          <span class="meta-val highlight">{totalPostedJobs}</span>
+        </div>
+
+        <div class="sidebar-divider"></div>
+
+        <h3>Danger Zone</h3>
+        <p class="sec-text">Permanently delete this employer account and remove all associated job postings.</p>
+        <button type="button" class="btn btn-danger w-full mt-2" id="delete-employer-btn">
+          🗑️ Delete Employer Account
+        </button>
+      </div>
+    </div>
+  </div>
+</DashboardLayout>
+
+<script>
+  const form = document.getElementById('admin-edit-employer-form') as HTMLFormElement | null;
+  const saveBtn = document.getElementById('save-employer-btn') as HTMLButtonElement | null;
+  const deleteBtn = document.getElementById('delete-employer-btn') as HTMLButtonElement | null;
+
+  if (form && saveBtn) {
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+
+      const formData = new FormData(form);
+      const data: Record<string, any> = Object.fromEntries(formData.entries());
+
+      const originalText = saveBtn.innerText;
+      saveBtn.innerText = 'Saving Changes...';
+      saveBtn.disabled = true;
+
+      try {
+        const res = await fetch('/api/admin/employers/update', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'same-origin',
+          body: JSON.stringify(data)
+        });
+
+        const result = await res.json();
+
+        if (res.ok) {
+          // @ts-ignore
+          if (window.showToast) window.showToast('Employer account updated successfully!');
+          setTimeout(() => {
+            window.location.href = '/admin/employers';
+          }, 800);
+        } else {
+          // @ts-ignore
+          if (window.showToast) window.showToast(result.error || 'Failed to update employer', 'error');
+          saveBtn.innerText = originalText;
+          saveBtn.disabled = false;
+        }
+      } catch (err) {
+        // @ts-ignore
+        if (window.showToast) window.showToast('An error occurred while saving.', 'error');
+        saveBtn.innerText = originalText;
+        saveBtn.disabled = false;
+      }
+    });
+  }
+
+  if (deleteBtn) {
+    deleteBtn.addEventListener('click', async () => {
+      const confirmDelete = confirm('Are you sure you want to PERMANENTLY delete this employer account? All posted jobs and applications will be deleted.');
+      if (!confirmDelete) return;
+
+      const userId = (document.querySelector('input[name="userId"]') as HTMLInputElement)?.value;
+      if (!userId) return;
+
+      deleteBtn.innerText = 'Deleting...';
+      deleteBtn.disabled = true;
+
+      try {
+        const res = await fetch('/api/admin/employers/delete', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'same-origin',
+          body: JSON.stringify({ userId })
+        });
+
+        if (res.ok) {
+          // @ts-ignore
+          if (window.showToast) window.showToast('Employer deleted successfully.');
+          window.location.href = '/admin/employers';
+        } else {
+          const result = await res.json();
+          // @ts-ignore
+          if (window.showToast) window.showToast(result.error || 'Failed to delete employer', 'error');
+          deleteBtn.innerText = '🗑️ Delete Employer Account';
+          deleteBtn.disabled = false;
+        }
+      } catch (err) {
+        // @ts-ignore
+        if (window.showToast) window.showToast('An error occurred during deletion.', 'error');
+        deleteBtn.innerText = '🗑️ Delete Employer Account';
+        deleteBtn.disabled = false;
+      }
+    });
+  }
+</script>
+
+<style>
+  .mb-3 { margin-bottom: 0.75rem; }
+  .mb-4 { margin-bottom: 1.75rem; }
+  .mt-2 { margin-top: 0.5rem; }
+  .mt-3 { margin-top: 1rem; }
+  .mt-4 { margin-top: 1.5rem; }
+  .w-full { width: 100%; box-sizing: border-box; }
+
+  .back-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--color-text-muted);
+    text-decoration: none;
+    transition: color 0.2s;
+  }
+  .back-link:hover { color: var(--color-primary); }
+
+  .badge-tag {
+    display: inline-block;
+    padding: 0.25rem 0.75rem;
+    background: rgba(99, 102, 241, 0.15);
+    color: var(--color-primary);
+    border-radius: 9999px;
+    font-size: 0.75rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin-bottom: 0.4rem;
+  }
+
+  .header-titles h1 {
+    margin: 0 0 0.3rem 0;
+    font-size: 1.75rem;
+    font-weight: 800;
+    color: var(--color-text-main);
+  }
+
+  .subtitle {
+    margin: 0;
+    font-size: 0.95rem;
+    color: var(--color-text-muted);
+  }
+
+  .admin-edit-grid {
+    display: grid;
+    grid-template-columns: 2.2fr 1fr;
+    gap: 1.75rem;
+  }
+
+  .form-card {
+    background: var(--color-surface);
+    backdrop-filter: blur(16px);
+    border: 1px solid var(--color-border);
+    border-radius: var(--border-radius-lg);
+    padding: 2.25rem;
+  }
+
+  .section-title-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+
+  .section-title-row h3, .form-section h3 {
+    margin: 0;
+    font-size: 1.15rem;
+    font-weight: 700;
+    color: var(--color-text-main);
+  }
+
+  .user-id-pill {
+    font-size: 0.75rem;
+    background: var(--color-bg);
+    border: 1px solid var(--color-border);
+    padding: 0.2rem 0.6rem;
+    border-radius: 6px;
+    color: var(--color-text-muted);
+    font-family: monospace;
+  }
+
+  .form-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1.25rem;
+  }
+
+  .form-group {
+    display: flex;
+    flex-direction: column;
+    gap: 0.45rem;
+  }
+  .full-width { grid-column: 1 / -1; }
+
+  .form-group label {
+    font-size: 0.88rem;
+    font-weight: 600;
+    color: var(--color-text-main);
+  }
+
+  .req { color: #ef4444; }
+
+  .form-group input, .form-group select, .form-group textarea {
+    padding: 0.75rem 1rem;
+    border: 1px solid var(--color-border);
+    border-radius: 10px;
+    font-size: 0.95rem;
+    font-family: inherit;
+    background: var(--color-bg);
+    color: var(--color-text-main);
+    transition: all 0.2s ease;
+  }
+
+  .disabled-input {
+    background: var(--color-border) !important;
+    opacity: 0.7;
+    cursor: not-allowed;
+  }
+
+  .form-group input:focus, .form-group select:focus, .form-group textarea:focus {
+    outline: none;
+    border-color: var(--color-primary);
+    box-shadow: 0 0 0 3px var(--color-primary-light);
+  }
+
+  .form-divider {
+    border-top: 1px solid var(--color-border);
+    margin: 1.75rem 0;
+  }
+
+  .form-actions-bar {
+    display: flex;
+    justify-content: flex-end;
+    align-items: center;
+    gap: 1rem;
+    padding-top: 1rem;
+    border-top: 1px solid var(--color-border);
+  }
+
+  .btn-glow {
+    box-shadow: 0 4px 14px rgba(99, 102, 241, 0.35);
+  }
+
+  .btn-danger {
+    background: #ef4444;
+    color: white;
+    border: none;
+    padding: 0.75rem 1rem;
+    border-radius: 10px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: background 0.2s;
+  }
+  .btn-danger:hover {
+    background: #dc2626;
+  }
+
+  /* Sidebar */
+  .sidebar-card {
+    background: var(--color-surface);
+    backdrop-filter: blur(16px);
+    border: 1px solid var(--color-border);
+    border-radius: var(--border-radius-lg);
+    padding: 1.5rem;
+  }
+
+  .sidebar-card h3 {
+    margin: 0 0 1rem 0;
+    font-size: 1.05rem;
+    font-weight: 700;
+    color: var(--color-text-main);
+  }
+
+  .emp-summary-box {
+    display: flex;
+    align-items: center;
+    gap: 0.85rem;
+  }
+  .emp-logo {
+    font-size: 1.75rem;
+    width: 44px;
+    height: 44px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(99, 102, 241, 0.1);
+    border-radius: 10px;
+  }
+  .emp-summary-box strong {
+    display: block;
+    font-size: 0.95rem;
+    color: var(--color-text-main);
+  }
+  .emp-summary-box p {
+    margin: 0.15rem 0;
+    font-size: 0.82rem;
+    color: var(--color-text-muted);
+  }
+  .emp-email-txt {
+    font-size: 0.78rem;
+    color: var(--color-primary);
+  }
+
+  .sidebar-divider {
+    border-top: 1px solid var(--color-border);
+    margin: 1.25rem 0;
+  }
+
+  .meta-item-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.5rem 0;
+    font-size: 0.88rem;
+  }
+  .meta-lbl { color: var(--color-text-muted); }
+  .meta-val { font-weight: 600; color: var(--color-text-main); }
+  .meta-val.highlight { color: var(--color-primary); font-size: 1rem; font-weight: 800; }
+
+  .sec-subtitle {
+    font-size: 0.85rem;
+    color: var(--color-text-muted);
+    margin: 0.25rem 0 0 0;
+  }
+
+  .align-end {
+    display: flex;
+    justify-content: flex-end;
+    align-items: flex-end;
+  }
+
+  .btn-warning {
+    background: #f59e0b;
+    color: white;
+    border: none;
+    padding: 0.75rem 1.25rem;
+    border-radius: 10px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: background 0.2s;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+  }
+  .btn-warning:hover {
+    background: #d97706;
+  }
+
+  @media (max-width: 900px) {
+    .admin-edit-grid { grid-template-columns: 1fr; }
+    .form-grid { grid-template-columns: 1fr; }
+  }
+</style>

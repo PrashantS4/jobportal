@@ -1,0 +1,503 @@
+---
+import DashboardLayout from '../../../../layouts/DashboardLayout.astro';
+import { getDb } from '../../../../lib/db';
+import { jobPostings, users } from '../../../../db/schema';
+import { eq } from 'drizzle-orm';
+
+const payload = Astro.locals.user;
+if (!payload || (payload.userType !== 'admin' && payload.userType !== 'superadmin')) {
+  return Astro.redirect('/login');
+}
+
+const { id } = Astro.params;
+if (!id) {
+  return Astro.redirect('/admin/jobs');
+}
+
+const db = getDb();
+const job = await db.select().from(jobPostings).where(eq(jobPostings.id, id)).get();
+
+if (!job) {
+  return Astro.redirect('/admin/jobs');
+}
+
+// Fetch posting employer details
+const employer = job.employerId ? await db.select().from(users).where(eq(users.id, job.employerId)).get() : null;
+---
+
+<DashboardLayout title={`Edit Job: ${job.jobTitle}`} userType="admin" activePath="/admin/jobs">
+  <div class="dashboard-header mb-4">
+    <div class="back-link-wrap mb-3">
+      <a href="/admin/jobs" class="back-link">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline></svg>
+        Back to Job Moderation
+      </a>
+    </div>
+    <div class="header-titles">
+      <span class="badge-tag">Admin Moderation</span>
+      <h1>Edit Job Posting: {job.jobTitle}</h1>
+      <p class="subtitle">Update job details, adjust description/requirements, and modify status across the platform.</p>
+    </div>
+  </div>
+
+  <div class="admin-edit-grid">
+    <div class="edit-main-col">
+      <form id="admin-edit-job-form" class="card form-card">
+        <input type="hidden" name="jobId" value={job.id} />
+        
+        <!-- Job Title & Status Section -->
+        <div class="form-section">
+          <div class="section-title-row">
+            <h3>Basic Role Information</h3>
+            <span class="job-id-pill">ID: {job.id}</span>
+          </div>
+
+          <div class="form-group full-width mt-3">
+            <label for="jobTitle">Job Title <span class="req">*</span></label>
+            <input type="text" id="jobTitle" name="jobTitle" required value={job.jobTitle} />
+          </div>
+
+          <div class="form-grid mt-3">
+            <div class="form-group">
+              <label for="status">Publication Status <span class="req">*</span></label>
+              <select id="status" name="status">
+                <option value="published" selected={job.status === 'published'}>🟢 Published (Active on platform)</option>
+                <option value="draft" selected={job.status === 'draft'}>🟡 Draft (Hidden / Pending)</option>
+                <option value="closed" selected={job.status === 'closed'}>🔴 Closed / Inactive</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label for="employmentType">Employment Type</label>
+              <select id="employmentType" name="employmentType">
+                <option value="Full-time" selected={job.employmentType === 'Full-time'}>Full-time</option>
+                <option value="Part-time" selected={job.employmentType === 'Part-time'}>Part-time</option>
+                <option value="Contract" selected={job.employmentType === 'Contract'}>Contract</option>
+                <option value="Internship" selected={job.employmentType === 'Internship'}>Internship</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <div class="form-divider"></div>
+
+        <!-- Job Description Section -->
+        <div class="form-section">
+          <h3>Job Description & Responsibilities <span class="req">*</span></h3>
+          <p class="section-hint">Provide full description including candidate expectations, benefits, and tech stack.</p>
+          <div class="form-group full-width mt-2">
+            <textarea id="description" name="description" rows="9" required>{job.description}</textarea>
+          </div>
+        </div>
+
+        <div class="form-divider"></div>
+
+        <!-- Experience & Location Section -->
+        <div class="form-section">
+          <h3>Experience & Location Logistics</h3>
+          <div class="form-grid mt-3">
+            <div class="form-group">
+              <label for="experienceLevel">Experience Level</label>
+              <select id="experienceLevel" name="experienceLevel">
+                <option value="Entry" selected={job.experienceLevel === 'Entry'}>Entry Level</option>
+                <option value="Mid" selected={job.experienceLevel === 'Mid'}>Mid Level</option>
+                <option value="Senior" selected={job.experienceLevel === 'Senior'}>Senior Level</option>
+                <option value="Lead" selected={job.experienceLevel === 'Lead'}>Lead / Principal</option>
+              </select>
+            </div>
+
+            <div class="form-group">
+              <label for="locationCity">City / Location</label>
+              <input type="text" id="locationCity" name="locationCity" value={job.locationCity || ''} placeholder="e.g. San Francisco, CA" />
+            </div>
+          </div>
+
+          <div class="checkbox-card-wrap mt-3">
+            <label class="custom-checkbox-container">
+              <input type="checkbox" id="locationRemote" name="locationRemote" value="true" checked={job.locationRemote} />
+              <span class="checkbox-label">
+                <strong>Remote Friendly Position</strong>
+                <small>Allows candidates worldwide or nationally to apply remotely.</small>
+              </span>
+            </label>
+          </div>
+        </div>
+
+        <div class="form-divider"></div>
+
+        <!-- Compensation Section -->
+        <div class="form-section">
+          <h3>Compensation Range (Annual or Hourly)</h3>
+          <div class="form-grid-3 mt-3">
+            <div class="form-group">
+              <label for="salaryMin">Minimum Salary</label>
+              <input type="number" id="salaryMin" name="salaryMin" value={job.salaryMin || ''} placeholder="e.g. 80000" />
+            </div>
+            <div class="form-group">
+              <label for="salaryMax">Maximum Salary</label>
+              <input type="number" id="salaryMax" name="salaryMax" value={job.salaryMax || ''} placeholder="e.g. 130000" />
+            </div>
+            <div class="form-group">
+              <label for="salaryCurrency">Currency</label>
+              <select id="salaryCurrency" name="salaryCurrency">
+                <option value="USD" selected={job.salaryCurrency === 'USD'}>USD ($)</option>
+                <option value="INR" selected={job.salaryCurrency === 'INR'}>INR (₹)</option>
+                <option value="EUR" selected={job.salaryCurrency === 'EUR'}>EUR (€)</option>
+                <option value="GBP" selected={job.salaryCurrency === 'GBP'}>GBP (£)</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <div class="form-actions-bar mt-4">
+          <a href="/admin/jobs" class="btn btn-outline">Cancel</a>
+          <button type="submit" class="btn btn-primary btn-glow" id="save-job-btn">
+            Save & Update Job Posting
+          </button>
+        </div>
+      </form>
+    </div>
+
+    <!-- Employer & Statistics Sidebar -->
+    <div class="edit-sidebar-col">
+      <div class="card sidebar-card">
+        <h3>Employer Information</h3>
+        <div class="employer-info-box">
+          <div class="emp-avatar">🏢</div>
+          <div>
+            <strong>{employer?.companyName || 'Unknown Employer'}</strong>
+            <p>{employer ? `${employer.firstName} ${employer.lastName}` : 'Direct Posting'}</p>
+            <span class="emp-email">{employer?.email || '—'}</span>
+          </div>
+        </div>
+
+        <div class="sidebar-divider"></div>
+
+        <h3>Posting Meta</h3>
+        <div class="meta-item-row">
+          <span class="meta-lbl">Created Date</span>
+          <span class="meta-val">{job.createdAt ? new Date(job.createdAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : '—'}</span>
+        </div>
+        <div class="meta-item-row">
+          <span class="meta-lbl">Published Date</span>
+          <span class="meta-val">{job.publishedAt ? new Date(job.publishedAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : '—'}</span>
+        </div>
+        <div class="meta-item-row">
+          <span class="meta-lbl">Total Applications</span>
+          <span class="meta-val highlight">{job.applicationsCount || 0}</span>
+        </div>
+
+        <div class="sidebar-divider"></div>
+
+        <div class="quick-links">
+          <a href={`/jobs/${job.id}`} target="_blank" class="btn btn-outline w-full text-center">
+            View Live Public Page ↗
+          </a>
+        </div>
+      </div>
+    </div>
+  </div>
+</DashboardLayout>
+
+<script>
+  const form = document.getElementById('admin-edit-job-form') as HTMLFormElement | null;
+  const saveBtn = document.getElementById('save-job-btn') as HTMLButtonElement | null;
+
+  if (form && saveBtn) {
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+
+      const formData = new FormData(form);
+      const data: Record<string, any> = Object.fromEntries(formData.entries());
+      data.locationRemote = formData.has('locationRemote');
+
+      const originalText = saveBtn.innerText;
+      saveBtn.innerText = 'Saving Changes...';
+      saveBtn.disabled = true;
+
+      try {
+        const res = await fetch('/api/admin/jobs/update', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'same-origin',
+          body: JSON.stringify(data)
+        });
+
+        const result = await res.json();
+
+        if (res.ok) {
+          // @ts-ignore
+          if (window.showToast) window.showToast('Job posting updated successfully by Administrator!');
+          setTimeout(() => {
+            window.location.href = '/admin/jobs';
+          }, 800);
+        } else {
+          // @ts-ignore
+          if (window.showToast) window.showToast(result.error || 'Failed to update job', 'error');
+          saveBtn.innerText = originalText;
+          saveBtn.disabled = false;
+        }
+      } catch (err) {
+        // @ts-ignore
+        if (window.showToast) window.showToast('An error occurred while saving.', 'error');
+        saveBtn.innerText = originalText;
+        saveBtn.disabled = false;
+      }
+    });
+  }
+</script>
+
+<style>
+  .mb-3 { margin-bottom: 0.75rem; }
+  .mb-4 { margin-bottom: 1.75rem; }
+  .mt-2 { margin-top: 0.5rem; }
+  .mt-3 { margin-top: 1rem; }
+  .mt-4 { margin-top: 1.5rem; }
+  .w-full { width: 100%; box-sizing: border-box; }
+  .text-center { text-align: center; justify-content: center; }
+
+  .back-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--color-text-muted);
+    text-decoration: none;
+    transition: color 0.2s;
+  }
+  .back-link:hover { color: var(--color-primary); }
+
+  .badge-tag {
+    display: inline-block;
+    padding: 0.25rem 0.75rem;
+    background: rgba(99, 102, 241, 0.15);
+    color: var(--color-primary);
+    border-radius: 9999px;
+    font-size: 0.75rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin-bottom: 0.4rem;
+  }
+
+  .header-titles h1 {
+    margin: 0 0 0.3rem 0;
+    font-size: 1.75rem;
+    font-weight: 800;
+    color: var(--color-text-main);
+  }
+
+  .subtitle {
+    margin: 0;
+    font-size: 0.95rem;
+    color: var(--color-text-muted);
+  }
+
+  .admin-edit-grid {
+    display: grid;
+    grid-template-columns: 2.2fr 1fr;
+    gap: 1.75rem;
+  }
+
+  .form-card {
+    background: var(--color-surface);
+    backdrop-filter: blur(16px);
+    border: 1px solid var(--color-border);
+    border-radius: var(--border-radius-lg);
+    padding: 2.25rem;
+  }
+
+  .section-title-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+
+  .section-title-row h3, .form-section h3 {
+    margin: 0;
+    font-size: 1.15rem;
+    font-weight: 700;
+    color: var(--color-text-main);
+  }
+
+  .job-id-pill {
+    font-size: 0.75rem;
+    background: var(--color-bg);
+    border: 1px solid var(--color-border);
+    padding: 0.2rem 0.6rem;
+    border-radius: 6px;
+    color: var(--color-text-muted);
+    font-family: monospace;
+  }
+
+  .section-hint {
+    margin: 0.35rem 0 0 0;
+    font-size: 0.85rem;
+    color: var(--color-text-muted);
+  }
+
+  .form-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1.25rem;
+  }
+
+  .form-grid-3 {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 1.25rem;
+  }
+
+  .form-group {
+    display: flex;
+    flex-direction: column;
+    gap: 0.45rem;
+  }
+  .full-width { grid-column: 1 / -1; }
+
+  .form-group label {
+    font-size: 0.88rem;
+    font-weight: 600;
+    color: var(--color-text-main);
+  }
+
+  .req { color: #ef4444; }
+
+  .form-group input, .form-group textarea {
+    padding: 0.75rem 1rem;
+    border: 1px solid var(--color-border);
+    border-radius: 10px;
+    font-size: 0.95rem;
+    font-family: inherit;
+    background: var(--color-bg);
+    color: var(--color-text-main);
+    transition: all 0.2s ease;
+  }
+
+  .form-group select {
+    padding: 0.75rem 2.25rem 0.75rem 1rem;
+    border: 1px solid var(--color-border);
+    border-radius: 10px;
+    font-size: 0.95rem;
+    font-family: inherit;
+    background-color: var(--color-bg);
+    color: var(--color-text-main);
+    transition: all 0.2s ease;
+  }
+
+  .form-group input:focus, .form-group select:focus, .form-group textarea:focus {
+    outline: none;
+    border-color: var(--color-primary);
+    box-shadow: 0 0 0 3px var(--color-primary-light);
+  }
+
+  .form-divider {
+    border-top: 1px solid var(--color-border);
+    margin: 1.75rem 0;
+  }
+
+  .custom-checkbox-container {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.75rem 1rem;
+    background: var(--color-bg);
+    border: 1px solid var(--color-border);
+    border-radius: 10px;
+    cursor: pointer;
+  }
+  .custom-checkbox-container input {
+    width: 18px;
+    height: 18px;
+    cursor: pointer;
+  }
+  .checkbox-label strong {
+    display: block;
+    font-size: 0.88rem;
+    color: var(--color-text-main);
+  }
+  .checkbox-label small {
+    font-size: 0.78rem;
+    color: var(--color-text-muted);
+  }
+
+  .form-actions-bar {
+    display: flex;
+    justify-content: flex-end;
+    align-items: center;
+    gap: 1rem;
+    padding-top: 1rem;
+    border-top: 1px solid var(--color-border);
+  }
+
+  .btn-glow {
+    box-shadow: 0 4px 14px rgba(99, 102, 241, 0.35);
+  }
+
+  /* Sidebar */
+  .sidebar-card {
+    background: var(--color-surface);
+    backdrop-filter: blur(16px);
+    border: 1px solid var(--color-border);
+    border-radius: var(--border-radius-lg);
+    padding: 1.5rem;
+  }
+
+  .sidebar-card h3 {
+    margin: 0 0 1rem 0;
+    font-size: 1.05rem;
+    font-weight: 700;
+    color: var(--color-text-main);
+  }
+
+  .employer-info-box {
+    display: flex;
+    align-items: center;
+    gap: 0.85rem;
+  }
+  .emp-avatar {
+    font-size: 1.75rem;
+    width: 44px;
+    height: 44px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(99, 102, 241, 0.1);
+    border-radius: 10px;
+  }
+  .employer-info-box strong {
+    display: block;
+    font-size: 0.95rem;
+    color: var(--color-text-main);
+  }
+  .employer-info-box p {
+    margin: 0.15rem 0;
+    font-size: 0.82rem;
+    color: var(--color-text-muted);
+  }
+  .emp-email {
+    font-size: 0.78rem;
+    color: var(--color-primary);
+  }
+
+  .sidebar-divider {
+    border-top: 1px solid var(--color-border);
+    margin: 1.25rem 0;
+  }
+
+  .meta-item-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.5rem 0;
+    font-size: 0.88rem;
+  }
+  .meta-lbl { color: var(--color-text-muted); }
+  .meta-val { font-weight: 600; color: var(--color-text-main); }
+  .meta-val.highlight { color: var(--color-primary); font-size: 1rem; font-weight: 800; }
+
+  @media (max-width: 900px) {
+    .admin-edit-grid { grid-template-columns: 1fr; }
+    .form-grid, .form-grid-3 { grid-template-columns: 1fr; }
+  }
+</style>

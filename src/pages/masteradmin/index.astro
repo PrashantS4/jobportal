@@ -1,0 +1,414 @@
+---
+import DashboardLayout from '../../layouts/DashboardLayout.astro';
+import { getDb } from '../../lib/db';
+import { users, jobPostings, plans, applications } from '../../db/schema';
+import { eq, count, ne, desc, and } from 'drizzle-orm';
+
+const db = getDb();
+
+const totalUsersResult = await db.select({ count: count() }).from(users).where(ne(users.userType, 'external_applicant'));
+const totalUsers = totalUsersResult[0]?.count || 0;
+
+// Filter ONLY employers with pending verification
+const pendingVerificationsResult = await db.select({ count: count() }).from(users).where(and(eq(users.userType, 'employer'), eq(users.verifiedStatus, 'pending')));
+const pendingVerifications = pendingVerificationsResult[0]?.count || 0;
+
+const activeJobsResult = await db.select({ count: count() }).from(jobPostings).where(eq(jobPostings.status, 'published'));
+const activeJobs = activeJobsResult[0]?.count || 0;
+
+const totalEmployersResult = await db.select({ count: count() }).from(users).where(eq(users.userType, 'employer'));
+const totalEmployers = totalEmployersResult[0]?.count || 0;
+
+const recentEmployers = await db.select({
+  id: users.id,
+  firstName: users.firstName,
+  lastName: users.lastName,
+  email: users.email,
+  companyName: users.companyName,
+  planId: users.planId,
+  subscriptionStatus: users.subscriptionStatus,
+  verifiedStatus: users.verifiedStatus,
+  createdAt: users.createdAt
+}).from(users).where(eq(users.userType, 'employer')).orderBy(desc(users.createdAt)).limit(8);
+---
+
+<DashboardLayout title="MasterAdmin Operations Center" userType="masteradmin" activePath="/masteradmin">
+  <!-- MasterAdmin Hero Banner -->
+  <div class="welcome-banner">
+    <div class="banner-content">
+      <div>
+        <span class="banner-tag">Master Control</span>
+        <h1>MasterAdmin Operations Center 👑</h1>
+        <p class="banner-subtitle">Global oversight across billing plans, employer verification, platform accounts, and security logs.</p>
+      </div>
+      <div class="banner-actions">
+        <a href="/masteradmin/security" class="btn btn-outline" style="border-color: #8B5CF6; color: #A78BFA;">🛡️ Fraud & Security</a>
+        <a href="/masteradmin/plans" class="btn btn-primary btn-glow">Manage Plans</a>
+        <a href="/masteradmin/users" class="btn btn-outline">User Directory ↗</a>
+      </div>
+    </div>
+  </div>
+
+  <!-- Key Metrics Row -->
+  <div class="metrics-grid mb-4">
+    <div class="metric-card">
+      <div class="metric-icon-wrap icon-blue">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
+      </div>
+      <div class="metric-info">
+        <span class="metric-val">{totalUsers}</span>
+        <span class="metric-label">Total Accounts</span>
+      </div>
+    </div>
+
+    <div class="metric-card">
+      <div class="metric-icon-wrap icon-purple">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="7" width="20" height="14" rx="2" ry="2"></rect><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"></path></svg>
+      </div>
+      <div class="metric-info">
+        <span class="metric-val">{totalEmployers}</span>
+        <span class="metric-label">Total Employers</span>
+      </div>
+    </div>
+
+    <div class="metric-card">
+      <div class="metric-icon-wrap icon-green">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>
+      </div>
+      <div class="metric-info">
+        <span class="metric-val">{activeJobs}</span>
+        <span class="metric-label">Live Active Jobs</span>
+      </div>
+    </div>
+
+    <div class="metric-card">
+      <div class="metric-icon-wrap icon-yellow">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>
+      </div>
+      <div class="metric-info">
+        <span class="metric-val">{pendingVerifications}</span>
+        <span class="metric-label">Pending Employer Verifications</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Recent Registered Employers Table Section -->
+  <div class="admin-table-card">
+    <div class="table-card-header">
+      <div>
+        <h3>Registered Companies & Subscriptions</h3>
+        <p class="subtext">Overview of employer tiers, verification badges, and plan allocations</p>
+      </div>
+      <a href="/masteradmin/employers" class="view-all-link">Manage All Employers &rarr;</a>
+    </div>
+
+    <div class="table-responsive">
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>Company & Recruiter</th>
+            <th>Email</th>
+            <th>Tier / Plan</th>
+            <th>Verification</th>
+            <th>Joined Date</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {recentEmployers.length === 0 ? (
+            <tr>
+              <td colspan="6" style="text-align: center; color: var(--color-text-muted); padding: 3rem;">No employers registered yet.</td>
+            </tr>
+          ) : (
+            recentEmployers.map((emp) => (
+              <tr class="data-row">
+                <td>
+                  <div class="company-row-cell">
+                    <div class="avatar-box">
+                      {(emp.companyName || emp.firstName || 'C').charAt(0).toUpperCase()}
+                    </div>
+                    <div>
+                      <strong class="company-name-text">{emp.companyName || 'Company'}</strong>
+                      <span class="recruiter-name-sub">{emp.firstName} {emp.lastName}</span>
+                    </div>
+                  </div>
+                </td>
+                <td>
+                  <span class="email-text">{emp.email}</span>
+                </td>
+                <td>
+                  <span class="plan-pill">{emp.planId || 'Free'}</span>
+                </td>
+                <td>
+                  <span class={`verification-badge badge-${emp.verifiedStatus}`}>
+                    {emp.verifiedStatus?.toUpperCase()}
+                  </span>
+                </td>
+                <td>
+                  <span class="date-text">
+                    {emp.createdAt ? new Date(emp.createdAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : '-'}
+                  </span>
+                </td>
+                <td>
+                  <button 
+                    type="button" 
+                    class="btn btn-outline btn-sm view-dash-btn"
+                    onclick={`impersonateUser('${emp.id}')`}
+                  >
+                    👁️ View Dashboard
+                  </button>
+                </td>
+              </tr>
+            ))
+          )}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</DashboardLayout>
+
+<script>
+  async function impersonateUser(targetUserId: string) {
+    if (confirm("View dashboard as this employer? You will be logged into their company portal and can return to MasterAdmin at any time.")) {
+      try {
+        const res = await fetch('/api/masteradmin/impersonate', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ targetUserId })
+        });
+        const data = await res.json();
+        if (res.ok && data.redirectUrl) {
+          window.location.href = data.redirectUrl;
+        } else {
+          // @ts-ignore
+          if (window.showToast) window.showToast(data.error || 'Failed to switch context', 'error');
+        }
+      } catch (e) {
+        // @ts-ignore
+        if (window.showToast) window.showToast('An error occurred while switching context.', 'error');
+      }
+    }
+  }
+  // @ts-ignore
+  window.impersonateUser = impersonateUser;
+</script>
+
+<style>
+  .mb-4 { margin-bottom: 1.5rem; }
+
+  .welcome-banner {
+    background: linear-gradient(135deg, rgba(99, 102, 241, 0.12) 0%, rgba(139, 92, 246, 0.12) 100%);
+    border: 1px solid rgba(99, 102, 241, 0.2);
+    border-radius: var(--border-radius-lg);
+    padding: 1.75rem 2rem;
+    margin-bottom: 1.5rem;
+  }
+
+  .banner-content {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 1.5rem;
+    flex-wrap: wrap;
+  }
+
+  .banner-tag {
+    display: inline-block;
+    padding: 0.2rem 0.6rem;
+    background: rgba(99, 102, 241, 0.2);
+    color: var(--color-primary);
+    border-radius: 9999px;
+    font-size: 0.75rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    margin-bottom: 0.5rem;
+  }
+
+  .banner-content h1 {
+    font-size: 1.75rem;
+    font-weight: 800;
+    color: var(--color-text-main);
+    margin: 0 0 0.4rem 0;
+  }
+
+  .banner-subtitle {
+    color: var(--color-text-muted);
+    font-size: 0.9rem;
+    margin: 0;
+  }
+
+  .banner-actions {
+    display: flex;
+    gap: 0.75rem;
+    align-items: center;
+    flex-wrap: wrap;
+  }
+
+  .btn-glow {
+    box-shadow: 0 4px 15px rgba(99, 102, 241, 0.4);
+  }
+
+  .metrics-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1.25rem;
+  }
+
+  .metric-card {
+    flex: 1 1 calc(25% - 1.25rem);
+    min-width: 220px;
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--border-radius-md);
+    padding: 1.25rem;
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.03);
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+  }
+
+  .metric-card:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
+  }
+
+  .metric-icon-wrap {
+    width: 48px;
+    height: 48px;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+  }
+
+  .icon-blue { background: rgba(59, 130, 246, 0.12); color: #3b82f6; }
+  .icon-purple { background: rgba(168, 85, 247, 0.12); color: #a855f7; }
+  .icon-green { background: rgba(16, 185, 129, 0.12); color: #10b981; }
+  .icon-yellow { background: rgba(245, 158, 11, 0.12); color: #f59e0b; }
+
+  .metric-info { display: flex; flex-direction: column; }
+  .metric-val { font-size: 1.6rem; font-weight: 800; color: var(--color-text-main); line-height: 1.1; }
+  .metric-label { font-size: 0.78rem; font-weight: 600; color: var(--color-text-muted); margin-top: 0.2rem; }
+
+  .admin-table-card {
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--border-radius-lg);
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.04);
+    overflow: hidden;
+  }
+
+  .table-card-header {
+    padding: 1.25rem 1.5rem;
+    border-bottom: 1px solid var(--color-border);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+
+  .table-card-header h3 { margin: 0; font-size: 1.1rem; font-weight: 800; color: var(--color-text-main); }
+  .table-card-header .subtext { margin: 0.1rem 0 0 0; font-size: 0.82rem; color: var(--color-text-muted); }
+
+  .view-all-link {
+    font-size: 0.85rem;
+    font-weight: 700;
+    color: var(--color-primary);
+    text-decoration: none;
+  }
+  .view-all-link:hover { text-decoration: underline; }
+
+  .table-responsive { overflow-x: auto; }
+  .data-table { width: 100%; min-width: 900px; border-collapse: collapse; text-align: left; }
+
+  .data-table th {
+    padding: 1rem 1.25rem;
+    font-size: 0.78rem;
+    font-weight: 700;
+    color: var(--color-text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    border-bottom: 1px solid var(--color-border);
+    background: rgba(0,0,0,0.01);
+  }
+
+  .data-table td {
+    padding: 1rem 1.25rem;
+    border-bottom: 1px solid var(--color-border);
+    vertical-align: middle;
+  }
+
+  .company-row-cell { display: flex; align-items: center; gap: 0.75rem; }
+  .avatar-box {
+    width: 36px; height: 36px; border-radius: 8px;
+    background: linear-gradient(135deg, #6366f1, #8b5cf6);
+    color: white; font-weight: 800; font-size: 0.95rem;
+    display: flex; align-items: center; justify-content: center;
+  }
+
+  .company-name-text { font-size: 0.9rem; color: var(--color-text-main); display: block; }
+  .recruiter-name-sub { font-size: 0.78rem; color: var(--color-text-muted); }
+  .email-text { font-size: 0.85rem; color: var(--color-text-main); }
+
+  .plan-pill {
+    display: inline-block; padding: 0.2rem 0.55rem; border-radius: 6px;
+    background: rgba(99, 102, 241, 0.1); color: var(--color-primary);
+    font-size: 0.75rem; font-weight: 700; font-family: monospace;
+  }
+
+  .verification-badge {
+    display: inline-block; padding: 0.2rem 0.55rem; border-radius: 9999px;
+    font-size: 0.72rem; font-weight: 800;
+  }
+  .badge-verified { background: rgba(16, 185, 129, 0.12); color: #10b981; }
+  .badge-pending { background: rgba(245, 158, 11, 0.12); color: #f59e0b; }
+  .badge-rejected { background: rgba(239, 68, 68, 0.12); color: #ef4444; }
+
+  .date-text { font-size: 0.82rem; color: var(--color-text-muted); }
+
+  .view-dash-btn {
+    border-radius: 9999px;
+    padding: 0.35rem 0.85rem;
+    font-size: 0.78rem;
+    font-weight: 700;
+    white-space: nowrap;
+  }
+  .view-dash-btn:hover {
+    background: var(--color-primary);
+    color: white;
+    border-color: var(--color-primary);
+  }
+
+  @media (max-width: 1024px) {
+    .metric-card {
+      flex: 1 1 calc(50% - 1.25rem);
+    }
+  }
+
+  @media (max-width: 640px) {
+    .metrics-grid {
+      gap: 0.75rem;
+    }
+    .metric-card {
+      flex: 1 1 calc(50% - 0.75rem);
+      min-width: 130px;
+      padding: 1.25rem 0.75rem;
+      flex-direction: column;
+      justify-content: center;
+      text-align: center;
+      gap: 0.5rem;
+    }
+    .metric-info {
+      align-items: center;
+    }
+    .metric-val {
+      font-size: 1.4rem;
+    }
+    .metric-label {
+      font-size: 0.7rem;
+      line-height: 1.2;
+    }
+    .banner-content { flex-direction: column; align-items: flex-start; }
+  }
+</style>

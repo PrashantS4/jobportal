@@ -1,0 +1,195 @@
+---
+// PostEditor.astro
+import { getDb } from '../lib/db';
+import { users } from '../db/schema';
+import { eq } from 'drizzle-orm';
+
+// @ts-ignore
+const payload = Astro.locals.user;
+let user = null;
+if (payload) {
+  const db = getDb();
+  user = await db.select().from(users).where(eq(users.id, payload.userId)).get();
+}
+---
+
+{user && (
+  <div class="card post-editor-card">
+    <form id="postForm" class="post-form">
+      <div class="editor-header">
+        <img 
+          src={user.avatarUrl || `https://ui-avatars.com/api/?name=${encodeURIComponent(user.firstName + ' ' + user.lastName)}&background=random`} 
+          alt={user.firstName} 
+          class="user-avatar" 
+        />
+        <textarea 
+          id="postContent" 
+          rows="3" 
+          placeholder="What's on your mind? Share a blog, thought, or update..." 
+          class="content-input"
+          required
+        ></textarea>
+      </div>
+      
+      <div class="editor-footer border-top">
+        <div class="media-inputs">
+          <input 
+            type="url" 
+            id="postMediaUrl" 
+            placeholder="Add media URL (image/video link)" 
+            class="media-url-input"
+          />
+          <select id="postMediaType" class="media-type-select">
+            <option value="">Type</option>
+            <option value="image">Image</option>
+            <option value="video">Video</option>
+            <option value="link">Link</option>
+          </select>
+        </div>
+        
+        <button type="submit" class="btn btn-primary post-btn">
+          <span>Post</span>
+        </button>
+      </div>
+      <div id="postError" class="error-msg hidden"></div>
+    </form>
+  </div>
+)}
+
+<style>
+  .post-editor-card {
+    padding: 1.5rem;
+    margin-bottom: 2rem;
+  }
+  .post-form {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+  }
+  .editor-header {
+    display: flex;
+    gap: 1rem;
+    align-items: flex-start;
+  }
+  .user-avatar {
+    width: 48px;
+    height: 48px;
+    border-radius: 50%;
+    object-fit: cover;
+    border: 2px solid var(--color-surface);
+  }
+  .content-input {
+    flex: 1;
+    width: 100%;
+    background-color: var(--color-surface);
+    border: 1px solid transparent;
+    border-radius: var(--border-radius-md);
+    padding: 0.75rem;
+    font-family: inherit;
+    font-size: 0.95rem;
+    resize: none;
+    transition: all 0.2s ease;
+    color: var(--color-text-main);
+  }
+  .content-input:focus {
+    outline: none;
+    background-color: white;
+    border-color: var(--color-primary);
+  }
+  .editor-footer {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    align-items: center;
+    gap: 1rem;
+    padding-top: 1rem;
+    border-top: 1px solid var(--color-border);
+  }
+  .media-inputs {
+    display: flex;
+    gap: 0.75rem;
+    align-items: center;
+    flex: 1;
+  }
+  .media-url-input, .media-type-select {
+    background-color: var(--color-surface);
+    border: 1px solid transparent;
+    border-radius: var(--border-radius-sm);
+    padding: 0.5rem 0.75rem;
+    font-size: 0.875rem;
+    color: var(--color-text-main);
+    transition: all 0.2s ease;
+  }
+  .media-url-input:focus, .media-type-select:focus {
+    outline: none;
+    background-color: white;
+    border-color: var(--color-primary);
+  }
+  .media-url-input {
+    width: 100%;
+    max-width: 300px;
+  }
+  .post-btn {
+    padding: 0.5rem 1.5rem;
+    font-weight: 500;
+  }
+  .hidden {
+    display: none !important;
+  }
+  .error-msg {
+    color: var(--color-danger);
+    font-size: 0.875rem;
+    margin-top: 0.5rem;
+  }
+</style>
+
+<script>
+  const form = document.getElementById('postForm');
+  const contentInput = document.getElementById('postContent') as HTMLTextAreaElement;
+  const mediaUrlInput = document.getElementById('postMediaUrl') as HTMLInputElement;
+  const mediaTypeInput = document.getElementById('postMediaType') as HTMLSelectElement;
+  const errorDiv = document.getElementById('postError');
+
+  if (form) {
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const btn = form.querySelector('button[type="submit"]') as HTMLButtonElement;
+      
+      const content = contentInput?.value;
+      const mediaUrl = mediaUrlInput?.value;
+      const mediaType = mediaTypeInput?.value;
+      
+      if (!content) return;
+      
+      btn.disabled = true;
+      btn.innerHTML = '<span>Posting...</span>';
+      if(errorDiv) errorDiv.classList.add('hidden');
+
+      try {
+        const res = await fetch('/api/posts/create', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ content, mediaUrl, mediaType })
+        });
+
+        if (res.ok) {
+          window.location.reload();
+        } else {
+          const data = await res.json();
+          if(errorDiv) {
+            errorDiv.textContent = data.error || 'Failed to create post';
+            errorDiv.classList.remove('hidden');
+          }
+        }
+      } catch (err) {
+        if(errorDiv) {
+          errorDiv.textContent = 'An unexpected error occurred';
+          errorDiv.classList.remove('hidden');
+        }
+      } finally {
+        btn.disabled = false;
+        btn.innerHTML = '<span>Post</span>';
+      }
+    });
+  }
+</script>

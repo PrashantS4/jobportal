@@ -1,0 +1,276 @@
+---
+import Layout from '../layouts/Layout.astro';
+import Header from '../components/Header.astro';
+---
+
+<Layout hideNavAndFooter={true}>
+  <main class="auth-container">
+    <a href="/" class="back-home-link">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <line x1="19" y1="12" x2="5" y2="12"></line>
+        <polyline points="12 19 5 12 12 5"></polyline>
+      </svg>
+      Back to Home
+    </a>
+    <div class="auth-card card">
+      <div class="auth-header">
+        <h1>Welcome Back</h1>
+        <p>Log in to your RecruitNest account</p>
+      </div>
+
+      <form class="auth-form" id="login-form">
+        <div class="form-group">
+          <label for="email">Email Address</label>
+          <input type="email" id="email" name="email" required placeholder="name@example.com" />
+        </div>
+
+        <div class="form-group">
+          <label for="password">Password</label>
+          <div class="password-wrapper">
+            <input type="password" id="password" name="password" required placeholder="••••••••" />
+            <button type="button" class="password-toggle" aria-label="Toggle password visibility">
+              <svg class="eye-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+                <circle cx="12" cy="12" r="3"></circle>
+              </svg>
+              <svg class="eye-off-icon" style="display: none;" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path>
+                <line x1="1" y1="1" x2="23" y2="23"></line>
+              </svg>
+            </button>
+          </div>
+        </div>
+
+        <div class="form-options">
+          <label class="checkbox-container">
+            <input type="checkbox" name="remember" />
+            <span class="checkmark"></span>
+            Remember me
+          </label>
+          <a href="/forgot-password" class="text-primary">Forgot Password?</a>
+        </div>
+
+        <button type="submit" class="btn btn-primary w-full">Log In</button>
+      </form>
+
+      <div class="auth-footer">
+        <p>Don't have an account? <a href="/pricing" class="text-primary fw-600">Choose a plan & Sign up</a></p>
+      </div>
+    </div>
+  </main>
+</Layout>
+
+<style>
+  .auth-container {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 100vh;
+    padding: 2rem 1.5rem;
+    background-color: var(--color-bg);
+    position: relative;
+  }
+
+  .back-home-link {
+    position: absolute;
+    top: 2rem;
+    left: 2rem;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    color: var(--color-text-muted);
+    font-weight: 500;
+    text-decoration: none;
+    transition: all 0.2s ease;
+    padding: 0.5rem 1rem;
+    border-radius: 2rem;
+    background-color: var(--color-bg);
+    border: 1px solid var(--color-border);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+  }
+
+  .back-home-link:hover {
+    color: var(--color-primary);
+    transform: translateX(-4px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+    border-color: var(--color-primary-light);
+  }
+
+  .auth-card {
+    width: 100%;
+    max-width: 440px;
+    padding: 2.5rem;
+  }
+
+  .auth-header {
+    text-align: center;
+    margin-bottom: 2rem;
+  }
+
+  .auth-header h1 {
+    font-size: 1.75rem;
+    margin-bottom: 0.5rem;
+  }
+
+  .auth-header p {
+    color: var(--color-text-muted);
+    margin: 0;
+  }
+
+  .auth-form {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+  }
+
+  .form-group {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+
+  .form-group label {
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: var(--color-text-main);
+  }
+
+  .form-group input {
+    width: 100%;
+    padding: 0.75rem 1rem;
+    border: 1px solid var(--color-border);
+    border-radius: var(--border-radius-md);
+    font-size: 1rem;
+    font-family: inherit;
+    background-color: var(--color-bg);
+    color: var(--color-text-main);
+    transition: border-color 0.2s;
+  }
+
+  .form-group input:focus {
+    outline: none;
+    border-color: var(--color-primary);
+    box-shadow: 0 0 0 3px var(--color-primary-light);
+  }
+
+  .password-wrapper {
+    position: relative;
+    display: flex;
+    align-items: center;
+  }
+
+  .password-wrapper input {
+    padding-right: 2.5rem;
+  }
+
+  .password-toggle {
+    position: absolute;
+    right: 12px;
+    background: none;
+    border: none;
+    padding: 0;
+    cursor: pointer;
+    color: var(--color-text-muted);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .password-toggle:hover {
+    color: var(--color-text-main);
+  }
+
+  .form-options {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 0.875rem;
+  }
+
+  .checkbox-container {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    cursor: pointer;
+    color: var(--color-text-muted);
+  }
+
+  .w-full {
+    width: 100%;
+  }
+
+  .auth-footer {
+    margin-top: 2rem;
+    text-align: center;
+    font-size: 0.875rem;
+    color: var(--color-text-muted);
+  }
+
+  .fw-600 {
+    font-weight: 600;
+  }
+</style>
+
+<script>
+  // Password visibility toggle
+  const passToggle = document.querySelector('.password-toggle');
+  const passInput = document.getElementById('password');
+  
+  if (passToggle && passInput) {
+    passToggle.addEventListener('click', () => {
+      const type = passInput.getAttribute('type') === 'password' ? 'text' : 'password';
+      passInput.setAttribute('type', type);
+      
+      const eyeIcon = passToggle.querySelector('.eye-icon') as HTMLElement;
+      const eyeOffIcon = passToggle.querySelector('.eye-off-icon') as HTMLElement;
+      
+      if (type === 'text') {
+        eyeIcon.style.display = 'none';
+        eyeOffIcon.style.display = 'block';
+      } else {
+        eyeIcon.style.display = 'block';
+        eyeOffIcon.style.display = 'none';
+      }
+    });
+  }
+
+  // Simple client-side auth logic
+  const form = document.getElementById('login-form');
+  if (form) {
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const formData = new FormData(e.target as HTMLFormElement);
+      const email = formData.get('email');
+      const password = formData.get('password');
+
+      try {
+        const res = await fetch('/api/auth/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email, password })
+        });
+        
+        const data = await res.json();
+        if (res.ok) {
+          if (data.user.userType === 'employer' && !data.user.planId) {
+            showToast('You must buy a premium plan first before logging in.');
+            window.location.href = '/#pricing';
+            return;
+          }
+          // Set cookie or local storage, then redirect
+          document.cookie = `auth_token=${data.token}; path=/; max-age=86400`;
+          
+          if (data.user.userType === 'employer') window.location.href = '/employer';
+          else if (data.user.userType === 'masteradmin') window.location.href = '/masteradmin';
+          else if (data.user.userType === 'superadmin') window.location.href = '/superadmin';
+          else if (data.user.userType === 'admin') window.location.href = '/admin';
+          else window.location.href = '/dashboard';
+        } else {
+          showToast(data.error || 'Login failed');
+        }
+      } catch (err) {
+        showToast('An error occurred during login');
+      }
+    });
+  }
+</script>

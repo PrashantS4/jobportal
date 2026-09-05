@@ -1,0 +1,45 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "recruitnest",
+  "account_id": "ba6bd9c21ac1835d8941ec92b809442e",
+  "compatibility_date": "2026-08-06",
+  "compatibility_flags": [
+    "nodejs_compat"
+  ],
+  "vars": {
+    "PUBLIC_BASE_URL": "https://recruitnest.prashantsinghstd.workers.dev",
+    "PUBLIC_STORAGE_URL": "https://recruitnest.prashantsinghstd.workers.dev/uploads"
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "recruitnest",
+      "database_id": "293b9585-0b6d-4a5d-b573-6bc7539ebcdb",
+      "migrations_dir": "drizzle"
+    }
+  ],
+  "r2_buckets": [
+    {
+      "binding": "BUCKET",
+      "bucket_name": "recruitnest-uploads"
+    }
+  ],
+  "kv_namespaces": [
+    {
+      "binding": "SESSION",
+      "id": "b4daec1a4a4c4a8daaee96253dbe4a95"
+    }
+  ],
+  "vectorize": [
+    {
+      "binding": "VECTORIZE_INDEX",
+      "index_name": "job-embeddings"
+    }
+  ],
+  "ai": {
+    "binding": "AI"
+  },
+  "triggers": {
+    "crons": ["0 8 * * *"]
+  }
+}

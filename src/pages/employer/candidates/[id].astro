@@ -1,0 +1,777 @@
+---
+import { getResumeViewerUrl } from '../../../lib/resume-helper';
+import DashboardLayout from '../../../layouts/DashboardLayout.astro';
+import { getDb } from '../../../lib/db';
+import { users, applications, jobPostings } from '../../../db/schema';
+import { eq, and, desc } from 'drizzle-orm';
+
+const payload = Astro.locals.user;
+if (!payload || payload.userType !== 'employer') {
+  return Astro.redirect('/login');
+}
+
+const { id } = Astro.params;
+if (!id) {
+  return Astro.redirect('/employer/candidates');
+}
+
+const db = getDb();
+
+// 1. Fetch Candidate User Record
+const candidate = await db.select()
+  .from(users)
+  .where(and(eq(users.id, id), eq(users.userType, 'employee')))
+  .get();
+
+if (!candidate) {
+  return Astro.redirect('/employer/candidates');
+}
+
+// 2. Fetch Applications submitted by this candidate to THIS employer's job postings
+const candidateApps = await db.select({
+  id: applications.id,
+  status: applications.status,
+  appliedAt: applications.appliedAt,
+  aiScore: applications.aiScore,
+  aiSummary: applications.aiSummary,
+  resumeUrl: applications.resumeUrl,
+  jobId: jobPostings.id,
+  jobTitle: jobPostings.jobTitle,
+})
+.from(applications)
+.innerJoin(jobPostings, eq(applications.jobPostingId, jobPostings.id))
+.where(and(
+  eq(applications.applicantId, candidate.id),
+  eq(applications.employerId, payload.userId)
+))
+.orderBy(desc(applications.appliedAt))
+.all();
+
+// Safely parse skills JSON array strictly from candidate DB record
+let skillsList: string[] = [];
+if (candidate.skills) {
+  try {
+    const parsed = typeof candidate.skills === 'string' ? JSON.parse(candidate.skills) : candidate.skills;
+    if (Array.isArray(parsed)) {
+      skillsList = parsed.filter((s: any) => typeof s === 'string' && s.trim());
+    }
+  } catch (e) {}
+}
+
+// Safely parse education JSON array strictly from candidate DB record
+let educationList: any[] = [];
+if (candidate.education) {
+  try {
+    const parsed = typeof candidate.education === 'string' ? JSON.parse(candidate.education) : candidate.education;
+    if (Array.isArray(parsed)) {
+      educationList = parsed;
+    }
+  } catch (e) {}
+}
+
+// Safely parse workExperience JSON array strictly from candidate DB record
+let workExperienceList: any[] = [];
+if (candidate.workExperience) {
+  try {
+    const parsed = typeof candidate.workExperience === 'string' ? JSON.parse(candidate.workExperience) : candidate.workExperience;
+    if (Array.isArray(parsed)) {
+      workExperienceList = parsed;
+    }
+  } catch (e) {}
+}
+
+const avatarInitial = (candidate.firstName?.[0] || 'C').toUpperCase();
+const photoUrl = candidate.avatarUrl || null;
+const resumePdfUrl = candidate.defaultResumeUrl || (candidateApps[0]?.resumeUrl) || null;
+---
+
+<DashboardLayout title={`${candidate.firstName} ${candidate.lastName} - Candidate Profile`} userType="employer" activePath="/employer/candidates">
+  <div class="candidate-profile-page">
+    <!-- Top Back Header -->
+    <div class="header-nav mb-4">
+      <a href="/employer/candidates" class="btn btn-outline btn-sm">
+        &larr; Back to Candidate Search
+      </a>
+      <span class="badge-tag">Verified Candidate Record</span>
+    </div>
+
+    <!-- Candidate Hero Profile Card -->
+    <div class="hero-profile-card mb-4">
+      <div class="hero-main-info">
+        <div class="avatar-large-wrap">
+          {photoUrl ? (
+            <img src={photoUrl} alt={`${candidate.firstName} ${candidate.lastName}`} class="avatar-img" />
+          ) : (
+            <div class="avatar-initials-large">{avatarInitial}</div>
+          )}
+          {candidate.verifiedStatus === 'verified' && (
+            <span class="verified-badge" title="Verified Seeker">✓ Verified</span>
+          )}
+        </div>
+
+        <div class="candidate-details-head">
+          <div class="name-status-row">
+            <h1>{candidate.firstName} {candidate.lastName}</h1>
+            <span class="status-badge-active">● Active Job Seeker</span>
+          </div>
+
+          {candidate.headline && (
+            <p class="headline-text">{candidate.headline}</p>
+          )}
+
+          <div class="meta-row">
+            <span>📍 {candidate.location || 'Location not specified'}</span>
+            <span>•</span>
+            <span>✉️ {candidate.email}</span>
+            <span>•</span>
+            <span>📞 {candidate.phone || 'Phone upon request'}</span>
+            {candidate.experienceYears && (
+              <>
+                <span>•</span>
+                <span>💼 {candidate.experienceYears}+ Years Experience</span>
+              </>
+            )}
+          </div>
+
+          <!-- Social Links Bar -->
+          <div class="social-links-bar mt-3">
+            {candidate.linkedinUrl && (
+              <a href={candidate.linkedinUrl} target="_blank" rel="noopener noreferrer" class="social-chip">
+                <span>🌐 LinkedIn Profile</span>
+              </a>
+            )}
+            {candidate.portfolioUrl && (
+              <a href={candidate.portfolioUrl} target="_blank" rel="noopener noreferrer" class="social-chip">
+                <span>🔗 Portfolio Website</span>
+              </a>
+            )}
+            {resumePdfUrl && (
+              <a href={getResumeViewerUrl(resumePdfUrl, Astro.url.origin)} target="_blank" rel="noopener noreferrer" class="social-chip resume-chip">
+                <span>📄 Download Resume PDF</span>
+              </a>
+            )}
+          </div>
+        </div>
+      </div>
+
+      <!-- Quick Action Buttons -->
+      <div class="hero-actions-bar">
+        <a href={`/employer/messages?userId=${candidate.id}`} class="btn btn-primary btn-glow">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>
+          Direct Message Candidate
+        </a>
+
+        {candidateApps.length > 0 && (
+          <a href={`/employer/interviews?appId=${candidateApps[0].id}&action=schedule`} class="btn btn-outline">
+            📅 Schedule Interview
+          </a>
+        )}
+      </div>
+    </div>
+
+    <!-- Grid Content Columns -->
+    <div class="profile-grid">
+      <!-- Left Main Column -->
+      <div class="main-column">
+        <!-- Professional Bio -->
+        <div class="profile-card mb-4">
+          <h3 class="section-title">
+            <span>👤 Professional Bio & Summary</span>
+          </h3>
+          <p class="bio-text">
+            {candidate.bio || 'No professional bio or summary statement added to candidate profile yet.'}
+          </p>
+        </div>
+
+        <!-- Technical Skills & Core Competencies -->
+        <div class="profile-card mb-4">
+          <h3 class="section-title">
+            <span>🎯 Core Competencies & Skills</span>
+          </h3>
+          {skillsList.length > 0 ? (
+            <div class="skills-grid">
+              {skillsList.map(skill => (
+                <div class="skill-pill">
+                  <span class="skill-dot"></span>
+                  <span>{skill}</span>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p class="no-data-hint">No skills added to candidate profile yet.</p>
+          )}
+        </div>
+
+        <!-- Work Experience History Card -->
+        <div class="profile-card mb-4">
+          <h3 class="section-title">
+            <span>💼 Work Experience History ({workExperienceList.length})</span>
+          </h3>
+          {workExperienceList.length > 0 ? (
+            <div class="work-exp-display-list">
+              {workExperienceList.map((exp: any) => (
+                <div class="work-exp-display-item">
+                  <div class="exp-icon-box">💼</div>
+                  <div class="exp-display-details">
+                    <h4 class="exp-title-text">{exp.jobTitle || 'Position'}</h4>
+                    <p class="exp-company-text">🏛️ <strong>{exp.company || 'Company'}</strong></p>
+                    {(exp.startDate || exp.endDate) && (
+                      <span class="exp-date-pill">
+                        📅 {exp.startDate || ''} {exp.startDate && exp.endDate ? '–' : ''} {exp.currentlyWorking ? 'Present' : (exp.endDate || '')}
+                      </span>
+                    )}
+                    {exp.skillsUsed && (
+                      <p class="exp-skills-used mt-2">
+                        <strong>Skills Used:</strong> {exp.skillsUsed}
+                      </p>
+                    )}
+                    {exp.description && (
+                      <p class="exp-desc-text mt-2">{exp.description}</p>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p class="no-data-hint">No detailed work experience entries listed on candidate profile yet.</p>
+          )}
+        </div>
+
+        <!-- Education & Credentials -->
+        <div class="profile-card mb-4">
+          <h3 class="section-title">
+            <span>🎓 Education & Credentials</span>
+          </h3>
+          {educationList.length > 0 ? (
+            <div class="education-list">
+              {educationList.map((edu: any) => (
+                <div class="education-item">
+                  <div class="edu-icon">🏛️</div>
+                  <div>
+                    <h4 class="edu-degree">{edu.degree || edu.course || 'Degree / Qualification'}</h4>
+                    <p class="edu-institution">{edu.institution || edu.college || 'Institution'}</p>
+                    {(edu.startYear || edu.year) && (
+                      <span class="edu-year">
+                        {edu.startYear && edu.endYear ? `${edu.startYear} - ${edu.endYear}` : (edu.year || '')}
+                      </span>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p class="no-data-hint">No education history listed on candidate profile yet.</p>
+          )}
+        </div>
+      </div>
+
+      <!-- Right Column: Applications History with Your Company -->
+      <div class="side-column">
+        <div class="profile-card mb-4">
+          <h3 class="section-title">
+            <span>💼 Applications to Your Jobs ({candidateApps.length})</span>
+          </h3>
+
+          {candidateApps.length === 0 ? (
+            <div class="no-apps-box">
+              <span class="no-apps-icon">📌</span>
+              <p>This candidate has not directly submitted an application to your company postings yet.</p>
+              <a href={`/employer/messages?userId=${candidate.id}`} class="btn btn-outline btn-sm mt-2">
+                Invite to Apply via Message
+              </a>
+            </div>
+          ) : (
+            <div class="apps-history-list">
+              {candidateApps.map(app => (
+                <div class="app-history-card">
+                  <div class="app-card-top">
+                    <strong class="job-title-name">{app.jobTitle}</strong>
+                    <span class={`status-pill status-${app.status}`}>
+                      {app.status.replace('_', ' ').toUpperCase()}
+                    </span>
+                  </div>
+
+                  <div class="app-card-meta">
+                    <span>📅 Applied {new Date(app.appliedAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}</span>
+                    {app.aiScore !== null && (
+                      <span class="match-badge" style={`color: ${app.aiScore >= 80 ? '#10b981' : app.aiScore >= 50 ? '#f59e0b' : '#ef4444'};`}>
+                        ✨ {app.aiScore}% AI Fit
+                      </span>
+                    )}
+                  </div>
+
+                  <div class="app-card-actions mt-3">
+                    <a href={`/employer/applications/${app.id}`} class="btn btn-primary btn-sm w-full text-center">
+                      Review Application &rarr;
+                    </a>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        <!-- Recruiter Notes / Direct Actions Card -->
+        <div class="profile-card">
+          <h3 class="section-title">
+            <span>⚡ Quick Recruiter Actions</span>
+          </h3>
+          <div class="quick-actions-stack">
+            <a href={`/employer/messages?userId=${candidate.id}`} class="action-tile">
+              <span class="tile-icon">💬</span>
+              <div>
+                <strong>Send Direct Message</strong>
+                <p>Start a conversation in candidate chat</p>
+              </div>
+            </a>
+            {resumePdfUrl && (
+              <a href={getResumeViewerUrl(resumePdfUrl, Astro.url.origin)} target="_blank" rel="noopener noreferrer" class="action-tile">
+                <span class="tile-icon">📄</span>
+                <div>
+                  <strong>View Full Resume PDF</strong>
+                  <p>Download or preview attached CV</p>
+                </div>
+              </a>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</DashboardLayout>
+
+<style>
+  .mb-4 { margin-bottom: 1.5rem; }
+  .mt-2 { margin-top: 0.5rem; }
+  .mt-3 { margin-top: 0.85rem; }
+  .w-full { width: 100%; box-sizing: border-box; }
+  .text-center { text-align: center; justify-content: center; }
+
+  .header-nav {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 1rem;
+    flex-wrap: wrap;
+  }
+
+  .badge-tag {
+    display: inline-block;
+    padding: 0.25rem 0.75rem;
+    background: rgba(99, 102, 241, 0.15);
+    color: var(--color-primary);
+    border-radius: 9999px;
+    font-size: 0.75rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+
+  /* Hero Profile Card */
+  .hero-profile-card {
+    background: var(--color-surface);
+    backdrop-filter: blur(16px);
+    border-radius: var(--border-radius-lg);
+    border: 1px solid var(--color-border);
+    padding: 1.75rem;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.04);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 2rem;
+    flex-wrap: wrap;
+  }
+
+  .hero-main-info {
+    display: flex;
+    align-items: flex-start;
+    gap: 1.5rem;
+    flex: 1;
+    min-width: 280px;
+  }
+
+  .avatar-large-wrap {
+    position: relative;
+    flex-shrink: 0;
+  }
+
+  .avatar-img {
+    width: 80px;
+    height: 80px;
+    border-radius: 20px;
+    object-fit: cover;
+    border: 2px solid var(--color-primary);
+  }
+
+  .avatar-initials-large {
+    width: 80px;
+    height: 80px;
+    border-radius: 20px;
+    background: linear-gradient(135deg, #6366f1, #8b5cf6);
+    color: white;
+    font-weight: 800;
+    font-size: 2.25rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 6px 18px rgba(99, 102, 241, 0.3);
+  }
+
+  .verified-badge {
+    position: absolute;
+    bottom: -6px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: #10b981;
+    color: white;
+    font-size: 0.65rem;
+    font-weight: 800;
+    padding: 0.15rem 0.5rem;
+    border-radius: 9999px;
+    white-space: nowrap;
+    box-shadow: 0 2px 6px rgba(16, 185, 129, 0.4);
+  }
+
+  .candidate-details-head h1 {
+    margin: 0;
+    font-size: 1.75rem;
+    font-weight: 800;
+    color: var(--color-text-main);
+  }
+
+  .name-status-row {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+  }
+
+  .status-badge-active {
+    font-size: 0.75rem;
+    font-weight: 700;
+    color: #10b981;
+    background: rgba(16, 185, 129, 0.12);
+    border: 1px solid rgba(16, 185, 129, 0.3);
+    padding: 0.2rem 0.65rem;
+    border-radius: 9999px;
+  }
+
+  .headline-text {
+    margin: 0.25rem 0 0.5rem 0;
+    font-size: 1.05rem;
+    font-weight: 600;
+    color: var(--color-primary);
+  }
+
+  .meta-row {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.85rem;
+    color: var(--color-text-muted);
+    flex-wrap: wrap;
+  }
+
+  .social-links-bar {
+    display: flex;
+    gap: 0.6rem;
+    flex-wrap: wrap;
+  }
+
+  .social-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.35rem 0.75rem;
+    background: var(--color-bg);
+    border: 1px solid var(--color-border);
+    border-radius: 8px;
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--color-text-main);
+    text-decoration: none;
+    transition: all 0.2s ease;
+  }
+  .social-chip:hover {
+    border-color: var(--color-primary);
+    color: var(--color-primary);
+    transform: translateY(-1px);
+  }
+
+  .resume-chip {
+    background: rgba(99, 102, 241, 0.1);
+    border-color: rgba(99, 102, 241, 0.3);
+    color: var(--color-primary);
+  }
+
+  .hero-actions-bar {
+    display: flex;
+    flex-direction: column;
+    gap: 0.65rem;
+    min-width: 220px;
+  }
+  .hero-actions-bar .btn {
+    justify-content: center;
+  }
+
+  .btn-glow {
+    box-shadow: 0 4px 14px rgba(99, 102, 241, 0.35);
+  }
+
+  /* Profile Grid Layout */
+  .profile-grid {
+    display: grid;
+    grid-template-columns: 1fr 340px;
+    gap: 1.5rem;
+  }
+
+  .profile-card {
+    background: var(--color-surface);
+    backdrop-filter: blur(16px);
+    border-radius: var(--border-radius-lg);
+    border: 1px solid var(--color-border);
+    padding: 1.5rem;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.04);
+  }
+
+  .section-title {
+    margin: 0 0 1.1rem 0;
+    font-size: 1.1rem;
+    font-weight: 800;
+    color: var(--color-text-main);
+  }
+
+  .bio-text {
+    margin: 0;
+    font-size: 0.95rem;
+    line-height: 1.6;
+    color: var(--color-text-muted);
+  }
+
+  .no-data-hint {
+    margin: 0;
+    font-size: 0.88rem;
+    color: var(--color-text-muted);
+    font-style: italic;
+  }
+
+  /* Skills Grid */
+  .skills-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+
+  .skill-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+    padding: 0.4rem 0.85rem;
+    background: rgba(99, 102, 241, 0.08);
+    border: 1px solid rgba(99, 102, 241, 0.2);
+    border-radius: 8px;
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--color-text-main);
+  }
+
+  .skill-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--color-primary);
+  }
+
+  /* Education List */
+  .education-list {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+  }
+
+  .education-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.85rem;
+  }
+
+  .edu-icon {
+    font-size: 1.5rem;
+  }
+
+  .edu-degree {
+    margin: 0;
+    font-size: 0.95rem;
+    font-weight: 700;
+    color: var(--color-text-main);
+  }
+
+  .edu-institution {
+    margin: 0.15rem 0 0 0;
+    font-size: 0.85rem;
+    color: var(--color-text-muted);
+  }
+
+  .edu-year {
+    font-size: 0.78rem;
+    font-weight: 600;
+    color: var(--color-primary);
+  }
+
+  /* Applications History Cards */
+  .apps-history-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.85rem;
+  }
+
+  .app-history-card {
+    padding: 1rem;
+    background: var(--color-bg);
+    border: 1px solid var(--color-border);
+    border-radius: var(--border-radius-md);
+  }
+
+  .app-card-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 0.5rem;
+  }
+
+  .job-title-name {
+    font-size: 0.92rem;
+    color: var(--color-text-main);
+  }
+
+  .status-pill {
+    padding: 0.2rem 0.6rem;
+    border-radius: 9999px;
+    font-size: 0.7rem;
+    font-weight: 700;
+  }
+  .status-received { background: rgba(59, 130, 246, 0.15); color: #3b82f6; }
+  .status-under_review { background: rgba(245, 158, 11, 0.15); color: #f59e0b; }
+  .status-shortlisted { background: rgba(250, 204, 21, 0.15); color: #ca8a04; }
+  .status-accepted { background: rgba(16, 185, 129, 0.15); color: #10b981; }
+
+  .app-card-meta {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 0.78rem;
+    color: var(--color-text-muted);
+    margin-top: 0.35rem;
+  }
+
+  .match-badge {
+    font-weight: 700;
+  }
+
+  .no-apps-box {
+    text-align: center;
+    padding: 1.5rem 1rem;
+    color: var(--color-text-muted);
+  }
+  .no-apps-icon { font-size: 2rem; margin-bottom: 0.5rem; display: block; }
+  .no-apps-box p { font-size: 0.85rem; margin: 0; }
+
+  /* Quick Actions Tiles */
+  .quick-actions-stack {
+    display: flex;
+    flex-direction: column;
+    gap: 0.65rem;
+  }
+
+  .action-tile {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.85rem;
+    background: var(--color-bg);
+    border: 1px solid var(--color-border);
+    border-radius: var(--border-radius-md);
+    text-decoration: none;
+    color: var(--color-text-main);
+    transition: all 0.2s ease;
+  }
+  .action-tile:hover {
+    border-color: var(--color-primary);
+    background: rgba(99, 102, 241, 0.05);
+    transform: translateY(-1px);
+  }
+
+  .tile-icon { font-size: 1.25rem; }
+  .action-tile strong { display: block; font-size: 0.88rem; }
+  .action-tile p { margin: 0; font-size: 0.78rem; color: var(--color-text-muted); }
+
+  /* Responsive Rules */
+  @media (max-width: 900px) {
+    .profile-grid {
+      grid-template-columns: 1fr;
+    }
+  }
+
+  @media (max-width: 640px) {
+    .hero-profile-card {
+      padding: 1.25rem 1rem !important;
+      gap: 1.25rem !important;
+    }
+    .hero-main-info {
+      flex-direction: column !important;
+      align-items: center !important;
+      text-align: center !important;
+    }
+    .name-status-row {
+      justify-content: center !important;
+    }
+    .meta-row {
+      justify-content: center !important;
+      font-size: 0.78rem !important;
+    }
+    .social-links-bar {
+      justify-content: center !important;
+    }
+    .hero-actions-bar {
+      width: 100% !important;
+    }
+  /* Work Experience Display */
+  .work-exp-display-list {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+  }
+  .work-exp-display-item {
+    display: flex;
+    gap: 0.85rem;
+    padding: 1rem;
+    background: var(--color-bg);
+    border: 1px solid var(--color-border);
+    border-radius: var(--border-radius-md);
+  }
+  .exp-icon-box {
+    width: 36px;
+    height: 36px;
+    border-radius: 8px;
+    background: rgba(99, 102, 241, 0.12);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1rem;
+    flex-shrink: 0;
+  }
+  .exp-display-details { flex: 1; }
+  .exp-title-text { margin: 0 0 0.2rem 0; font-size: 0.95rem; font-weight: 700; color: var(--color-text-main); }
+  .exp-company-text { margin: 0 0 0.4rem 0; font-size: 0.85rem; color: var(--color-text-muted); }
+  .exp-date-pill {
+    display: inline-block;
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: var(--color-primary);
+    background: rgba(99, 102, 241, 0.08);
+    padding: 0.15rem 0.55rem;
+    border-radius: 6px;
+  }
+  .exp-skills-used { font-size: 0.82rem; color: var(--color-text-main); margin: 0.35rem 0 0 0; }
+  .exp-desc-text { font-size: 0.85rem; color: var(--color-text-muted); line-height: 1.45; white-space: pre-line; margin: 0.35rem 0 0 0; }
+</style>

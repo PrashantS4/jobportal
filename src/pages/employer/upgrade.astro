@@ -1,0 +1,483 @@
+---
+import DashboardLayout from '../../layouts/DashboardLayout.astro';
+import { getDb } from '../../lib/db';
+import { users, plans } from '../../db/schema';
+import { eq } from 'drizzle-orm';
+
+const payload = Astro.locals.user;
+if (!payload || payload.userType !== 'employer') {
+  return Astro.redirect('/login');
+}
+
+const db = getDb();
+const userRecord = await db.select().from(users).where(eq(users.id, payload.userId)).get();
+const allPlans = await db.select().from(plans).where(eq(plans.isActive, true)).all();
+
+const currentPlanId = userRecord?.planId || 'P001';
+
+const p001 = allPlans.find(p => p.planId === 'P001') || { planId: 'P001', planName: 'Starter Free', price: 0, currency: 'USD', jobPostingLimit: 30, resumeLimit: 500 };
+const p002 = allPlans.find(p => p.planId === 'P002') || { planId: 'P002', planName: 'Growth Recruiter', price: 49, currency: 'USD', jobPostingLimit: 60, resumeLimit: 3000 };
+const p003 = allPlans.find(p => p.planId === 'P003') || { planId: 'P003', planName: 'Enterprise VIP', price: 149, currency: 'USD', jobPostingLimit: 999999, resumeLimit: 999999 };
+---
+
+<DashboardLayout title="Upgrade Subscription Tier" userType="employer" activePath="/employer/billing">
+  <div class="upgrade-header mb-5">
+    <div class="back-link-wrap mb-3">
+      <a href="/employer/billing" class="back-link">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline></svg>
+        Back to Billing Overview
+      </a>
+    </div>
+    <div class="header-titles">
+      <span class="badge-tag">Employer Channel Plans</span>
+      <h1>Upgrade Your Recruiter Workspace 🚀</h1>
+      <p class="subtitle">Select the optimal hiring tier for your company. Instant limits increase with zero downtime.</p>
+    </div>
+  </div>
+
+  <div class="plans-upgrade-grid">
+    <!-- Starter Tier -->
+    <div class={`card plan-upgrade-card ${currentPlanId === 'P001' ? 'current-active' : ''}`}>
+      {currentPlanId === 'P001' && <span class="current-plan-pill">Your Current Plan</span>}
+      <div class="card-top">
+        <div class="plan-icon-box starter">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
+        </div>
+        <h3 class="plan-title">{p001.planName}</h3>
+        <p class="plan-sub">Ideal for early-stage recruiting and occasional hiring.</p>
+        <div class="price-box">
+          <span class="price-val">Free</span>
+          <span class="price-period">/forever</span>
+        </div>
+      </div>
+
+      <div class="features-list">
+        <div class="feature-item">
+          <span class="check-icon">✓</span>
+          <span><strong>{p001.jobPostingLimit}</strong> Active Job Postings</span>
+        </div>
+        <div class="feature-item">
+          <span class="check-icon">✓</span>
+          <span><strong>{p001.resumeLimit}</strong> Resumes Screening Quota</span>
+        </div>
+        <div class="feature-item">
+          <span class="check-icon">✓</span>
+          <span>Standard AI Vector Matching</span>
+        </div>
+        <div class="feature-item">
+          <span class="check-icon">✓</span>
+          <span>Direct Recruiter Messaging</span>
+        </div>
+      </div>
+
+      <div class="card-footer-action">
+        {currentPlanId === 'P001' ? (
+          <button class="btn btn-outline w-full" disabled>Active Plan</button>
+        ) : (
+          <button class="btn btn-outline w-full upgrade-btn" data-plan="P001">Downgrade to Starter</button>
+        )}
+      </div>
+    </div>
+
+    <!-- Growth Recruiter Tier (Most Popular) -->
+    <div class={`card plan-upgrade-card highlight-growth ${currentPlanId === 'P002' ? 'current-active' : ''}`}>
+      <span class="popular-ribbon">⭐ Most Popular</span>
+      {currentPlanId === 'P002' && <span class="current-plan-pill">Your Current Plan</span>}
+      <div class="card-top">
+        <div class="plan-icon-box growth">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline></svg>
+        </div>
+        <h3 class="plan-title">{p002.planName}</h3>
+        <p class="plan-sub">Accelerate hiring speed with higher volume & AI match boost.</p>
+        <div class="price-box">
+          <span class="price-val">${p002.price}</span>
+          <span class="price-period">/month</span>
+        </div>
+      </div>
+
+      <div class="features-list">
+        <div class="feature-item">
+          <span class="check-icon">✓</span>
+          <span><strong>{p002.jobPostingLimit}</strong> Active Job Postings</span>
+        </div>
+        <div class="feature-item">
+          <span class="check-icon">✓</span>
+          <span><strong>{p002.resumeLimit.toLocaleString()}</strong> Resumes Screening Quota</span>
+        </div>
+        <div class="feature-item">
+          <span class="check-icon">✓</span>
+          <span>Priority AI Fit & Keyword Scoring</span>
+        </div>
+        <div class="feature-item">
+          <span class="check-icon">✓</span>
+          <span>Full Talent Discovery Search</span>
+        </div>
+        <div class="feature-item">
+          <span class="check-icon">✓</span>
+          <span>Advanced Application Analytics</span>
+        </div>
+      </div>
+
+      <div class="card-footer-action">
+        {currentPlanId === 'P002' ? (
+          <button class="btn btn-outline w-full" disabled>Active Plan</button>
+        ) : (
+          <button class="btn btn-primary btn-glow w-full upgrade-btn" data-plan="P002">
+            Switch to Growth Plan &rarr;
+          </button>
+        )}
+      </div>
+    </div>
+
+    <!-- Enterprise VIP Tier -->
+    <div class={`card plan-upgrade-card ${currentPlanId === 'P003' ? 'current-active' : ''}`}>
+      {currentPlanId === 'P003' && <span class="current-plan-pill">Your Current Plan</span>}
+      <div class="card-top">
+        <div class="plan-icon-box enterprise">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon></svg>
+        </div>
+        <h3 class="plan-title">{p003.planName}</h3>
+        <p class="plan-sub">High-scale recruitment team power with unlimited access.</p>
+        <div class="price-box">
+          <span class="price-val">${p003.price}</span>
+          <span class="price-period">/month</span>
+        </div>
+      </div>
+
+      <div class="features-list">
+        <div class="feature-item">
+          <span class="check-icon">✓</span>
+          <span><strong>Unlimited</strong> Active Job Postings</span>
+        </div>
+        <div class="feature-item">
+          <span class="check-icon">✓</span>
+          <span><strong>Unlimited</strong> Resume Screening</span>
+        </div>
+        <div class="feature-item">
+          <span class="check-icon">✓</span>
+          <span>Instant AI Recalculation Engine</span>
+        </div>
+        <div class="feature-item">
+          <span class="check-icon">✓</span>
+          <span>Verified Recruiter Employer Badge</span>
+        </div>
+        <div class="feature-item">
+          <span class="check-icon">✓</span>
+          <span>24/7 Dedicated Account Lead</span>
+        </div>
+      </div>
+
+      <div class="card-footer-action">
+        {currentPlanId === 'P003' ? (
+          <button class="btn btn-outline w-full" disabled>Active Plan</button>
+        ) : (
+          <button class="btn btn-primary btn-glow w-full upgrade-btn" data-plan="P003">
+            Upgrade to Enterprise VIP &rarr;
+          </button>
+        )}
+      </div>
+    </div>
+  </div>
+
+  <!-- Guarantee & Security Banner -->
+  <div class="security-banner mt-5">
+    <div class="security-item">
+      <span class="sec-icon">🔒</span>
+      <div>
+        <strong>Instant Provisioning</strong>
+        <p>Your limits and quota increase immediately upon confirmation.</p>
+      </div>
+    </div>
+    <div class="security-item">
+      <span class="sec-icon">⚡</span>
+      <div>
+        <strong>Cancel or Switch Anytime</strong>
+        <p>No lock-in contracts. Upgrade or downgrade as hiring needs evolve.</p>
+      </div>
+    </div>
+    <div class="security-item">
+      <span class="sec-icon">🛡️</span>
+      <div>
+        <strong>Enterprise Security</strong>
+        <p>Encrypted data routing and candidate privacy compliance.</p>
+      </div>
+    </div>
+  </div>
+</DashboardLayout>
+
+<script>
+  document.querySelectorAll('.upgrade-btn').forEach(btn => {
+    btn.addEventListener('click', async (e) => {
+      const button = e.currentTarget as HTMLButtonElement;
+      const planId = button.getAttribute('data-plan');
+      if (!planId) return;
+
+      const originalText = button.innerText;
+      button.innerText = 'Activating Plan...';
+      button.disabled = true;
+
+      try {
+        const res = await fetch('/api/payments/verify', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            planId,
+            billingCycle: 'monthly'
+          })
+        });
+
+        if (res.ok) {
+          // @ts-ignore
+          if (window.showToast) {
+            // @ts-ignore
+            window.showToast('Subscription updated successfully!');
+          }
+          setTimeout(() => {
+            window.location.href = '/employer/billing';
+          }, 800);
+        } else {
+          const data = await res.json();
+          alert(data.error || 'Failed to update plan.');
+          button.innerText = originalText;
+          button.disabled = false;
+        }
+      } catch (err) {
+        console.error(err);
+        alert('An error occurred while updating your subscription.');
+        button.innerText = originalText;
+        button.disabled = false;
+      }
+    });
+  });
+</script>
+
+<style>
+  .mb-3 { margin-bottom: 0.75rem; }
+  .mb-4 { margin-bottom: 1.5rem; }
+  .mb-5 { margin-bottom: 2rem; }
+  .mt-5 { margin-top: 2.5rem; }
+  .w-full { width: 100%; box-sizing: border-box; }
+
+  .back-link-wrap {
+    display: flex;
+    align-items: center;
+  }
+  .back-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--color-text-muted);
+    text-decoration: none;
+    transition: color 0.2s;
+  }
+  .back-link:hover {
+    color: var(--color-primary);
+  }
+
+  .badge-tag {
+    display: inline-block;
+    padding: 0.25rem 0.75rem;
+    background: rgba(99, 102, 241, 0.15);
+    color: var(--color-primary);
+    border-radius: 9999px;
+    font-size: 0.75rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin-bottom: 0.4rem;
+  }
+
+  .header-titles h1 {
+    margin: 0 0 0.3rem 0;
+    font-size: 1.75rem;
+    font-weight: 800;
+    color: var(--color-text-main);
+  }
+
+  .subtitle {
+    margin: 0;
+    font-size: 0.95rem;
+    color: var(--color-text-muted);
+  }
+
+  .plans-upgrade-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 1.75rem;
+    align-items: stretch;
+  }
+
+  .plan-upgrade-card {
+    background: var(--color-surface);
+    backdrop-filter: blur(16px);
+    border: 1px solid var(--color-border);
+    border-radius: var(--border-radius-lg);
+    padding: 2rem;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    position: relative;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.04);
+    transition: transform 0.25s ease, box-shadow 0.25s ease, border-color 0.25s ease;
+  }
+  .plan-upgrade-card:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.08);
+  }
+
+  .highlight-growth {
+    border: 2px solid var(--color-primary);
+    box-shadow: 0 8px 30px rgba(99, 102, 241, 0.15);
+  }
+
+  .current-active {
+    border-color: rgba(16, 185, 129, 0.5);
+  }
+
+  .popular-ribbon {
+    position: absolute;
+    top: -12px;
+    right: 24px;
+    background: linear-gradient(135deg, #6366f1, #a855f7);
+    color: white;
+    font-size: 0.72rem;
+    font-weight: 800;
+    padding: 0.25rem 0.75rem;
+    border-radius: 9999px;
+    box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3);
+  }
+
+  .current-plan-pill {
+    position: absolute;
+    top: -12px;
+    left: 24px;
+    background: #10b981;
+    color: white;
+    font-size: 0.72rem;
+    font-weight: 800;
+    padding: 0.25rem 0.75rem;
+    border-radius: 9999px;
+  }
+
+  .plan-icon-box {
+    width: 48px;
+    height: 48px;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 1.25rem;
+  }
+  .plan-icon-box.starter { background: rgba(59, 130, 246, 0.12); color: #3b82f6; }
+  .plan-icon-box.growth { background: rgba(99, 102, 241, 0.15); color: #6366f1; }
+  .plan-icon-box.enterprise { background: rgba(168, 85, 247, 0.15); color: #a855f7; }
+
+  .plan-title {
+    margin: 0 0 0.3rem 0;
+    font-size: 1.3rem;
+    font-weight: 800;
+    color: var(--color-text-main);
+  }
+
+  .plan-sub {
+    margin: 0 0 1.25rem 0;
+    font-size: 0.85rem;
+    color: var(--color-text-muted);
+    min-height: 2.4rem;
+  }
+
+  .price-box {
+    display: flex;
+    align-items: baseline;
+    gap: 0.3rem;
+    margin-bottom: 1.5rem;
+    padding-bottom: 1.25rem;
+    border-bottom: 1px solid var(--color-border);
+  }
+
+  .price-val {
+    font-size: 2.2rem;
+    font-weight: 900;
+    color: var(--color-text-main);
+  }
+
+  .price-period {
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--color-text-muted);
+  }
+
+  .features-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    margin-bottom: 2rem;
+  }
+
+  .feature-item {
+    display: flex;
+    align-items: center;
+    gap: 0.65rem;
+    font-size: 0.88rem;
+    color: var(--color-text-main);
+  }
+
+  .check-icon {
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    background: rgba(16, 185, 129, 0.15);
+    color: #10b981;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.72rem;
+    font-weight: 800;
+    flex-shrink: 0;
+  }
+
+  .btn-glow {
+    box-shadow: 0 4px 14px rgba(99, 102, 241, 0.35);
+  }
+
+  /* Security Banner */
+  .security-banner {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 1.5rem;
+    background: var(--color-surface);
+    backdrop-filter: blur(16px);
+    border: 1px solid var(--color-border);
+    border-radius: var(--border-radius-lg);
+    padding: 1.5rem 2rem;
+  }
+
+  .security-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.85rem;
+  }
+
+  .sec-icon { font-size: 1.5rem; }
+
+  .security-item strong {
+    display: block;
+    font-size: 0.92rem;
+    color: var(--color-text-main);
+    margin-bottom: 0.2rem;
+  }
+
+  .security-item p {
+    margin: 0;
+    font-size: 0.8rem;
+    color: var(--color-text-muted);
+    line-height: 1.4;
+  }
+
+  @media (max-width: 1024px) {
+    .plans-upgrade-grid { grid-template-columns: 1fr; }
+    .security-banner { grid-template-columns: 1fr; }
+  }
+</style>

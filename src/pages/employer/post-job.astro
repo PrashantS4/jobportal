@@ -1,0 +1,1374 @@
+---
+import DashboardLayout from '../../layouts/DashboardLayout.astro';
+
+const payload = Astro.locals.user;
+if (!payload || payload.userType !== 'employer') {
+  return Astro.redirect('/login');
+}
+---
+
+<DashboardLayout title="Post New Job" userType="employer" activePath="/employer/post-job">
+  <div class="post-job-header mb-4">
+    <div class="header-titles">
+      <span class="badge-tag">Hiring Studio</span>
+      <h1>Create a Job Opening</h1>
+      <p class="subtitle">Draft your position requirements, compensation, and custom screening questions to attract top talent.</p>
+    </div>
+    <div class="header-nav">
+      <a href="/employer/jobs" class="btn btn-outline">Cancel & Return</a>
+    </div>
+  </div>
+
+  <div class="post-job-container">
+    <form id="post-job-form" class="job-form">
+      
+      <!-- Section 1: Role Overview -->
+      <div class="form-card">
+        <div class="card-section-title">
+          <div class="step-num">1</div>
+          <div>
+            <h3>Job Overview & Description</h3>
+            <p>Define the core identity and responsibilities of this position</p>
+          </div>
+        </div>
+
+        <div class="form-body">
+          <div class="form-group full-width">
+            <label for="jobTitle">Job Title <span class="req">*</span></label>
+            <input type="text" id="jobTitle" name="jobTitle" required placeholder="e.g. Senior Full-Stack Engineer" />
+          </div>
+
+          <div class="form-group full-width">
+            <label for="description">Job Description & Responsibilities <span class="req">*</span></label>
+            <textarea id="description" name="description" rows="6" required placeholder="Outline key expectations, role responsibilities, tech stack, and ideal qualification criteria..."></textarea>
+          </div>
+        </div>
+      </div>
+
+      <!-- Section 2: Logistics & Experience -->
+      <div class="form-card">
+        <div class="card-section-title">
+          <div class="step-num">2</div>
+          <div>
+            <h3>Requirements & Logistics</h3>
+            <p>Specify work arrangement, location, and required seniority</p>
+          </div>
+        </div>
+
+        <div class="form-body">
+          <div class="form-grid">
+            <div class="form-group">
+              <label for="employmentType">Employment Type</label>
+              <select id="employmentType" name="employmentType">
+                <option value="Full-time">Full-time</option>
+                <option value="Part-time">Part-time</option>
+                <option value="Contract">Contract</option>
+                <option value="Internship">Internship</option>
+              </select>
+            </div>
+
+            <div class="form-group">
+              <label for="experienceLevel">Experience Level</label>
+              <select id="experienceLevel" name="experienceLevel">
+                <option value="Entry">Entry Level (0-2 yrs)</option>
+                <option value="Mid" selected>Mid Level (2-5 yrs)</option>
+                <option value="Senior">Senior Level (5+ yrs)</option>
+                <option value="Lead">Lead / Director</option>
+              </select>
+            </div>
+
+            <div class="form-group">
+              <label for="locationCity">City / Location</label>
+              <input type="text" id="locationCity" name="locationCity" placeholder="e.g. New York, NY or Bengaluru, IN" />
+            </div>
+
+            <div class="form-group checkbox-card">
+              <label class="custom-checkbox-container">
+                <input type="checkbox" id="locationRemote" name="locationRemote" value="true" />
+                <span class="checkmark"></span>
+                <span class="checkbox-label">
+                  <strong>Remote Eligible</strong>
+                  <small>Candidates worldwide can apply</small>
+                </span>
+              </label>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Section 3: Compensation -->
+      <div class="form-card">
+        <div class="card-section-title">
+          <div class="step-num">3</div>
+          <div>
+            <h3>Compensation & Budget (Optional)</h3>
+            <p>Transparent salaries increase high-quality applicant response rates</p>
+          </div>
+        </div>
+
+        <div class="form-body">
+          <div class="form-grid-3">
+            <div class="form-group">
+              <label for="salaryMin">Minimum Salary / Range</label>
+              <input type="number" id="salaryMin" name="salaryMin" placeholder="e.g. 80000" />
+            </div>
+
+            <div class="form-group">
+              <label for="salaryMax">Maximum Salary</label>
+              <input type="number" id="salaryMax" name="salaryMax" placeholder="e.g. 130000" />
+            </div>
+
+            <div class="form-group">
+              <label for="salaryCurrency">Currency</label>
+              <select id="salaryCurrency" name="salaryCurrency">
+                <option value="USD" selected>USD ($)</option>
+                <option value="EUR">EUR (€)</option>
+                <option value="GBP">GBP (£)</option>
+                <option value="INR">INR (₹)</option>
+              </select>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Section 4: Custom Screening Questions (NEW FEATURE) -->
+      <div class="form-card">
+        <div class="card-section-title">
+          <div class="step-num">4</div>
+          <div class="title-with-badge">
+            <div>
+              <h3>Applicant Screening Questions (Optional)</h3>
+              <p>Add custom questions for candidates to answer when applying (e.g., experience, notice period, technical skills)</p>
+            </div>
+            <span class="feature-tag">Custom Questions</span>
+          </div>
+        </div>
+
+        <div class="form-body">
+          <!-- Preset Suggestions -->
+          <div class="presets-wrap mb-3">
+            <span class="presets-lbl">Quick Presets:</span>
+            <div class="preset-chips">
+              <button type="button" class="chip-btn" data-preset="exp">
+                + Years of Experience
+              </button>
+              <button type="button" class="chip-btn" data-preset="notice">
+                + Notice Period / Availability
+              </button>
+              <button type="button" class="chip-btn" data-preset="auth">
+                + Work Authorization
+              </button>
+              <button type="button" class="chip-btn" data-preset="salary">
+                + Expected Compensation
+              </button>
+              <button type="button" class="chip-btn" data-preset="custom">
+                + Custom Question
+              </button>
+            </div>
+          </div>
+
+          <!-- Question Cards Container -->
+          <div id="questions-container" class="questions-list">
+            <!-- Dynamically populated question cards -->
+          </div>
+
+          <button type="button" class="btn btn-outline btn-add-q" id="add-question-btn">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+            Add Another Screening Question
+          </button>
+        </div>
+      </div>
+
+      <!-- Section 5: Custom Hiring Stage Pipeline Builder -->
+      <div class="form-card">
+        <div class="card-section-title">
+          <div class="step-num">5</div>
+          <div class="title-with-badge">
+            <div>
+              <h3>Candidate Hiring Stage Journey Pipeline</h3>
+              <p>Customize the evaluation stages candidates will go through for this position (e.g. AI Screening, Technical Challenge, HR Round)</p>
+            </div>
+            <span class="feature-tag purple-tag">Custom Pipeline</span>
+          </div>
+        </div>
+
+        <div class="form-body">
+          <!-- Pipeline Presets -->
+          <div class="presets-wrap mb-3">
+            <span class="presets-lbl">Pipeline Presets:</span>
+            <div class="preset-chips">
+              <button type="button" class="chip-btn pipeline-preset-btn" data-pipeline="tech">
+                ⚡ Tech Engineering (5 Stages)
+              </button>
+              <button type="button" class="chip-btn pipeline-preset-btn" data-pipeline="startup">
+                🚀 Fast-Track Startup (3 Stages)
+              </button>
+              <button type="button" class="chip-btn pipeline-preset-btn" data-pipeline="design">
+                🎨 Design & Creative (4 Stages)
+              </button>
+              <button type="button" class="chip-btn pipeline-preset-btn" data-pipeline="corporate">
+                💼 Corporate Enterprise (6 Stages)
+              </button>
+            </div>
+          </div>
+
+          <!-- Stages List Container -->
+          <div id="stages-container" class="stages-list">
+            <!-- Dynamically populated stage items -->
+          </div>
+
+          <button type="button" class="btn btn-outline btn-add-stage" id="add-stage-btn">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+            Add Custom Stage Step
+          </button>
+        </div>
+      </div>
+
+      <!-- Submit Actions Bar -->
+      <div class="form-actions-bar">
+        <a href="/employer/jobs" class="btn btn-outline">Discard Draft</a>
+        <button type="submit" class="btn btn-primary btn-glow" id="submit-job-btn">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+          Publish Position Now
+        </button>
+      </div>
+
+    </form>
+  </div>
+</DashboardLayout>
+
+<style>
+  .mb-3 { margin-bottom: 1rem; }
+  .mb-4 { margin-bottom: 1.75rem; }
+
+  .post-job-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-end;
+    flex-wrap: wrap;
+    gap: 1.5rem;
+  }
+
+  .badge-tag {
+    display: inline-block;
+    padding: 0.25rem 0.75rem;
+    background: rgba(99, 102, 241, 0.15);
+    color: var(--color-primary);
+    border-radius: 9999px;
+    font-size: 0.75rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin-bottom: 0.4rem;
+  }
+
+  .header-titles h1 {
+    margin: 0 0 0.3rem 0;
+    font-size: 1.85rem;
+    font-weight: 800;
+    color: var(--color-text-main);
+  }
+
+  .subtitle {
+    margin: 0;
+    font-size: 0.95rem;
+    color: var(--color-text-muted);
+  }
+
+  .post-job-container {
+    max-width: 900px;
+    margin: 0 auto;
+  }
+
+  .job-form {
+    display: flex;
+    flex-direction: column;
+    gap: 1.75rem;
+  }
+
+  .form-card {
+    background: var(--color-surface);
+    backdrop-filter: blur(16px);
+    border: 1px solid var(--color-border);
+    border-radius: var(--border-radius-lg);
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.03);
+    padding: 1.75rem 2rem;
+  }
+
+  .card-section-title {
+    display: flex;
+    align-items: flex-start;
+    gap: 1rem;
+    padding-bottom: 1.25rem;
+    border-bottom: 1px solid var(--color-border);
+    margin-bottom: 1.5rem;
+  }
+
+  .title-with-badge {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    width: 100%;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+
+  .feature-tag {
+    font-size: 0.75rem;
+    font-weight: 700;
+    background: rgba(16, 185, 129, 0.15);
+    color: #10b981;
+    border: 1px solid rgba(16, 185, 129, 0.3);
+    padding: 0.2rem 0.6rem;
+    border-radius: 9999px;
+  }
+
+  .step-num {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    background: var(--color-primary);
+    color: white;
+    font-weight: 800;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.95rem;
+    flex-shrink: 0;
+    box-shadow: 0 2px 8px rgba(99, 102, 241, 0.4);
+  }
+
+  .card-section-title h3 {
+    margin: 0 0 0.2rem 0;
+    font-size: 1.15rem;
+    font-weight: 700;
+    color: var(--color-text-main);
+  }
+
+  .card-section-title p {
+    margin: 0;
+    font-size: 0.85rem;
+    color: var(--color-text-muted);
+  }
+
+  .form-body {
+    display: flex;
+    flex-direction: column;
+    gap: 1.25rem;
+  }
+
+  .form-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 1.25rem;
+  }
+
+  .form-grid-3 {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 1.25rem;
+  }
+
+  .form-group {
+    display: flex;
+    flex-direction: column;
+    gap: 0.45rem;
+  }
+
+  .form-group.full-width {
+    grid-column: 1 / -1;
+  }
+
+  .form-group label {
+    font-size: 0.88rem;
+    font-weight: 600;
+    color: var(--color-text-main);
+  }
+
+  .req {
+    color: #ef4444;
+  }
+
+  .form-group input,
+  .form-group textarea {
+    padding: 0.75rem 1rem;
+    border: 1px solid var(--color-border);
+    border-radius: 10px;
+    font-size: 0.95rem;
+    font-family: inherit;
+    background: var(--color-bg);
+    color: var(--color-text-main);
+    transition: all 0.2s ease;
+  }
+
+  .form-group select {
+    padding: 0.75rem 2.25rem 0.75rem 1rem;
+    border: 1px solid var(--color-border);
+    border-radius: 10px;
+    font-size: 0.95rem;
+    font-family: inherit;
+    background-color: var(--color-bg);
+    color: var(--color-text-main);
+    transition: all 0.2s ease;
+  }
+
+  .form-group input:focus,
+  .form-group select:focus,
+  .form-group textarea:focus {
+    outline: none;
+    border-color: var(--color-primary);
+    box-shadow: 0 0 0 3px var(--color-primary-light);
+  }
+
+  /* Custom Checkbox Card */
+  .checkbox-card {
+    justify-content: flex-end;
+  }
+
+  .custom-checkbox-container {
+    display: flex;
+    align-items: center;
+    position: relative;
+    padding: 0.65rem 1rem;
+    background: var(--color-bg);
+    border: 1px solid var(--color-border);
+    border-radius: 10px;
+    cursor: pointer;
+    user-select: none;
+    transition: all 0.2s ease;
+  }
+
+  .custom-checkbox-container:hover {
+    border-color: var(--color-primary);
+  }
+
+  .custom-checkbox-container input {
+    position: absolute;
+    opacity: 0;
+    cursor: pointer;
+    height: 0;
+    width: 0;
+  }
+
+  .checkmark {
+    height: 20px;
+    width: 20px;
+    background-color: var(--color-surface);
+    border: 2px solid var(--color-border);
+    border-radius: 6px;
+    margin-right: 0.75rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s ease;
+    flex-shrink: 0;
+  }
+
+  .custom-checkbox-container input:checked ~ .checkmark {
+    background-color: var(--color-primary);
+    border-color: var(--color-primary);
+  }
+
+  .checkmark:after {
+    content: "";
+    display: none;
+    width: 5px;
+    height: 10px;
+    border: solid white;
+    border-width: 0 2px 2px 0;
+    transform: rotate(45deg);
+    margin-bottom: 2px;
+  }
+
+  .custom-checkbox-container input:checked ~ .checkmark:after {
+    display: block;
+  }
+
+  .checkbox-label {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .checkbox-label strong {
+    font-size: 0.88rem;
+    color: var(--color-text-main);
+  }
+
+  .checkbox-label small {
+    font-size: 0.75rem;
+    color: var(--color-text-muted);
+  }
+
+  /* Preset Question Chips */
+  .presets-wrap {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    flex-wrap: wrap;
+  }
+  .presets-lbl {
+    font-size: 0.8rem;
+    font-weight: 700;
+    color: var(--color-text-muted);
+    text-transform: uppercase;
+  }
+  .preset-chips {
+    display: flex;
+    gap: 0.4rem;
+    flex-wrap: wrap;
+  }
+  .chip-btn {
+    background: var(--color-bg);
+    border: 1px dashed var(--color-border);
+    color: var(--color-text-main);
+    padding: 0.3rem 0.7rem;
+    border-radius: 9999px;
+    font-size: 0.78rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+  }
+  .chip-btn:hover {
+    border-color: var(--color-primary);
+    color: var(--color-primary);
+    background: rgba(99, 102, 241, 0.08);
+  }
+
+  /* Screening Questions List & Dynamic Elements */
+  .questions-list {
+    display: flex;
+    flex-direction: column;
+    gap: 1.25rem;
+  }
+
+  :global(.question-item-card) {
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: 12px;
+    padding: 1.25rem 1.5rem;
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+    position: relative;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.02);
+    transition: all 0.2s ease;
+  }
+  :global(.question-item-card:hover) {
+    border-color: rgba(99, 102, 241, 0.4);
+    box-shadow: 0 4px 16px rgba(99, 102, 241, 0.08);
+  }
+
+  :global(.q-card-header) {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding-bottom: 0.75rem;
+    border-bottom: 1px dashed var(--color-border);
+  }
+  :global(.q-badge) {
+    font-size: 0.78rem;
+    font-weight: 800;
+    color: var(--color-primary);
+    background: rgba(99, 102, 241, 0.12);
+    padding: 0.25rem 0.65rem;
+    border-radius: 6px;
+    letter-spacing: 0.03em;
+  }
+  :global(.q-actions) {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+  }
+  :global(.btn-q-icon) {
+    background: var(--color-bg);
+    border: 1px solid var(--color-border);
+    width: 32px;
+    height: 32px;
+    border-radius: 8px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    font-size: 0.85rem;
+    color: var(--color-text-main);
+    transition: all 0.2s ease;
+  }
+  :global(.btn-q-icon:hover) {
+    background: var(--color-surface);
+    border-color: var(--color-primary);
+    color: var(--color-primary);
+    transform: translateY(-1px);
+  }
+  :global(.btn-q-delete:hover) {
+    background: rgba(239, 68, 68, 0.15);
+    border-color: #ef4444;
+    color: #ef4444;
+  }
+
+  :global(.q-card-grid) {
+    display: grid;
+    grid-template-columns: 2fr 1.3fr 0.9fr;
+    gap: 1rem;
+    align-items: end;
+  }
+  :global(.q-options-row) {
+    grid-column: 1 / -1;
+    margin-top: 0.25rem;
+  }
+
+  :global(.q-field-label) {
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--color-text-main);
+    margin-bottom: 0.4rem;
+    display: block;
+  }
+
+  :global(.q-text-input),
+  :global(.q-options-input) {
+    width: 100%;
+    box-sizing: border-box;
+    padding: 0.75rem 1rem;
+    border: 1px solid var(--color-border);
+    border-radius: 10px;
+    font-size: 0.92rem;
+    font-family: inherit;
+    background: var(--color-bg);
+    color: var(--color-text-main);
+    transition: all 0.2s ease;
+  }
+  :global(.q-type-select) {
+    width: 100%;
+    box-sizing: border-box;
+    padding: 0.75rem 2.5rem 0.75rem 0.85rem !important;
+    border: 1px solid var(--color-border);
+    border-radius: 10px;
+    font-size: 0.92rem;
+    font-family: inherit;
+    background-color: var(--color-bg);
+    color: var(--color-text-main);
+    transition: all 0.2s ease;
+    text-overflow: ellipsis !important;
+    white-space: nowrap !important;
+  }
+  :global(.q-text-input:focus),
+  :global(.q-type-select:focus),
+  :global(.q-options-input:focus) {
+    outline: none;
+    border-color: var(--color-primary);
+    box-shadow: 0 0 0 3px var(--color-primary-light);
+  }
+
+  :global(.q-checkbox-pill) {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.6rem;
+    padding: 0.72rem 1rem;
+    background: var(--color-bg);
+    border: 1px solid var(--color-border);
+    border-radius: 10px;
+    cursor: pointer;
+    user-select: none;
+    transition: all 0.2s ease;
+    width: 100%;
+    box-sizing: border-box;
+    height: 44px;
+  }
+  :global(.q-checkbox-pill:hover) {
+    border-color: var(--color-primary);
+  }
+  :global(.q-checkbox-pill input) {
+    width: 16px;
+    height: 16px;
+    cursor: pointer;
+    accent-color: var(--color-primary);
+    margin: 0;
+  }
+  :global(.q-req-label) {
+    font-size: 0.85rem;
+    font-weight: 700;
+    color: var(--color-text-main);
+  }
+
+  .btn-add-q {
+    border-style: dashed;
+    justify-content: center;
+    padding: 0.85rem;
+    font-weight: 600;
+    border-radius: 10px;
+    margin-top: 0.5rem;
+  }
+
+  /* Form Actions Bar */
+  .form-actions-bar {
+    display: flex;
+    justify-content: flex-end;
+    align-items: center;
+    gap: 1rem;
+    padding: 1.5rem 0;
+  }
+
+  .btn-glow {
+    box-shadow: 0 4px 14px rgba(99, 102, 241, 0.35);
+  }
+
+  .purple-tag {
+    background: rgba(168, 85, 247, 0.15);
+    color: #a855f7;
+    border-color: rgba(168, 85, 247, 0.3);
+  }
+
+  .stages-list {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+  }
+
+  :global(.stage-item-card) {
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: 12px;
+    padding: 1.25rem 1.5rem;
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+    position: relative;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.02);
+    transition: all 0.2s ease;
+  }
+  :global(.stage-item-card:hover) {
+    border-color: rgba(168, 85, 247, 0.4);
+    box-shadow: 0 4px 16px rgba(168, 85, 247, 0.08);
+  }
+
+  :global(.stage-card-header) {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding-bottom: 0.65rem;
+    border-bottom: 1px dashed var(--color-border);
+  }
+
+  :global(.stage-badge) {
+    font-size: 0.78rem;
+    font-weight: 800;
+    color: #a855f7;
+    background: rgba(168, 85, 247, 0.12);
+    padding: 0.25rem 0.65rem;
+    border-radius: 6px;
+  }
+
+  :global(.stage-card-grid) {
+    display: grid;
+    grid-template-columns: minmax(135px, 1fr) 2fr 3fr;
+    gap: 1rem;
+    align-items: end;
+  }
+
+  .btn-add-stage {
+    border-style: dashed;
+    justify-content: center;
+    padding: 0.85rem;
+    font-weight: 600;
+    border-radius: 10px;
+    margin-top: 0.5rem;
+    color: #a855f7;
+    border-color: rgba(168, 85, 247, 0.4);
+  }
+  .btn-add-stage:hover {
+    background: rgba(168, 85, 247, 0.08);
+    border-color: #a855f7;
+  }
+
+  @media (max-width: 768px) {
+    .form-grid, .form-grid-3, :global(.q-card-grid), :global(.stage-card-grid) {
+      grid-template-columns: 1fr;
+    }
+  }
+
+  /* CKEditor 5 Custom Styling & Theme Support */
+  :global(.ck-editor__editable_inline) {
+    min-height: 240px !important;
+    max-height: 500px !important;
+    background-color: var(--color-bg) !important;
+    color: var(--color-text-main) !important;
+    font-family: inherit !important;
+    font-size: 0.95rem !important;
+    border-radius: 0 0 var(--border-radius-md) var(--border-radius-md) !important;
+  }
+  :global(.ck) {
+    --ck-color-button-default-hover-background: rgba(128, 128, 128, 0.15) !important;
+    --ck-color-button-default-active-background: rgba(128, 128, 128, 0.2) !important;
+    --ck-color-button-on-background: rgba(128, 128, 128, 0.2) !important;
+    --ck-color-button-on-hover-background: rgba(128, 128, 128, 0.25) !important;
+    --ck-color-button-default-text: var(--color-text-main) !important;
+    --ck-color-button-on-text: var(--color-text-main) !important;
+    --ck-color-dropdown-panel-background: #14151f !important;
+    --ck-color-dropdown-panel-border: var(--color-border) !important;
+    --ck-color-list-background: #14151f !important;
+    --ck-color-list-button-hover-background: rgba(255, 255, 255, 0.08) !important;
+    --ck-color-list-button-on-background: #8b5cf6 !important;
+    --ck-color-list-button-on-text: #ffffff !important;
+  }
+  :global([data-theme="light"] .ck) {
+    --ck-color-dropdown-panel-background: #ffffff !important;
+    --ck-color-list-background: #ffffff !important;
+    --ck-color-list-button-hover-background: rgba(0, 0, 0, 0.05) !important;
+  }
+  :global(.ck.ck-toolbar) {
+    background-color: var(--color-surface) !important;
+    border-color: var(--color-border) !important;
+    border-radius: var(--border-radius-md) var(--border-radius-md) 0 0 !important;
+  }
+  :global(.ck.ck-toolbar__items) {
+    flex-wrap: wrap !important;
+  }
+  :global(.ck.ck-toolbar .ck-button),
+  :global(.ck.ck-dropdown__button) {
+    color: var(--color-text-main) !important;
+    border-radius: 6px !important;
+    transition: all 0.2s ease !important;
+  }
+  :global(.ck.ck-toolbar .ck-button:hover),
+  :global(.ck.ck-toolbar .ck-button.ck-on),
+  :global(.ck.ck-button.ck-dropdown__button:hover),
+  :global(.ck.ck-button.ck-dropdown__button.ck-on),
+  :global(.ck.ck-button.ck-dropdown__button.ck-focused) {
+    background-color: rgba(128, 128, 128, 0.15) !important;
+    color: var(--color-text-main) !important;
+  }
+  :global(.ck.ck-editor__main > .ck-editor__editable:not(.ck-focused)) {
+    border-color: var(--color-border) !important;
+  }
+  :global(.ck.ck-editor__main > .ck-editor__editable.ck-focused) {
+    border-color: var(--color-primary) !important;
+    box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.15) !important;
+  }
+  :global(.ck.ck-dropdown__panel) {
+    background-color: #14151f !important;
+    border: 1px solid var(--color-border) !important;
+    border-radius: 12px !important;
+    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.5) !important;
+    margin-top: 8px !important;
+    z-index: 1000 !important;
+  }
+  :global([data-theme="light"] .ck.ck-dropdown__panel) {
+    background-color: #ffffff !important;
+    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1) !important;
+  }
+  :global(.ck.ck-list) {
+    background-color: transparent !important;
+    border: none !important;
+    padding: 8px !important;
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 4px !important;
+  }
+  :global(.ck.ck-list__item) {
+    min-width: 160px !important;
+  }
+  :global(.ck.ck-list__item .ck-button) {
+    color: var(--color-text-main) !important;
+    border-radius: 8px !important;
+    margin: 0 !important;
+    transition: all 0.2s ease !important;
+    padding: 8px 14px !important;
+  }
+  :global(.ck.ck-list__item .ck-button:hover) {
+    background-color: rgba(128, 128, 128, 0.15) !important;
+    color: var(--color-text-main) !important;
+  }
+  :global(.ck.ck-list__item .ck-button.ck-on) {
+    background-color: #8b5cf6 !important;
+    color: #ffffff !important;
+    font-weight: 600 !important;
+  }
+</style>
+
+<!-- CKEditor 5 CDN Script -->
+<script is:inline src="https://cdn.ckeditor.com/ckeditor5/39.0.1/classic/ckeditor.js"></script>
+
+<script>
+  interface ScreeningQuestion {
+    id: string;
+    text: string;
+    type: 'text' | 'paragraph' | 'yes_no' | 'number' | 'select';
+    options?: string[];
+    required: boolean;
+  }
+
+  let questions: ScreeningQuestion[] = [];
+
+  const questionsContainer = document.getElementById('questions-container');
+  const addQuestionBtn = document.getElementById('add-question-btn');
+
+  function renderQuestions() {
+    if (!questionsContainer) return;
+    questionsContainer.innerHTML = '';
+
+    if (questions.length === 0) {
+      questionsContainer.innerHTML = `
+        <div style="text-align: center; padding: 1.5rem; border: 1px dashed var(--color-border); border-radius: 10px; color: var(--color-text-muted); font-size: 0.88rem;">
+          No screening questions added yet. Click one of the presets above or "+ Add Another Screening Question" below.
+        </div>
+      `;
+      return;
+    }
+
+    questions.forEach((q, idx) => {
+      const card = document.createElement('div');
+      card.className = 'question-item-card';
+      card.innerHTML = `
+        <div class="q-card-header">
+          <span class="q-badge">Question #${idx + 1}</span>
+          <div class="q-actions">
+            ${idx > 0 ? `<button type="button" class="btn-q-icon btn-move-up" data-idx="${idx}" title="Move Up">↑</button>` : ''}
+            ${idx < questions.length - 1 ? `<button type="button" class="btn-q-icon btn-move-down" data-idx="${idx}" title="Move Down">↓</button>` : ''}
+            <button type="button" class="btn-q-icon btn-q-delete" data-idx="${idx}" title="Delete Question">🗑️</button>
+          </div>
+        </div>
+
+        <div class="q-card-grid">
+          <div class="form-group" style="margin: 0;">
+            <label class="q-field-label">Question Prompt <span class="req">*</span></label>
+            <input type="text" class="q-text-input" data-idx="${idx}" value="${q.text}" placeholder="e.g. How many years of experience do you have with TypeScript?" required />
+          </div>
+
+          <div class="form-group" style="margin: 0;">
+            <label class="q-field-label">Response Type</label>
+            <select class="q-type-select" data-idx="${idx}">
+              <option value="text" ${q.type === 'text' ? 'selected' : ''}>Short Text</option>
+              <option value="paragraph" ${q.type === 'paragraph' ? 'selected' : ''}>Detailed Paragraph</option>
+              <option value="yes_no" ${q.type === 'yes_no' ? 'selected' : ''}>Yes / No</option>
+              <option value="number" ${q.type === 'number' ? 'selected' : ''}>Numeric (Number/Years)</option>
+              <option value="select" ${q.type === 'select' ? 'selected' : ''}>Dropdown (Multiple Choice)</option>
+            </select>
+          </div>
+
+          <div class="form-group" style="margin: 0;">
+            <label class="q-checkbox-pill">
+              <input type="checkbox" class="q-req-checkbox" data-idx="${idx}" ${q.required ? 'checked' : ''} />
+              <span class="q-req-label">Mandatory Question</span>
+            </label>
+          </div>
+
+          ${q.type === 'select' ? `
+            <div class="form-group q-options-row">
+              <label class="q-field-label">Choice Options (Comma separated) <span class="req">*</span></label>
+              <input type="text" class="q-options-input" data-idx="${idx}" value="${(q.options || []).join(', ')}" placeholder="e.g. Immediate, 2 Weeks, 1 Month, 2+ Months" required />
+            </div>
+          ` : ''}
+        </div>
+      `;
+      questionsContainer.appendChild(card);
+    });
+
+    attachQuestionEvents();
+  }
+
+  function attachQuestionEvents() {
+    // Text changes
+    document.querySelectorAll('.q-text-input').forEach(input => {
+      input.addEventListener('input', (e) => {
+        const idx = parseInt((e.target as HTMLElement).dataset.idx || '0');
+        if (questions[idx]) questions[idx].text = (e.target as HTMLInputElement).value;
+      });
+    });
+
+    // Type changes
+    document.querySelectorAll('.q-type-select').forEach(select => {
+      select.addEventListener('change', (e) => {
+        const idx = parseInt((e.target as HTMLElement).dataset.idx || '0');
+        const val = (e.target as HTMLSelectElement).value as any;
+        if (questions[idx]) {
+          questions[idx].type = val;
+          if (val === 'select' && (!questions[idx].options || questions[idx].options?.length === 0)) {
+            questions[idx].options = ['Option 1', 'Option 2'];
+          }
+          renderQuestions();
+        }
+      });
+    });
+
+    // Options changes
+    document.querySelectorAll('.q-options-input').forEach(input => {
+      input.addEventListener('input', (e) => {
+        const idx = parseInt((e.target as HTMLElement).dataset.idx || '0');
+        const raw = (e.target as HTMLInputElement).value;
+        if (questions[idx]) {
+          questions[idx].options = raw.split(',').map(s => s.trim()).filter(Boolean);
+        }
+      });
+    });
+
+    // Required checkbox changes
+    document.querySelectorAll('.q-req-checkbox').forEach(box => {
+      box.addEventListener('change', (e) => {
+        const idx = parseInt((e.target as HTMLElement).dataset.idx || '0');
+        if (questions[idx]) questions[idx].required = (e.target as HTMLInputElement).checked;
+      });
+    });
+
+    // Delete question
+    document.querySelectorAll('.btn-q-delete').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        const idx = parseInt((e.currentTarget as HTMLElement).dataset.idx || '0');
+        questions.splice(idx, 1);
+        renderQuestions();
+      });
+    });
+
+    // Move up
+    document.querySelectorAll('.btn-move-up').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        const idx = parseInt((e.currentTarget as HTMLElement).dataset.idx || '0');
+        if (idx > 0) {
+          const temp = questions[idx];
+          questions[idx] = questions[idx - 1];
+          questions[idx - 1] = temp;
+          renderQuestions();
+        }
+      });
+    });
+
+    // Move down
+    document.querySelectorAll('.btn-move-down').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        const idx = parseInt((e.currentTarget as HTMLElement).dataset.idx || '0');
+        if (idx < questions.length - 1) {
+          const temp = questions[idx];
+          questions[idx] = questions[idx + 1];
+          questions[idx + 1] = temp;
+          renderQuestions();
+        }
+      });
+    });
+  }
+
+  function addQuestion(preset?: string) {
+    const id = 'q_' + Math.random().toString(36).substr(2, 9);
+    let newQ: ScreeningQuestion = {
+      id,
+      text: '',
+      type: 'text',
+      required: true
+    };
+
+    if (preset === 'exp') {
+      newQ.text = 'How many years of professional experience do you have in this role?';
+      newQ.type = 'number';
+    } else if (preset === 'notice') {
+      newQ.text = 'What is your notice period or earliest start date?';
+      newQ.type = 'select';
+      newQ.options = ['Immediately available', '1 - 2 weeks', '1 month', '2+ months'];
+    } else if (preset === 'auth') {
+      newQ.text = 'Are you legally authorized to work in this location without sponsorship?';
+      newQ.type = 'yes_no';
+    } else if (preset === 'salary') {
+      newQ.text = 'What is your expected annual / monthly compensation range?';
+      newQ.type = 'text';
+    }
+
+    questions.push(newQ);
+    renderQuestions();
+  }
+
+  addQuestionBtn?.addEventListener('click', () => addQuestion());
+
+  document.querySelectorAll('.chip-btn').forEach(chip => {
+    chip.addEventListener('click', (e) => {
+      const preset = (e.currentTarget as HTMLElement).dataset.preset;
+      addQuestion(preset);
+    });
+  });
+
+  // Initial render
+  renderQuestions();
+
+  // --- HIRING STAGE PIPELINE BUILDER ---
+  interface HiringStageItem {
+    id: string;
+    step: number;
+    title: string;
+    icon: string;
+    desc: string;
+  }
+
+  let pipelineStagesList: HiringStageItem[] = [
+    { id: 's_1', step: 1, title: 'Application Received', icon: '📥', desc: 'Application & resume submitted' },
+    { id: 's_2', step: 2, title: 'AI Screening & Assessment', icon: '✨', desc: 'Semantic AI skills alignment' },
+    { id: 's_3', step: 3, title: 'Recruiter Profile Review', icon: '🔍', desc: 'Hiring manager evaluation' },
+    { id: 's_4', step: 4, title: 'Technical Interview Round', icon: '🎯', desc: 'Coding & system design evaluation' },
+    { id: 's_5', step: 5, title: 'Final Decision & Offer', icon: '🏆', desc: 'Official offer letter' },
+  ];
+
+  const stagesContainer = document.getElementById('stages-container');
+  const addStageBtn = document.getElementById('add-stage-btn');
+
+  function renderStages() {
+    if (!stagesContainer) return;
+    stagesContainer.innerHTML = '';
+
+    if (pipelineStagesList.length === 0) {
+      stagesContainer.innerHTML = `
+        <div style="text-align: center; padding: 1.5rem; border: 1px dashed var(--color-border); border-radius: 10px; color: var(--color-text-muted); font-size: 0.88rem;">
+          No hiring stages added yet. Click one of the presets above or "+ Add Custom Stage Step" below.
+        </div>
+      `;
+      return;
+    }
+
+    pipelineStagesList.forEach((st, idx) => {
+      st.step = idx + 1;
+      const card = document.createElement('div');
+      card.className = 'stage-item-card';
+      card.innerHTML = `
+        <div class="stage-card-header">
+          <span class="stage-badge">Stage #${st.step}</span>
+          <div class="q-actions">
+            ${idx > 0 ? `<button type="button" class="btn-q-icon btn-stage-up" data-idx="${idx}" title="Move Up">↑</button>` : ''}
+            ${idx < pipelineStagesList.length - 1 ? `<button type="button" class="btn-q-icon btn-stage-down" data-idx="${idx}" title="Move Down">↓</button>` : ''}
+            <button type="button" class="btn-q-icon btn-q-delete btn-stage-delete" data-idx="${idx}" title="Delete Stage">🗑️</button>
+          </div>
+        </div>
+
+        <div class="stage-card-grid">
+          <div class="form-group" style="margin: 0;">
+            <label class="q-field-label">Icon</label>
+            <select class="q-type-select stage-icon-input" data-idx="${idx}">
+              <option value="📥" ${st.icon === '📥' ? 'selected' : ''}>📥 Inbox</option>
+              <option value="✨" ${st.icon === '✨' ? 'selected' : ''}>✨ AI Spark</option>
+              <option value="🔍" ${st.icon === '🔍' ? 'selected' : ''}>🔍 Review</option>
+              <option value="🎯" ${st.icon === '🎯' ? 'selected' : ''}>🎯 Target</option>
+              <option value="💻" ${st.icon === '💻' ? 'selected' : ''}>💻 Code</option>
+              <option value="📞" ${st.icon === '📞' ? 'selected' : ''}>📞 Call</option>
+              <option value="🎨" ${st.icon === '🎨' ? 'selected' : ''}>🎨 Design</option>
+              <option value="✏️" ${st.icon === '✏️' ? 'selected' : ''}>✏️ Task</option>
+              <option value="👥" ${st.icon === '👥' ? 'selected' : ''}>👥 Team</option>
+              <option value="👔" ${st.icon === '👔' ? 'selected' : ''}>👔 Manager</option>
+              <option value="🏛️" ${st.icon === '🏛️' ? 'selected' : ''}>🏛️ Executive</option>
+              <option value="🏆" ${st.icon === '🏆' ? 'selected' : ''}>🏆 Offer</option>
+            </select>
+          </div>
+
+          <div class="form-group" style="margin: 0;">
+            <label class="q-field-label">Stage Title <span class="req">*</span></label>
+            <input type="text" class="q-text-input stage-title-input" data-idx="${idx}" value="${st.title}" placeholder="e.g. Technical Interview" required />
+          </div>
+
+          <div class="form-group" style="margin: 0;">
+            <label class="q-field-label">Stage Description</label>
+            <input type="text" class="q-text-input stage-desc-input" data-idx="${idx}" value="${st.desc}" placeholder="e.g. Live coding session with tech lead" />
+          </div>
+        </div>
+      `;
+      stagesContainer.appendChild(card);
+    });
+
+    attachStageEvents();
+  }
+
+  function attachStageEvents() {
+    document.querySelectorAll('.stage-title-input').forEach(input => {
+      input.addEventListener('input', (e) => {
+        const idx = parseInt((e.target as HTMLElement).dataset.idx || '0');
+        if (pipelineStagesList[idx]) pipelineStagesList[idx].title = (e.target as HTMLInputElement).value;
+      });
+    });
+
+    document.querySelectorAll('.stage-icon-input').forEach(select => {
+      select.addEventListener('change', (e) => {
+        const idx = parseInt((e.target as HTMLElement).dataset.idx || '0');
+        if (pipelineStagesList[idx]) pipelineStagesList[idx].icon = (e.target as HTMLSelectElement).value;
+      });
+    });
+
+    document.querySelectorAll('.stage-desc-input').forEach(input => {
+      input.addEventListener('input', (e) => {
+        const idx = parseInt((e.target as HTMLElement).dataset.idx || '0');
+        if (pipelineStagesList[idx]) pipelineStagesList[idx].desc = (e.target as HTMLInputElement).value;
+      });
+    });
+
+    document.querySelectorAll('.btn-stage-delete').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        const idx = parseInt((e.currentTarget as HTMLElement).dataset.idx || '0');
+        pipelineStagesList.splice(idx, 1);
+        renderStages();
+      });
+    });
+
+    document.querySelectorAll('.btn-stage-up').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        const idx = parseInt((e.currentTarget as HTMLElement).dataset.idx || '0');
+        if (idx > 0) {
+          const temp = pipelineStagesList[idx];
+          pipelineStagesList[idx] = pipelineStagesList[idx - 1];
+          pipelineStagesList[idx - 1] = temp;
+          renderStages();
+        }
+      });
+    });
+
+    document.querySelectorAll('.btn-stage-down').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        const idx = parseInt((e.currentTarget as HTMLElement).dataset.idx || '0');
+        if (idx < pipelineStagesList.length - 1) {
+          const temp = pipelineStagesList[idx];
+          pipelineStagesList[idx] = pipelineStagesList[idx + 1];
+          pipelineStagesList[idx + 1] = temp;
+          renderStages();
+        }
+      });
+    });
+  }
+
+  function addStage() {
+    const id = 's_' + Math.random().toString(36).substr(2, 9);
+    pipelineStagesList.push({
+      id,
+      step: pipelineStagesList.length + 1,
+      title: 'Custom Evaluation Stage',
+      icon: '🎯',
+      desc: 'Candidate evaluation round'
+    });
+    renderStages();
+  }
+
+  function loadPipelinePreset(presetKey: string) {
+    if (presetKey === 'tech') {
+      pipelineStagesList = [
+        { id: 's_1', step: 1, title: 'Application Received', icon: '📥', desc: 'Application & resume submitted' },
+        { id: 's_2', step: 2, title: 'AI Screening & Assessment', icon: '✨', desc: 'Semantic AI skills alignment' },
+        { id: 's_3', step: 3, title: 'Recruiter Profile Review', icon: '🔍', desc: 'Hiring manager evaluation' },
+        { id: 's_4', step: 4, title: 'Technical Interview Round', icon: '🎯', desc: 'Coding & system design evaluation' },
+        { id: 's_5', step: 5, title: 'Final Decision & Offer', icon: '🏆', desc: 'Official offer letter' },
+      ];
+    } else if (presetKey === 'startup') {
+      pipelineStagesList = [
+        { id: 's_1', step: 1, title: 'Application Submitted', icon: '📥', desc: 'Resume logged in queue' },
+        { id: 's_2', step: 2, title: 'Screening Call', icon: '📞', desc: '15-min recruiter chat' },
+        { id: 's_3', step: 3, title: 'Founder & Tech Interview', icon: '💻', desc: 'Technical & culture interview' },
+        { id: 's_4', step: 4, title: 'Hiring Offer Extended', icon: '🏆', desc: 'Final employment agreement' },
+      ];
+    } else if (presetKey === 'design') {
+      pipelineStagesList = [
+        { id: 's_1', step: 1, title: 'Portfolio Submitted', icon: '🎨', desc: 'Portfolio & resume submission' },
+        { id: 's_2', step: 2, title: 'Design Challenge', icon: '✏️', desc: 'Take-home design assignment' },
+        { id: 's_3', step: 3, title: 'Team Presentation', icon: '👥', desc: 'Design walkthrough & critique' },
+        { id: 's_4', step: 4, title: 'Hiring Offer', icon: '🏆', desc: 'Final job offer' },
+      ];
+    } else if (presetKey === 'corporate') {
+      pipelineStagesList = [
+        { id: 's_1', step: 1, title: 'Application Received', icon: '📥', desc: 'Form & CV logged' },
+        { id: 's_2', step: 2, title: 'HR Screening', icon: '📋', desc: 'HR eligibility check' },
+        { id: 's_3', step: 3, title: 'Technical Assessment', icon: '💻', desc: 'Proctored skill assessment' },
+        { id: 's_4', step: 4, title: 'Hiring Manager Round', icon: '👔', desc: 'In-depth domain interview' },
+        { id: 's_5', step: 5, title: 'Executive Panel', icon: '🏛️', desc: 'Leadership interview' },
+        { id: 's_6', step: 6, title: 'Official Job Offer', icon: '🏆', desc: 'Offer & background verification' },
+      ];
+    }
+    renderStages();
+  }
+
+  addStageBtn?.addEventListener('click', () => addStage());
+
+  document.querySelectorAll('.pipeline-preset-btn').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      const preset = (e.currentTarget as HTMLElement).dataset.pipeline;
+      if (preset) loadPipelinePreset(preset);
+    });
+  });
+
+  renderStages();
+
+  // CKEditor 5 Initialization for Job Description & Responsibilities
+  let jobDescriptionEditor: any = null;
+  const descEl = document.querySelector('#description');
+
+  if (descEl && typeof (window as any).ClassicEditor !== 'undefined') {
+    (window as any).ClassicEditor
+      .create(descEl, {
+        placeholder: 'Outline key expectations, role responsibilities, tech stack, and ideal qualification criteria...',
+        toolbar: [
+          'heading', '|',
+          'bold', 'italic', 'underline', 'strikethrough', '|',
+          'bulletedList', 'numberedList', 'blockQuote', '|',
+          'insertTable', 'undo', 'redo'
+        ]
+      })
+      .then((editor: any) => {
+        jobDescriptionEditor = editor;
+        editor.model.document.on('change:data', () => {
+          const descInput = document.querySelector('#description') as HTMLTextAreaElement | null;
+          if (descInput) descInput.value = editor.getData();
+        });
+      })
+      .catch((err: any) => {
+        console.error('CKEditor init error:', err);
+      });
+  }
+
+  // Form Submission
+  const form = document.getElementById('post-job-form') as HTMLFormElement | null;
+  const submitBtn = document.getElementById('submit-job-btn') as HTMLButtonElement | null;
+
+  if (form && submitBtn) {
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+
+      if (jobDescriptionEditor) {
+        const descInput = document.querySelector('#description') as HTMLTextAreaElement | null;
+        if (descInput) descInput.value = jobDescriptionEditor.getData();
+      }
+      
+      const formData = new FormData(e.target as HTMLFormElement);
+      const data: Record<string, any> = Object.fromEntries(formData.entries());
+      
+      data.locationRemote = formData.has('locationRemote');
+
+      // Attach custom screening questions & custom hiring pipeline stages
+      const validQuestions = questions.filter(q => q.text.trim().length > 0);
+      const validStages = pipelineStagesList.filter(s => s.title.trim().length > 0);
+
+      if (validQuestions.length > 0 || validStages.length > 0) {
+        data.applicationFormConfig = JSON.stringify({
+          questions: validQuestions,
+          hiringStages: validStages
+        });
+      } else {
+        data.applicationFormConfig = null;
+      }
+
+      const originalText = submitBtn.innerHTML;
+      submitBtn.innerText = 'Publishing...';
+      submitBtn.disabled = true;
+      
+      try {
+        const res = await fetch('/api/employer/jobs', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'same-origin',
+          body: JSON.stringify(data)
+        });
+        
+        const result = await res.json();
+        
+        if (res.ok) {
+          // @ts-ignore
+          if (window.showToast) window.showToast('Job posted successfully!');
+          window.location.href = '/employer/jobs';
+        } else {
+          // @ts-ignore
+          if (window.showToast) window.showToast(result.error || 'Failed to post job. Please try again.', 'error');
+        }
+      } catch (err) {
+        // @ts-ignore
+        if (window.showToast) window.showToast('A network error occurred. Please check your connection.', 'error');
+      } finally {
+        submitBtn.innerHTML = originalText;
+        submitBtn.disabled = false;
+      }
+    });
+  }
+</script>

@@ -1,0 +1,252 @@
+---
+import "../styles/global.css";
+import Footer from "../components/Footer.astro";
+import MobileBottomNav from "../components/MobileBottomNav.astro";
+import SEO from "../components/SEO.astro";
+
+interface Props {
+	hideNavAndFooter?: boolean;
+	title?: string;
+	description?: string;
+	image?: string;
+	type?: "website" | "article" | "job" | "profile";
+	noindex?: boolean;
+	canonicalUrl?: string;
+	keywords?: string;
+	schemaType?:
+		| "WebSite"
+		| "Organization"
+		| "JobPosting"
+		| "SoftwareApplication"
+		| "BreadcrumbList";
+	jobData?: any;
+	customSchema?: Record<string, any>;
+}
+
+const {
+	hideNavAndFooter = false,
+	title,
+	description,
+	image,
+	type,
+	noindex,
+	canonicalUrl,
+	keywords,
+	schemaType,
+	jobData,
+	customSchema,
+} = Astro.props;
+// @ts-ignore
+const payload = Astro.locals.user;
+const userType = payload?.userType;
+---
+
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+		<link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+		<link rel="apple-touch-icon" href="/icon-192.png" />
+		<link rel="manifest" href="/site.webmanifest" />
+		<meta name="generator" content={Astro.generator} />
+		<SEO
+			title={title}
+			description={description}
+			image={image}
+			type={type}
+			noindex={noindex}
+			canonicalUrl={canonicalUrl}
+			keywords={keywords}
+			schemaType={schemaType}
+			jobData={jobData}
+			customSchema={customSchema}
+		/>
+		<link
+			rel="stylesheet"
+			type="text/css"
+			href="https://cdn.jsdelivr.net/npm/toastify-js/src/toastify.min.css"
+		/>
+		<script
+			type="text/javascript"
+			src="https://cdn.jsdelivr.net/npm/toastify-js"></script>
+		<script is:inline>
+			window.showToast = function (message, type = "success") {
+				const errorIcon = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="15" y1="9" x2="9" y2="15"></line><line x1="9" y1="9" x2="15" y2="15"></line></svg>`;
+				const warningIcon = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>`;
+				const successIcon = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>`;
+
+				const icon =
+					type === "error"
+						? errorIcon
+						: type === "warning"
+							? warningIcon
+							: successIcon;
+
+				Toastify({
+					text: `<div style="display:flex;align-items:center;gap:8px;font-weight:500;">${icon} <span>${message}</span></div>`,
+					escapeMarkup: false,
+					duration: 4000,
+					close: true,
+					gravity: "top",
+					position: "right",
+					stopOnFocus: true,
+					className:
+						type === "error"
+							? "toast-theme-error"
+							: type === "warning"
+								? "toast-theme-warning"
+								: "toast-theme-success",
+					style: {
+						background: "unset",
+					},
+				}).showToast();
+			};
+		</script>
+		<script is:inline>
+			(function () {
+				const savedTheme = localStorage.getItem("theme");
+				if (savedTheme === "dark") {
+					document.documentElement.setAttribute("data-theme", "dark");
+				} else {
+					document.documentElement.setAttribute(
+						"data-theme",
+						"light",
+					);
+				}
+			})();
+		</script>
+	</head>
+	<body>
+		{
+			hideNavAndFooter && (
+				<div style="position: fixed; top: 1.25rem; right: 1.25rem; z-index: 9999;">
+					<button
+						type="button"
+						class="theme-toggle-btn"
+						aria-label="Toggle Light/Dark Theme"
+						title="Toggle Light/Dark Theme"
+					>
+						<svg
+							class="sun-icon"
+							width="20"
+							height="20"
+							viewBox="0 0 24 24"
+							fill="none"
+							stroke="currentColor"
+							stroke-width="2"
+							stroke-linecap="round"
+							stroke-linejoin="round"
+						>
+							<>
+								<circle cx="12" cy="12" r="5" />
+								<line x1="12" y1="1" x2="12" y2="3" />
+								<line x1="12" y1="21" x2="12" y2="23" />
+								<line x1="4.22" y1="4.22" x2="5.64" y2="5.64" />
+								<line
+									x1="18.36"
+									y1="18.36"
+									x2="19.78"
+									y2="19.78"
+								/>
+								<line x1="1" y1="12" x2="3" y2="12" />
+								<line x1="21" y1="12" x2="23" y2="12" />
+								<line
+									x1="4.22"
+									y1="19.78"
+									x2="5.64"
+									y2="18.36"
+								/>
+								<line
+									x1="18.36"
+									y1="5.64"
+									x2="19.78"
+									y2="4.22"
+								/>
+							</>
+						</svg>
+						<svg
+							class="moon-icon"
+							width="20"
+							height="20"
+							viewBox="0 0 24 24"
+							fill="none"
+							stroke="currentColor"
+							stroke-width="2"
+							stroke-linecap="round"
+							stroke-linejoin="round"
+						>
+							<path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
+						</svg>
+					</button>
+				</div>
+			)
+		}
+
+		<div class="layout-wrapper">
+			<slot />
+		</div>
+		{!hideNavAndFooter && <Footer />}
+		{
+			!hideNavAndFooter && userType && (
+				<MobileBottomNav userType={userType} />
+			)
+		}
+
+		<script is:inline>
+			document.addEventListener("DOMContentLoaded", () => {
+				const observer = new IntersectionObserver(
+					(entries) => {
+						entries.forEach((entry) => {
+							if (entry.isIntersecting) {
+								entry.target.classList.add("is-visible");
+								observer.unobserve(entry.target); // Animate only once
+							}
+						});
+					},
+					{
+						threshold: 0.1,
+						rootMargin: "0px 0px -50px 0px",
+					},
+				);
+
+				document.querySelectorAll(".reveal-on-scroll").forEach((el) => {
+					observer.observe(el);
+				});
+
+				// Theme Toggle Handler
+				const themeToggleBtns =
+					document.querySelectorAll(".theme-toggle-btn");
+				themeToggleBtns.forEach((btn) => {
+					btn.addEventListener("click", () => {
+						const currentTheme =
+							document.documentElement.getAttribute(
+								"data-theme",
+							) || "dark";
+						const newTheme =
+							currentTheme === "light" ? "dark" : "light";
+						document.documentElement.setAttribute(
+							"data-theme",
+							newTheme,
+						);
+						localStorage.setItem("theme", newTheme);
+					});
+				});
+			});
+		</script>
+	</body>
+</html>
+
+<style>
+	html,
+	body {
+		margin: 0;
+		width: 100%;
+		min-height: 100vh;
+		display: flex;
+		flex-direction: column;
+	}
+	.layout-wrapper {
+		flex: 1;
+	}
+</style>

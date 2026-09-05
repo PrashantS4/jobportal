@@ -1,0 +1,108 @@
+---
+// PostFeed.astro
+import { getDb } from '../lib/db';
+import { posts, users } from '../db/schema';
+import { eq, desc } from 'drizzle-orm';
+import PostCard from './PostCard.astro';
+import PostEditor from './PostEditor.astro';
+
+// Fetch posts
+let allPosts = [];
+try {
+  const db = getDb();
+  allPosts = await db
+    .select({
+      id: posts.id,
+      content: posts.content,
+      mediaUrl: posts.mediaUrl,
+      mediaType: posts.mediaType,
+      status: posts.status,
+      createdAt: posts.createdAt,
+      author: {
+        id: users.id,
+        firstName: users.firstName,
+        lastName: users.lastName,
+        avatarUrl: users.avatarUrl,
+        headline: users.headline,
+        userType: users.userType
+      }
+    })
+    .from(posts)
+    .innerJoin(users, eq(posts.authorId, users.id))
+    .where(eq(posts.status, 'published'))
+    .orderBy(desc(posts.createdAt));
+} catch (e) {
+  console.error("Failed to fetch posts", e);
+}
+---
+
+<div class="post-feed-container">
+  <PostEditor />
+  
+  <div class="feed-section">
+    <h2 class="feed-title">Latest Updates</h2>
+    
+    {allPosts.length === 0 ? (
+      <div class="empty-feed card">
+        <svg class="empty-icon" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 002-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+        </svg>
+        <h3 class="empty-title">No posts yet</h3>
+        <p class="empty-subtitle">Be the first to share something with the community.</p>
+      </div>
+    ) : (
+      <div class="post-list">
+        {allPosts.map((post) => (
+          <PostCard post={post as any} />
+        ))}
+      </div>
+    )}
+  </div>
+</div>
+
+<style>
+  .post-feed-container {
+    width: 100%;
+    max-width: 800px;
+  }
+  .feed-section {
+    margin-top: 2rem;
+  }
+  .feed-title {
+    font-size: 1.25rem;
+    font-weight: 700;
+    color: var(--color-text-main);
+    margin-bottom: 1.5rem;
+  }
+  .empty-feed {
+    text-align: center;
+    padding: 3rem 1.5rem;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+  }
+  .empty-icon {
+    width: 48px;
+    height: 48px;
+    color: var(--color-text-muted);
+    margin-bottom: 1rem;
+    opacity: 0.5;
+  }
+  .empty-title {
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--color-text-main);
+    margin: 0 0 0.5rem 0;
+  }
+  .empty-subtitle {
+    font-size: 0.875rem;
+    color: var(--color-text-muted);
+    margin: 0;
+  }
+  .post-list {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+  }
+</style>

@@ -1,0 +1,925 @@
+---
+import DashboardLayout from '../../layouts/DashboardLayout.astro';
+import { getDb } from '../../lib/db';
+import { users, jobPostings, plans } from '../../db/schema';
+import { eq, desc, count } from 'drizzle-orm';
+
+const payload = Astro.locals.user;
+if (!payload || (payload.userType !== 'masteradmin' && payload.userType !== 'superadmin')) {
+  return Astro.redirect('/login');
+}
+
+const db = getDb();
+
+// Fetch ONLY employers
+const employers = await db.select().from(users).where(
+  eq(users.userType, 'employer')
+).orderBy(desc(users.createdAt)).all();
+
+// Map plans for names
+const allPlans = await db.select().from(plans).all();
+const planMap = new Map(allPlans.map(p => [p.planId, p.planName]));
+
+// Fetch job counts per employer
+const jobCounts = await db.select({
+  employerId: jobPostings.employerId,
+  jobCount: count()
+}).from(jobPostings).groupBy(jobPostings.employerId).all();
+
+const jobCountMap = new Map(jobCounts.map(j => [j.employerId, j.jobCount]));
+---
+
+<DashboardLayout title="Employer Directory - MasterAdmin" userType="masteradmin" activePath="/masteradmin/employers">
+  <div class="dashboard-header mb-4">
+    <div class="header-titles">
+      <span class="badge-tag">MasterAdmin Management</span>
+      <h1>Employer Directory & Accounts</h1>
+      <p class="subtitle">Review company profiles, manage verification status, edit details, or suspend recruiter accounts.</p>
+    </div>
+    <div class="stats-counter-pill">
+      <strong>{employers.length}</strong> Registered Employers
+    </div>
+  </div>
+
+  <!-- Search Section -->
+  <div class="search-bar-container mb-4">
+    <div class="search-input-wrapper">
+      <span class="search-icon">🔍</span>
+      <input type="text" id="employerSearchInput" class="search-input" placeholder="Search employers by company, name, or email..." />
+    </div>
+  </div>
+
+  <div class="table-card">
+    <div class="table-responsive">
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>Company & Recruiter</th>
+            <th>Contact Email</th>
+            <th>Tier / Plan</th>
+            <th>Jobs Posted</th>
+            <th>Verification</th>
+            <th>Account Status</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {employers.length === 0 ? (
+            <tr>
+              <td colspan="7" class="empty-cell">
+                <div class="empty-state">
+                  <div class="empty-icon">🏢</div>
+                  <h3>No Employers Found</h3>
+                  <p>No registered employer accounts exist in the database.</p>
+                </div>
+              </td>
+            </tr>
+          ) : (
+            employers.map((emp) => {
+              const planName = planMap.get(emp.planId || 'P001') || emp.planId || 'Starter Free';
+              const jobsCount = jobCountMap.get(emp.id) || 0;
+              const isBlocked = emp.isActive === false;
+
+              return (
+                <tr class={`employer-row ${isBlocked ? 'blocked-row' : ''}`} data-emp-id={emp.id}>
+                  <td>
+                    <div class="company-meta-cell">
+                      <div class="company-logo-avatar">
+                        {emp.companyName ? emp.companyName.charAt(0).toUpperCase() : emp.firstName.charAt(0).toUpperCase()}
+                      </div>
+                      <div>
+                        <strong class="company-name-txt">{emp.companyName || `${emp.firstName} ${emp.lastName}`}</strong>
+                        <div class="recruiter-sub">👤 {emp.firstName} {emp.lastName}</div>
+                      </div>
+                    </div>
+                  </td>
+                  <td>
+                    <span class="email-txt">{emp.email}</span>
+                  </td>
+                  <td>
+                    <span class="plan-pill">{planName}</span>
+                  </td>
+                  <td>
+                    <span class="jobs-badge">
+                      <strong>{jobsCount}</strong> Jobs
+                    </span>
+                  </td>
+                  <td>
+                    <span class={`status-pill status-${emp.verifiedStatus}`}>
+                      {emp.verifiedStatus === 'verified' ? '✓ Verified' : emp.verifiedStatus === 'rejected' ? '✕ Rejected' : '⏳ Pending'}
+                    </span>
+                  </td>
+                  <td>
+                    <span class={`account-pill ${isBlocked ? 'pill-blocked' : 'pill-active'}`}>
+                      {isBlocked ? '🔴 Suspended' : '🟢 Active'}
+                    </span>
+                  </td>
+                  <td>
+                    <div class="actions-group">
+                      <!-- View Employer Dashboard (Impersonate) -->
+                      <button 
+                        type="button" 
+                        class="btn-action-icon impersonate-action" 
+                        title="View Employer Dashboard (Impersonate)"
+                        onclick={`impersonateUser('${emp.id}')`}
+                      >
+                        🚀
+                      </button>
+
+                      <!-- Quick View Modal Button -->
+                      <button 
+                        type="button" 
+                        class="btn-action-icon view-emp-btn" 
+                        title="View Employer Details"
+                        data-id={emp.id}
+                        data-company={emp.companyName || `${emp.firstName} ${emp.lastName}`}
+                        data-recruiter={`${emp.firstName} ${emp.lastName}`}
+                        data-email={emp.email}
+                        data-phone={emp.phone || 'N/A'}
+                        data-website={emp.companyWebsite || 'N/A'}
+                        data-industry={emp.companyIndustry || 'N/A'}
+                        data-size={emp.companySize || 'N/A'}
+                        data-bio={emp.companyBio || 'No biography available.'}
+                        data-plan={planName}
+                        data-verified={emp.verifiedStatus}
+                        data-active={emp.isActive !== false ? 'Active' : 'Suspended'}
+                      >
+                        👁️
+                      </button>
+
+                      <!-- Edit Button -->
+                      <a href={`/masteradmin/employers/${emp.id}/edit`} class="btn-action-icon edit-action" title="Edit Employer Profile & Plan">
+                        ✏️
+                      </a>
+
+                      <!-- Change Password Quick Button -->
+                      <button 
+                        type="button" 
+                        class="btn-action-icon change-pwd-btn" 
+                        title="Change Employer Password"
+                        data-id={emp.id}
+                        data-name={emp.companyName || `${emp.firstName} ${emp.lastName}`}
+                      >
+                        🔑
+                      </button>
+
+                      <!-- Block / Unblock Button -->
+                      <button 
+                        type="button" 
+                        class={`btn-action-icon block-btn ${isBlocked ? 'unblock-action' : 'block-action'}`} 
+                        title={isBlocked ? 'Reactivate Employer Account' : 'Block / Suspend Employer'}
+                        data-id={emp.id}
+                        data-action={isBlocked ? 'unblock' : 'block'}
+                      >
+                        {isBlocked ? '🟢' : '🚫'}
+                      </button>
+
+                      <!-- Delete Button -->
+                      <button 
+                        type="button" 
+                        class="btn-action-icon delete-action delete-emp-btn" 
+                        title="Delete Employer Account"
+                        data-id={emp.id}
+                        data-name={emp.companyName || `${emp.firstName} ${emp.lastName}`}
+                      >
+                        🗑️
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              );
+            })
+          )}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Employer View Modal -->
+  <div id="empModal" class="modal-backdrop" style="display: none;">
+    <div class="modal-card">
+      <div class="modal-header">
+        <div class="modal-title-wrap">
+          <div class="modal-logo" id="mLogo">🏢</div>
+          <div>
+            <h2 id="mCompany">Company Name</h2>
+            <p id="mRecruiter">Recruiter Name</p>
+          </div>
+        </div>
+        <button type="button" class="modal-close" id="closeModal">✕</button>
+      </div>
+
+      <div class="modal-body">
+        <div class="modal-info-grid">
+          <div class="info-item">
+            <span class="lbl">Email</span>
+            <span class="val" id="mEmail">—</span>
+          </div>
+          <div class="info-item">
+            <span class="lbl">Phone</span>
+            <span class="val" id="mPhone">—</span>
+          </div>
+          <div class="info-item">
+            <span class="lbl">Website</span>
+            <span class="val" id="mWebsite">—</span>
+          </div>
+          <div class="info-item">
+            <span class="lbl">Industry</span>
+            <span class="val" id="mIndustry">—</span>
+          </div>
+          <div class="info-item">
+            <span class="lbl">Company Size</span>
+            <span class="val" id="mSize">—</span>
+          </div>
+          <div class="info-item">
+            <span class="lbl">Subscription Plan</span>
+            <span class="val highlight" id="mPlan">—</span>
+          </div>
+        </div>
+
+        <div class="modal-section-title">Company Biography</div>
+        <p class="bio-text" id="mBio">Biography details...</p>
+      </div>
+
+      <div class="modal-footer">
+        <button type="button" class="btn btn-outline" id="closeModalBtn">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Change Password Modal -->
+  <div id="pwdModal" class="modal-backdrop" style="display: none;">
+    <div class="modal-card modal-card-sm">
+      <div class="modal-header">
+        <div class="modal-title-wrap">
+          <div class="modal-logo">🔑</div>
+          <div>
+            <h2>Change Employer Password</h2>
+            <p id="pwdTargetUser">Target Account</p>
+          </div>
+        </div>
+        <button type="button" class="modal-close" id="closePwdModal">✕</button>
+      </div>
+
+      <form id="quick-pwd-form">
+        <input type="hidden" id="pwdUserId" value="" />
+        <div class="modal-body">
+          <div class="form-group">
+            <label for="quickNewPassword">New Password <span class="req">*</span></label>
+            <input type="password" id="quickNewPassword" required minlength="6" placeholder="Enter at least 6 characters..." />
+          </div>
+        </div>
+
+        <div class="modal-footer">
+          <button type="button" class="btn btn-outline" id="closePwdModalBtn">Cancel</button>
+          <button type="submit" class="btn btn-primary" id="savePwdBtn">Save New Password</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</DashboardLayout>
+
+<script>
+  // Search Filter Logic
+  const searchInput = document.getElementById('employerSearchInput') as HTMLInputElement | null;
+  if (searchInput) {
+    searchInput.addEventListener('input', (e) => {
+      const term = (e.target as HTMLInputElement).value.toLowerCase();
+      const rows = document.querySelectorAll('.employer-row');
+      rows.forEach(row => {
+        const textContent = row.textContent?.toLowerCase() || '';
+        if (textContent.includes(term)) {
+          (row as HTMLElement).style.display = '';
+        } else {
+          (row as HTMLElement).style.display = 'none';
+        }
+      });
+    });
+  }
+
+  async function impersonateUser(targetUserId: string) {
+    if (confirm("View dashboard as this employer? You will be logged into their company portal and can return to MasterAdmin at any time.")) {
+      try {
+        const res = await fetch('/api/masteradmin/impersonate', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ targetUserId })
+        });
+        const data = await res.json();
+        if (res.ok && data.redirectUrl) {
+          window.location.href = data.redirectUrl;
+        } else {
+          // @ts-ignore
+          if (window.showToast) window.showToast(data.error || 'Failed to switch context', 'error');
+        }
+      } catch (e) {
+        // @ts-ignore
+        if (window.showToast) window.showToast('An error occurred while switching context.', 'error');
+      }
+    }
+  }
+  // @ts-ignore
+  window.impersonateUser = impersonateUser;
+
+  // View Modal logic
+  const modal = document.getElementById('empModal');
+  const closeModal = document.getElementById('closeModal');
+  const closeModalBtn = document.getElementById('closeModalBtn');
+
+  if (modal) {
+    document.body.appendChild(modal);
+  }
+
+  document.querySelectorAll('.view-emp-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const b = btn as HTMLButtonElement;
+      document.getElementById('mCompany')!.innerText = b.dataset.company || '';
+      document.getElementById('mRecruiter')!.innerText = `Recruiter: ${b.dataset.recruiter || ''}`;
+      document.getElementById('mEmail')!.innerText = b.dataset.email || '—';
+      document.getElementById('mPhone')!.innerText = b.dataset.phone || '—';
+      document.getElementById('mWebsite')!.innerText = b.dataset.website || '—';
+      document.getElementById('mIndustry')!.innerText = b.dataset.industry || '—';
+      document.getElementById('mSize')!.innerText = b.dataset.size || '—';
+      document.getElementById('mPlan')!.innerText = b.dataset.plan || '—';
+      document.getElementById('mBio')!.innerText = b.dataset.bio || 'No biography available.';
+
+      if (modal) {
+        modal.style.display = 'flex';
+        document.body.style.overflow = 'hidden';
+      }
+    });
+  });
+
+  const hideModal = () => { 
+    if (modal) {
+      modal.style.display = 'none'; 
+      document.body.style.overflow = '';
+    }
+  };
+  closeModal?.addEventListener('click', hideModal);
+  closeModalBtn?.addEventListener('click', hideModal);
+  modal?.addEventListener('click', (e) => { if (e.target === modal) hideModal(); });
+
+  // Password Modal logic
+  const pwdModal = document.getElementById('pwdModal');
+  const closePwdModal = document.getElementById('closePwdModal');
+  const closePwdModalBtn = document.getElementById('closePwdModalBtn');
+  const quickPwdForm = document.getElementById('quick-pwd-form') as HTMLFormElement | null;
+  const pwdUserIdInput = document.getElementById('pwdUserId') as HTMLInputElement | null;
+  const pwdTargetUserTxt = document.getElementById('pwdTargetUser');
+  const quickNewPasswordInput = document.getElementById('quickNewPassword') as HTMLInputElement | null;
+  const savePwdBtn = document.getElementById('savePwdBtn') as HTMLButtonElement | null;
+
+  if (pwdModal) {
+    document.body.appendChild(pwdModal);
+  }
+
+  document.querySelectorAll('.change-pwd-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const b = btn as HTMLButtonElement;
+      const userId = b.dataset.id || '';
+      const userName = b.dataset.name || '';
+
+      if (pwdUserIdInput) pwdUserIdInput.value = userId;
+      if (pwdTargetUserTxt) pwdTargetUserTxt.innerText = `Account: ${userName}`;
+      if (quickNewPasswordInput) quickNewPasswordInput.value = '';
+
+      if (pwdModal) {
+        pwdModal.style.display = 'flex';
+        document.body.style.overflow = 'hidden';
+      }
+    });
+  });
+
+  const hidePwdModal = () => {
+    if (pwdModal) {
+      pwdModal.style.display = 'none';
+      document.body.style.overflow = '';
+    }
+  };
+  closePwdModal?.addEventListener('click', hidePwdModal);
+  closePwdModalBtn?.addEventListener('click', hidePwdModal);
+  pwdModal?.addEventListener('click', (e) => { if (e.target === pwdModal) hidePwdModal(); });
+
+  if (quickPwdForm && savePwdBtn) {
+    quickPwdForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const userId = pwdUserIdInput?.value;
+      const newPassword = quickNewPasswordInput?.value.trim();
+
+      if (!userId || !newPassword || newPassword.length < 6) {
+        // @ts-ignore
+        if (window.showToast) window.showToast('Please enter a password of at least 6 characters.', 'error');
+        return;
+      }
+
+      savePwdBtn.innerText = 'Saving...';
+      savePwdBtn.disabled = true;
+
+      try {
+        const res = await fetch('/api/admin/users/change-password', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'same-origin',
+          body: JSON.stringify({ userId, newPassword })
+        });
+
+        const result = await res.json();
+        if (res.ok) {
+          // @ts-ignore
+          if (window.showToast) window.showToast(result.message || 'Password changed successfully!');
+          hidePwdModal();
+        } else {
+          // @ts-ignore
+          if (window.showToast) window.showToast(result.error || 'Failed to update password', 'error');
+        }
+      } catch (err) {
+        // @ts-ignore
+        if (window.showToast) window.showToast('Error updating password', 'error');
+      } finally {
+        savePwdBtn.innerText = 'Save New Password';
+        savePwdBtn.disabled = false;
+      }
+    });
+  }
+
+  // Block / Unblock Logic
+  document.querySelectorAll('.block-btn').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const b = btn as HTMLButtonElement;
+      const userId = b.dataset.id;
+      const action = b.dataset.action;
+      if (!userId || !action) return;
+
+      const confirmMsg = action === 'block' 
+        ? 'Are you sure you want to SUSPEND/BLOCK this employer? They will not be able to post jobs or access recruiter tools.' 
+        : 'Reactivate this employer account?';
+
+      if (!confirm(confirmMsg)) return;
+
+      try {
+        const res = await fetch('/api/admin/employers/status', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'same-origin',
+          body: JSON.stringify({ userId, action })
+        });
+
+        if (res.ok) {
+          // @ts-ignore
+          if (window.showToast) window.showToast(`Employer ${action === 'block' ? 'suspended' : 'reactivated'} successfully!`);
+          window.location.reload();
+        } else {
+          const result = await res.json();
+          // @ts-ignore
+          if (window.showToast) window.showToast(result.error || 'Operation failed', 'error');
+        }
+      } catch (err) {
+        // @ts-ignore
+        if (window.showToast) window.showToast('Error updating account status', 'error');
+      }
+    });
+  });
+
+  // Delete Employer Logic
+  document.querySelectorAll('.delete-emp-btn').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const b = btn as HTMLButtonElement;
+      const userId = b.dataset.id;
+      const name = b.dataset.name;
+      if (!userId) return;
+
+      if (!confirm(`Are you sure you want to PERMANENTLY DELETE employer "${name}"? All associated job postings and applications will be deleted.`)) {
+        return;
+      }
+
+      try {
+        const res = await fetch('/api/admin/employers/delete', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'same-origin',
+          body: JSON.stringify({ userId })
+        });
+
+        if (res.ok) {
+          // @ts-ignore
+          if (window.showToast) window.showToast('Employer deleted successfully.');
+          window.location.reload();
+        } else {
+          const result = await res.json();
+          // @ts-ignore
+          if (window.showToast) window.showToast(result.error || 'Failed to delete employer', 'error');
+        }
+      } catch (err) {
+        // @ts-ignore
+        if (window.showToast) window.showToast('An error occurred during deletion.', 'error');
+      }
+    });
+  });
+</script>
+
+<style>
+  .mb-4 { margin-bottom: 1.75rem; }
+
+  .dashboard-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-end;
+    flex-wrap: wrap;
+    gap: 1rem;
+  }
+
+  .badge-tag {
+    display: inline-block;
+    padding: 0.25rem 0.75rem;
+    background: rgba(168, 85, 247, 0.15);
+    color: #a855f7;
+    border-radius: 9999px;
+    font-size: 0.75rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin-bottom: 0.4rem;
+  }
+
+  .header-titles h1 {
+    margin: 0 0 0.3rem 0;
+    font-size: 1.75rem;
+    font-weight: 800;
+    color: var(--color-text-main);
+  }
+
+  .subtitle {
+    margin: 0;
+    font-size: 0.95rem;
+    color: var(--color-text-muted);
+  }
+
+  .stats-counter-pill {
+    padding: 0.5rem 1rem;
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: 12px;
+    font-size: 0.88rem;
+    color: var(--color-text-muted);
+  }
+  .stats-counter-pill strong {
+    color: #a855f7;
+    font-size: 1.1rem;
+  }
+
+  .search-bar-container {
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--border-radius-lg);
+    padding: 1rem 1.25rem;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.02);
+  }
+  
+  .search-input-wrapper {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    background: var(--color-bg);
+    border: 1px solid var(--color-border);
+    border-radius: 10px;
+    padding: 0.75rem 1rem;
+    transition: all 0.2s ease;
+  }
+  
+  .search-input-wrapper:focus-within {
+    border-color: var(--color-primary);
+    box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.15);
+  }
+
+  .search-icon {
+    font-size: 1.1rem;
+    opacity: 0.6;
+  }
+
+  .search-input {
+    flex: 1;
+    border: none;
+    background: transparent;
+    color: var(--color-text-main);
+    font-size: 0.95rem;
+    outline: none;
+    font-family: inherit;
+  }
+
+  .search-input::placeholder {
+    color: var(--color-text-muted);
+  }
+
+  .table-card {
+    background: var(--color-surface);
+    backdrop-filter: blur(16px);
+    border: 1px solid var(--color-border);
+    border-radius: var(--border-radius-lg);
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.04);
+    overflow: hidden;
+  }
+
+  .table-responsive {
+    overflow-x: auto;
+    width: 100%;
+  }
+
+  .data-table {
+    width: 100%;
+    min-width: 900px;
+    border-collapse: collapse;
+    text-align: left;
+  }
+
+  .data-table th {
+    padding: 1.1rem 1.25rem;
+    font-weight: 700;
+    color: var(--color-text-muted);
+    font-size: 0.8rem;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    border-bottom: 1px solid var(--color-border);
+    background: rgba(255, 255, 255, 0.02);
+    white-space: nowrap;
+  }
+
+  .data-table td {
+    padding: 1.1rem 1.25rem;
+    border-bottom: 1px solid var(--color-border);
+    vertical-align: middle;
+    white-space: nowrap;
+  }
+
+  .employer-row:hover {
+    background: rgba(168, 85, 247, 0.02);
+  }
+
+  .blocked-row {
+    opacity: 0.75;
+    background: rgba(239, 68, 68, 0.03);
+  }
+
+  .company-meta-cell {
+    display: flex;
+    align-items: center;
+    gap: 0.85rem;
+    white-space: nowrap;
+  }
+
+  .company-logo-avatar {
+    width: 42px;
+    height: 42px;
+    border-radius: 10px;
+    background: linear-gradient(135deg, #a855f7, #6366f1);
+    color: white;
+    font-weight: 800;
+    font-size: 1.1rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 4px 10px rgba(168, 85, 247, 0.25);
+    flex-shrink: 0;
+  }
+
+  .company-name-txt {
+    font-size: 1rem;
+    font-weight: 700;
+    color: var(--color-text-main);
+    white-space: nowrap;
+  }
+
+  .recruiter-sub {
+    font-size: 0.78rem;
+    color: var(--color-text-muted);
+    margin-top: 0.2rem;
+    white-space: nowrap;
+  }
+
+  .email-txt {
+    font-size: 0.88rem;
+    color: var(--color-text-main);
+    font-weight: 500;
+    white-space: nowrap;
+  }
+
+  .plan-pill {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.25rem 0.65rem;
+    background: rgba(168, 85, 247, 0.12);
+    color: #a855f7;
+    border: 1px solid rgba(168, 85, 247, 0.25);
+    border-radius: 6px;
+    font-size: 0.78rem;
+    font-weight: 700;
+    white-space: nowrap;
+  }
+
+  .jobs-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    padding: 0.3rem 0.75rem;
+    background: var(--color-bg);
+    border: 1px solid var(--color-border);
+    border-radius: 6px;
+    font-size: 0.82rem;
+    color: var(--color-text-muted);
+    white-space: nowrap;
+  }
+  .jobs-badge strong { color: #a855f7; }
+
+  .status-pill {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0.3rem 0.75rem;
+    border-radius: 9999px;
+    font-size: 0.78rem;
+    font-weight: 700;
+    white-space: nowrap;
+  }
+  .status-verified { background: rgba(16, 185, 129, 0.15); color: #10b981; }
+  .status-pending { background: rgba(245, 158, 11, 0.15); color: #f59e0b; }
+  .status-rejected { background: rgba(239, 68, 68, 0.15); color: #ef4444; }
+
+  .account-pill {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0.3rem 0.75rem;
+    border-radius: 9999px;
+    font-size: 0.78rem;
+    font-weight: 700;
+    white-space: nowrap;
+  }
+  .pill-active { background: rgba(16, 185, 129, 0.15); color: #10b981; }
+  .pill-blocked { background: rgba(239, 68, 68, 0.15); color: #ef4444; }
+
+  .actions-group {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+
+  .btn-action-icon {
+    width: 34px;
+    height: 34px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 8px;
+    background: var(--color-bg);
+    border: 1px solid var(--color-border);
+    cursor: pointer;
+    text-decoration: none;
+    font-size: 0.9rem;
+    transition: all 0.2s ease;
+  }
+  .btn-action-icon:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
+  }
+  .delete-action:hover { background: rgba(239, 68, 68, 0.2); border-color: #ef4444; }
+
+  /* Modal */
+  .modal-backdrop {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    background: rgba(0, 0, 0, 0.72);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    z-index: 99999;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 1.5rem;
+    box-sizing: border-box;
+  }
+
+  .modal-card {
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--border-radius-lg);
+    width: 100%;
+    max-width: 580px;
+    max-height: 85vh;
+    display: flex;
+    flex-direction: column;
+    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+    overflow: hidden;
+    animation: modalPop 0.22s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  }
+
+  @keyframes modalPop {
+    0% { opacity: 0; transform: scale(0.94) translateY(10px); }
+    100% { opacity: 1; transform: scale(1) translateY(0); }
+  }
+
+  .modal-header {
+    padding: 1.5rem;
+    border-bottom: 1px solid var(--color-border);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+
+  .modal-title-wrap {
+    display: flex;
+    align-items: center;
+    gap: 0.85rem;
+  }
+
+  .modal-logo {
+    width: 44px;
+    height: 44px;
+    border-radius: 10px;
+    background: linear-gradient(135deg, #a855f7, #6366f1);
+    color: white;
+    font-size: 1.2rem;
+    font-weight: 800;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .modal-header h2 {
+    margin: 0 0 0.2rem 0;
+    font-size: 1.25rem;
+    color: var(--color-text-main);
+  }
+  .modal-header p {
+    margin: 0;
+    font-size: 0.82rem;
+    color: var(--color-text-muted);
+  }
+
+  .modal-close {
+    background: none;
+    border: none;
+    font-size: 1.25rem;
+    color: var(--color-text-muted);
+    cursor: pointer;
+  }
+
+  .modal-body {
+    padding: 1.5rem;
+    display: flex;
+    flex-direction: column;
+    gap: 1.25rem;
+    overflow-y: auto;
+  }
+
+  .modal-info-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1rem;
+    background: var(--color-bg);
+    padding: 1.25rem;
+    border-radius: 12px;
+    border: 1px solid var(--color-border);
+  }
+
+  .info-item {
+    display: flex;
+    flex-direction: column;
+    gap: 0.2rem;
+  }
+  .info-item .lbl { font-size: 0.75rem; color: var(--color-text-muted); text-transform: uppercase; font-weight: 700; }
+  .info-item .val { font-size: 0.9rem; color: var(--color-text-main); font-weight: 600; }
+  .info-item .val.highlight { color: #a855f7; }
+
+  .modal-section-title {
+    font-size: 0.85rem;
+    font-weight: 700;
+    color: var(--color-text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+
+  .bio-text {
+    margin: 0;
+    font-size: 0.9rem;
+    color: var(--color-text-main);
+    line-height: 1.5;
+  }
+
+  .modal-footer {
+    padding: 1rem 1.5rem;
+    border-top: 1px solid var(--color-border);
+    display: flex;
+    justify-content: flex-end;
+  }
+
+  .empty-cell {
+    padding: 4rem 2rem !important;
+    text-align: center;
+  }
+  .empty-icon { font-size: 2.5rem; margin-bottom: 0.5rem; }
+</style>

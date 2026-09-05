@@ -1,0 +1,116 @@
+---
+const payload = Astro.locals.user as any;
+const logoHomePath = 
+  payload?.userType === "employer" ? "/employer" :
+  payload?.userType === "admin" ? "/admin" :
+  payload?.userType === "superadmin" ? "/superadmin" :
+  payload?.userType === "masteradmin" ? "/masteradmin" :
+  payload?.userType === "employee" ? "/dashboard" : "/";
+---
+
+<header class="header">
+  <div class="container header-inner">
+    <div class="logo">
+      <a href={logoHomePath} style="display: flex; align-items: center; gap: 0.75rem; text-decoration: none; color: inherit;">
+        <svg width="32" height="32" viewBox="0 0 128 128" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <polygon points="64,18 104,41 104,87 64,110 24,87 24,41" stroke="#10B981" stroke-width="10" stroke-linejoin="round" stroke-linecap="round" />
+          <path d="M64,64 L64,110 M64,64 L24,41 M64,64 L104,41" stroke="#10B981" stroke-width="10" stroke-linejoin="round" stroke-linecap="round" />
+        </svg>
+        <span class="logo-text">RecruitNest</span>
+      </a>
+    </div>
+
+    <nav class="nav-links">
+      <a href="/jobs" class="active">Find Jobs</a>
+      <a href="/companies">Companies</a>
+      <a href="/resources">Resources</a>
+      <a href="/pricing">Pricing</a>
+      <a href="/about">About</a>
+    </nav>
+
+    <div class="auth-buttons" style="display: flex; align-items: center; gap: 0.75rem;">
+      <button type="button" class="theme-toggle-btn" aria-label="Toggle Light/Dark Theme" title="Toggle Light/Dark Theme">
+        <svg class="sun-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"></circle><line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line><line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line></svg>
+        <svg class="moon-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>
+      </button>
+      <a href="/login" class="btn btn-outline">Log in</a>
+      <a href="/register" class="btn btn-primary">Sign up</a>
+    </div>
+  </div>
+</header>
+
+<style>
+  .header {
+    background-color: var(--color-surface);
+    border-bottom: 1px solid var(--color-border);
+    padding: 1rem 0;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+  }
+
+  .container {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 0 1.5rem;
+  }
+
+  .header-inner {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .logo {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    text-decoration: none;
+    color: var(--color-text-main);
+  }
+
+  .logo-text {
+    font-size: 1.5rem;
+    font-weight: 700;
+    letter-spacing: -0.025em;
+  }
+
+  .nav-links {
+    display: flex;
+    gap: 2rem;
+  }
+
+  .nav-links a {
+    color: var(--color-text-muted);
+    font-weight: 500;
+    transition: color 0.2s;
+  }
+
+  .nav-links a:hover,
+  .nav-links a.active {
+    color: var(--color-text-main);
+  }
+
+  .auth-buttons {
+    display: flex;
+    gap: 1rem;
+    align-items: center;
+  }
+
+  @media (max-width: 768px) {
+    .nav-links {
+      display: none;
+    }
+    .auth-buttons {
+      gap: 0.5rem;
+    }
+    .auth-buttons .btn {
+      padding: 0.4rem 0.75rem;
+      font-size: 0.8rem;
+      white-space: nowrap;
+    }
+    .container {
+      padding: 0 1rem;
+    }
+  }
+</style>

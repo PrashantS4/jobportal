@@ -1,0 +1,895 @@
+---
+import DashboardLayout from "../../../layouts/DashboardLayout.astro";
+import { getDb } from "../../../lib/db";
+import { applications, jobPostings, users } from "../../../db/schema";
+import { eq } from "drizzle-orm";
+
+const payload = Astro.locals.user;
+if (!payload || payload.userType !== "employer") {
+  return Astro.redirect("/login");
+}
+
+const { id } = Astro.params;
+if (!id) {
+  return Astro.redirect("/employer/applications");
+}
+
+const db = getDb();
+const app = await db
+  .select({
+    id: applications.id,
+    status: applications.status,
+    appliedAt: applications.appliedAt,
+    coverLetter: applications.coverLetter,
+    resumeUrl: applications.resumeUrl,
+    customAnswers: applications.customAnswers,
+    rating: applications.rating,
+    notes: applications.notes,
+    aiScore: applications.aiScore,
+    aiSummary: applications.aiSummary,
+    jobTitle: jobPostings.jobTitle,
+    applicantId: users.id,
+    applicantFirstName: users.firstName,
+    applicantLastName: users.lastName,
+    applicantEmail: users.email,
+    applicantPhone: users.phone,
+    applicantAvatar: users.avatarUrl,
+    applicantLinkedin: users.linkedinUrl,
+    applicantPortfolio: users.portfolioUrl,
+  })
+  .from(applications)
+  .innerJoin(jobPostings, eq(applications.jobPostingId, jobPostings.id))
+  .innerJoin(users, eq(applications.applicantId, users.id))
+  .where(eq(applications.id, id))
+  .get();
+
+if (!app) {
+  return Astro.redirect("/employer/applications");
+}
+
+let customData: Record<string, any> = {};
+if (app.customAnswers) {
+  try {
+    customData = typeof app.customAnswers === 'string' ? JSON.parse(app.customAnswers) : app.customAnswers;
+  } catch(e) {}
+}
+
+const photoUrl = customData.photoUrl || app.applicantAvatar || '/images/default-avatar.png';
+const linkedinUrl = customData.linkedinUrl || app.applicantLinkedin;
+const portfolioUrl = customData.portfolioUrl || app.applicantPortfolio;
+---
+
+<DashboardLayout
+  title="Application Detail"
+  userType="employer"
+  activePath="/employer/applications"
+>
+  <div class="dashboard-header mb-4">
+    <div class="header-content">
+      <a href="/employer/applications" class="btn btn-outline"
+        >&larr; Back to Applications</a
+      >
+      <h2>Application Details</h2>
+    </div>
+  </div>
+
+  <div class="main-grid">
+    <div class="section-container">
+      <div class="card p-4 main-profile-card">
+        <div class="candidate-header">
+          <img src={photoUrl} alt="Avatar" class="avatar" />
+          <div class="candidate-name-section">
+            <div class="name-status-row">
+              <h3>{app.applicantFirstName} {app.applicantLastName}</h3>
+              <span class={`status-pill status-${app.status}`}>
+                {app.status.replace('_', ' ').replace(/\b\w/g, (l: string) => l.toUpperCase())}
+              </span>
+            </div>
+            <p class="applied-for">
+              Applied for <strong class="text-gradient">{app.jobTitle}</strong>
+            </p>
+            <p class="applied-on">
+              📅 Applied on {
+                new Date(app.appliedAt).toLocaleDateString("en-GB", {
+                  day: "numeric",
+                  month: "short",
+                  year: "numeric",
+                })
+              }
+            </p>
+          </div>
+        </div>
+
+        {app.aiScore !== null && (
+          <div class="ai-hero-card mt-4">
+            <div class="ai-hero-header">
+              <div class="ai-title-wrap">
+                <div class="ai-icon-pulse">✨</div>
+                <div>
+                  <h4 class="ai-heading">AI Match & Fit Analysis</h4>
+                  <span class="ai-sub">Powered by Semantic Vector Screening</span>
+                </div>
+              </div>
+              <div class="ai-score-pill" style={`background: ${app.aiScore >= 80 ? 'rgba(16, 185, 129, 0.15)' : app.aiScore >= 50 ? 'rgba(245, 158, 11, 0.15)' : 'rgba(239, 68, 68, 0.15)'}; color: ${app.aiScore >= 80 ? '#10B981' : app.aiScore >= 50 ? '#F59E0B' : '#EF4444'}; border: 1px solid ${app.aiScore >= 80 ? 'rgba(16, 185, 129, 0.3)' : app.aiScore >= 50 ? 'rgba(245, 158, 11, 0.3)' : 'rgba(239, 68, 68, 0.3)'};`}>
+                <span class="score-number">{app.aiScore}%</span>
+                <span class="score-label">Fit Score</span>
+              </div>
+            </div>
+            {app.aiSummary && (
+              <div class="ai-analysis-content">
+                <p class="ai-analysis-paragraph">{app.aiSummary}</p>
+              </div>
+            )}
+          </div>
+        )}
+
+        <div class="candidate-contact mt-5">
+          <h4 class="section-title">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
+            Contact & Profile Details
+          </h4>
+          <div class="contact-grid">
+            <div class="contact-item">
+              <span class="label">Email Address</span>
+              <a href={`mailto:${app.applicantEmail}`} class="value email-val">{app.applicantEmail}</a>
+            </div>
+            <div class="contact-item">
+              <span class="label">Phone Number</span>
+              <span class="value">{app.applicantPhone || "Not provided"}</span>
+            </div>
+            <div class="contact-item">
+              <span class="label">LinkedIn</span>
+              {linkedinUrl ? (
+                <a href={linkedinUrl} target="_blank" rel="noopener noreferrer" class="link-pill linkedin-pill">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M19 3a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h14m-.5 15.5v-5.3a3.26 3.26 0 0 0-3.26-3.26c-.85 0-1.84.52-2.28 1.3v-1.11h-2.79v8.37h2.79v-4.93c0-.77.62-1.4 1.39-1.4a1.4 1.4 0 0 1 1.4 1.4v4.93h2.75M6.46 10.9v8.37H9.2V10.9H6.46M7.83 6.64a1.64 1.64 0 1 0 0 3.28 1.64 1.64 0 0 0 0-3.28Z"/></svg>
+                  View Profile ↗
+                </a>
+              ) : (
+                <span class="none-text">Not provided</span>
+              )}
+            </div>
+            <div class="contact-item">
+              <span class="label">Portfolio Website</span>
+              {portfolioUrl ? (
+                <a href={portfolioUrl} target="_blank" rel="noopener noreferrer" class="link-pill web-pill">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="2" y1="12" x2="22" y2="12"></line><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path></svg>
+                  Visit Website ↗
+                </a>
+              ) : (
+                <span class="none-text">Not provided</span>
+              )}
+            </div>
+          </div>
+        </div>
+
+        <div class="resume-section mt-5">
+          <h4 class="section-title">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
+            Candidate Resume
+          </h4>
+          <a
+            href={app.resumeUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            class="resume-preview-button"
+          >
+            <div class="resume-btn-left">
+              <div class="pdf-badge">PDF</div>
+              <div>
+                <div class="resume-name">{app.applicantFirstName}_{app.applicantLastName}_Resume.pdf</div>
+                <div class="resume-sub">Click to open & view full document in new tab</div>
+              </div>
+            </div>
+            <div class="resume-btn-arrow">↗</div>
+          </a>
+        </div>
+
+        {app.coverLetter && (
+          <div class="cover-letter-section mt-5">
+            <h4 class="section-title">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>
+              Cover Letter / Candidate Note
+            </h4>
+            <div class="cover-letter-box">{app.coverLetter}</div>
+          </div>
+        )}
+
+        {Array.isArray(customData.screeningAnswers) && customData.screeningAnswers.length > 0 && (
+          <div class="screening-responses-section mt-5">
+            <h4 class="section-title">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><path d="m9 15 2 2 4-4"></path></svg>
+              Candidate Screening Responses ({customData.screeningAnswers.length})
+            </h4>
+            <div class="screening-responses-list">
+              {customData.screeningAnswers.map((item: any, idx: number) => (
+                <div class="screening-response-card">
+                  <div class="response-q-row">
+                    <span class="response-q-pill">Q{idx + 1}</span>
+                    <strong class="response-q-text">{item.question}</strong>
+                  </div>
+                  <div class="response-a-row">
+                    <span class="answer-badge">Answer</span>
+                    <div class="response-a-text">{item.answer || '—'}</div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+
+    <!-- Application Tracking Actions (Indeed/Naukri Style) -->
+    <div class="section-container">
+      <div class="card p-4 sidebar-card">
+        <h3>Application Status</h3>
+
+        <form id="app-status-form">
+          <input type="hidden" name="applicationId" value={app.id} />
+
+          <div class="form-group mt-3">
+            <label for="status">Hiring Stage Pipeline</label>
+            <select id="status" name="status" class="form-control">
+              <option value="received" selected={app.status === "received"}
+                >Stage 1: Received / New</option
+              >
+              <option
+                value="under_review"
+                selected={app.status === "under_review"}>Stage 2: Under Review</option
+              >
+              <option
+                value="shortlisted"
+                selected={app.status === "shortlisted"}>Stage 3: Shortlisted for Interview</option
+              >
+              <option value="accepted" selected={app.status === "accepted"}
+                >Stage 4: Hired / Offer Sent 🎉</option
+              >
+              <option value="rejected" selected={app.status === "rejected"}
+                >Closed: Rejected</option
+              >
+            </select>
+          </div>
+
+          <div class="quick-stage-actions mt-3">
+            <label class="form-sublabel">1-Click Pipeline Stage Advance:</label>
+            <div class="stage-btn-grid">
+              <button type="button" class={`stage-quick-btn ${app.status === 'under_review' ? 'active' : ''}`} onclick="setQuickStage('under_review')">🔍 Reviewing</button>
+              <button type="button" class={`stage-quick-btn ${app.status === 'shortlisted' ? 'active' : ''}`} onclick="setQuickStage('shortlisted')">🎯 Shortlist</button>
+              <button type="button" class={`stage-quick-btn ${app.status === 'accepted' ? 'active' : ''}`} onclick="setQuickStage('accepted')">🏆 Hire / Offer</button>
+              <button type="button" class={`stage-quick-btn danger ${app.status === 'rejected' ? 'active' : ''}`} onclick="setQuickStage('rejected')">❌ Reject</button>
+            </div>
+          </div>
+
+          <div class="form-group mt-3">
+            <label>Recruiter Rating</label>
+            <div class="rating-stars">
+              {
+                [1, 2, 3, 4, 5].map((star) => (
+                  <label class="star-label">
+                    <input
+                      type="radio"
+                      name="rating"
+                      value={star}
+                      checked={app.rating === star}
+                    />
+                    <span class="star-icon">★</span>
+                  </label>
+                ))
+              }
+            </div>
+          </div>
+
+          <div class="form-group mt-3">
+            <label for="notes">Recruiter Notes</label>
+            <textarea
+              id="notes"
+              name="notes"
+              rows="4"
+              placeholder="Add private hiring notes..."
+              >{app.notes || ""}</textarea
+            >
+          </div>
+
+          <button
+            type="submit"
+            class="btn btn-primary w-full mt-4"
+            id="save-app-btn">Save Updates</button
+          >
+        </form>
+      </div>
+    </div>
+  </div>
+</DashboardLayout>
+
+<style>
+  .mb-4 { margin-bottom: 1.5rem; }
+  .mt-2 { margin-top: 0.5rem; }
+  .mt-3 { margin-top: 1rem; }
+  .mt-4 { margin-top: 1.5rem; }
+  .mt-5 { margin-top: 2rem; }
+  .w-full { width: 100%; box-sizing: border-box; }
+
+  .header-content {
+    display: flex;
+    align-items: center;
+    gap: 1.5rem;
+  }
+  .header-content h2 {
+    margin: 0;
+    font-size: 1.5rem;
+    font-weight: 700;
+  }
+
+  .main-grid {
+    display: grid;
+    grid-template-columns: 2fr 1fr;
+    gap: 1.75rem;
+  }
+
+  .card {
+    background: var(--color-surface);
+    backdrop-filter: blur(16px);
+    border-radius: var(--border-radius-lg);
+    border: 1px solid var(--color-border);
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.05);
+  }
+
+  .p-4 { padding: 2rem; }
+
+  .candidate-header {
+    display: flex;
+    align-items: center;
+    gap: 1.5rem;
+    padding-bottom: 1.75rem;
+    border-bottom: 1px solid var(--color-border);
+  }
+
+  .avatar {
+    width: 80px;
+    height: 80px;
+    border-radius: 50%;
+    object-fit: cover;
+    border: 3px solid var(--color-primary);
+    box-shadow: 0 4px 14px rgba(99, 102, 241, 0.25);
+  }
+
+  .name-status-row {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    flex-wrap: wrap;
+  }
+
+  .candidate-name-section h3 {
+    margin: 0;
+    font-size: 1.5rem;
+    font-weight: 800;
+    color: var(--color-text-main);
+  }
+
+  .status-pill {
+    padding: 0.25rem 0.75rem;
+    border-radius: 9999px;
+    font-size: 0.75rem;
+    font-weight: 700;
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+  }
+  .status-received { background: rgba(59, 130, 246, 0.15); color: #3b82f6; border: 1px solid rgba(59, 130, 246, 0.3); }
+  .status-under_review { background: rgba(245, 158, 11, 0.15); color: #f59e0b; border: 1px solid rgba(245, 158, 11, 0.3); }
+  .status-shortlisted { background: rgba(139, 92, 246, 0.15); color: #8b5cf6; border: 1px solid rgba(139, 92, 246, 0.3); }
+  .status-accepted { background: rgba(16, 185, 129, 0.15); color: #10b981; border: 1px solid rgba(16, 185, 129, 0.3); }
+  .status-rejected { background: rgba(239, 68, 68, 0.15); color: #ef4444; border: 1px solid rgba(239, 68, 68, 0.3); }
+
+  .applied-for {
+    margin: 0.35rem 0 0 0;
+    font-size: 0.95rem;
+    color: var(--color-text-muted);
+  }
+
+  .text-gradient {
+    color: var(--color-primary);
+    font-weight: 700;
+  }
+
+  .applied-on {
+    margin: 0.25rem 0 0 0;
+    font-size: 0.85rem;
+    color: var(--color-text-muted);
+  }
+
+  /* AI Hero Card */
+  .ai-hero-card {
+    background: linear-gradient(135deg, rgba(99, 102, 241, 0.06) 0%, rgba(168, 85, 247, 0.06) 100%);
+    border: 1px solid rgba(99, 102, 241, 0.25);
+    border-radius: var(--border-radius-md);
+    padding: 1.5rem;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .ai-hero-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1rem;
+  }
+
+  .ai-title-wrap {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+  }
+
+  .ai-icon-pulse {
+    width: 36px;
+    height: 36px;
+    border-radius: 10px;
+    background: linear-gradient(135deg, #6366f1, #a855f7);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    font-size: 1.1rem;
+    box-shadow: 0 4px 12px rgba(99, 102, 241, 0.35);
+  }
+
+  .ai-heading {
+    margin: 0;
+    font-size: 1.05rem;
+    font-weight: 700;
+    color: var(--color-text-main);
+  }
+
+  .ai-sub {
+    font-size: 0.75rem;
+    color: var(--color-text-muted);
+    display: block;
+  }
+
+  .ai-score-pill {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 0.4rem 1rem;
+    border-radius: 12px;
+  }
+
+  .score-number {
+    font-size: 1.35rem;
+    font-weight: 800;
+    line-height: 1;
+  }
+
+  .score-label {
+    font-size: 0.65rem;
+    text-transform: uppercase;
+    font-weight: 600;
+    letter-spacing: 0.05em;
+    margin-top: 0.15rem;
+  }
+
+  .ai-analysis-content {
+    background: var(--color-bg);
+    border: 1px solid var(--color-border);
+    border-radius: var(--border-radius-sm);
+    padding: 1rem 1.25rem;
+  }
+
+  .ai-analysis-paragraph {
+    margin: 0;
+    font-size: 0.95rem;
+    line-height: 1.6;
+    color: var(--color-text-main);
+  }
+
+  /* Section Titles */
+  .section-title {
+    font-size: 1.05rem;
+    font-weight: 700;
+    color: var(--color-text-main);
+    margin: 0 0 1rem 0;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+
+  .section-title svg {
+    color: var(--color-primary);
+  }
+
+  .contact-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1rem;
+  }
+
+  .contact-item {
+    background: var(--color-bg);
+    border: 1px solid var(--color-border);
+    padding: 1rem;
+    border-radius: var(--border-radius-sm);
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+  }
+
+  .contact-item .label {
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: var(--color-text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+
+  .contact-item .value {
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: var(--color-text-main);
+  }
+
+  .email-val {
+    color: var(--color-primary) !important;
+    text-decoration: none;
+  }
+  .email-val:hover { text-decoration: underline; }
+
+  .link-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    font-size: 0.85rem;
+    font-weight: 600;
+    text-decoration: none;
+    padding: 0.35rem 0.75rem;
+    border-radius: 6px;
+    width: fit-content;
+    transition: all 0.2s ease;
+  }
+  .linkedin-pill {
+    background: rgba(0, 119, 181, 0.1);
+    color: #0077b5;
+    border: 1px solid rgba(0, 119, 181, 0.25);
+  }
+  .linkedin-pill:hover { background: rgba(0, 119, 181, 0.2); }
+
+  .web-pill {
+    background: rgba(99, 102, 241, 0.1);
+    color: var(--color-primary);
+    border: 1px solid rgba(99, 102, 241, 0.25);
+  }
+  .web-pill:hover { background: rgba(99, 102, 241, 0.2); }
+
+  .none-text {
+    font-size: 0.85rem;
+    color: var(--color-text-muted);
+    font-style: italic;
+  }
+
+  /* Resume Preview Button */
+  .resume-preview-button {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: var(--color-bg);
+    border: 1.5px solid var(--color-border);
+    padding: 1rem 1.25rem;
+    border-radius: var(--border-radius-md);
+    text-decoration: none;
+    color: inherit;
+    transition: all 0.2s ease;
+  }
+  .resume-preview-button:hover {
+    border-color: var(--color-primary);
+    transform: translateY(-2px);
+    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.08);
+  }
+
+  .resume-btn-left {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+  }
+
+  .pdf-badge {
+    background: #ef4444;
+    color: white;
+    font-weight: 800;
+    font-size: 0.75rem;
+    padding: 0.35rem 0.6rem;
+    border-radius: 6px;
+    letter-spacing: 0.05em;
+  }
+
+  .resume-name {
+    font-weight: 700;
+    font-size: 0.95rem;
+    color: var(--color-text-main);
+  }
+
+  .resume-sub {
+    font-size: 0.75rem;
+    color: var(--color-text-muted);
+  }
+
+  .resume-btn-arrow {
+    font-size: 1.25rem;
+    color: var(--color-primary);
+    font-weight: bold;
+  }
+
+  .cover-letter-box {
+    background: var(--color-bg);
+    border: 1px solid var(--color-border);
+    padding: 1.25rem;
+    border-radius: var(--border-radius-sm);
+    font-size: 0.95rem;
+    line-height: 1.6;
+    color: var(--color-text-main);
+    white-space: pre-wrap;
+  }
+
+  /* Sidebar Actions Card */
+  .sidebar-card {
+    position: sticky;
+    top: 1.5rem;
+  }
+
+  .sidebar-card h3 {
+    margin: 0 0 1rem 0;
+    font-size: 1.15rem;
+    font-weight: 700;
+    color: var(--color-text-main);
+    padding-bottom: 0.75rem;
+    border-bottom: 1px solid var(--color-border);
+  }
+
+  .form-group {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+
+  .form-group label {
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--color-text-main);
+  }
+
+  .form-control, textarea {
+    padding: 0.75rem 1rem;
+    border: 1px solid var(--color-border);
+    border-radius: var(--border-radius-md);
+    font-size: 0.95rem;
+    font-family: inherit;
+    background-color: var(--color-bg);
+    color: var(--color-text-main);
+    transition: border-color 0.2s;
+  }
+
+  .form-control:focus, textarea:focus {
+    outline: none;
+    border-color: var(--color-primary);
+    box-shadow: 0 0 0 3px var(--color-primary-light);
+  }
+
+  .rating-stars {
+    display: flex;
+    gap: 0.5rem;
+  }
+
+  .star-label { cursor: pointer; }
+  .star-label input { display: none; }
+  .star-icon {
+    font-size: 1.5rem;
+    color: #e2e8f0;
+    transition: color 0.2s;
+  }
+  .star-label input:checked ~ .star-icon,
+  .star-label:hover ~ .star-label .star-icon,
+  .star-label:hover .star-icon {
+    color: #f59e0b;
+  }
+
+  /* Candidate Screening Responses */
+  .screening-responses-list {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+  }
+
+  .screening-response-card {
+    background: var(--color-bg);
+    border: 1px solid var(--color-border);
+    border-radius: var(--border-radius-sm);
+    padding: 1.15rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.6rem;
+  }
+
+  .response-q-row {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.6rem;
+  }
+
+  .response-q-pill {
+    background: var(--color-primary);
+    color: white;
+    font-size: 0.72rem;
+    font-weight: 800;
+    padding: 0.15rem 0.45rem;
+    border-radius: 4px;
+    flex-shrink: 0;
+    margin-top: 0.1rem;
+  }
+
+  .response-q-text {
+    font-size: 0.95rem;
+    color: var(--color-text-main);
+    line-height: 1.4;
+  }
+
+  .response-a-row {
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: 8px;
+    padding: 0.75rem 1rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+  }
+
+  .answer-badge {
+    font-size: 0.7rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    color: var(--color-primary);
+    letter-spacing: 0.05em;
+  }
+
+  .response-a-text {
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: var(--color-text-main);
+    white-space: pre-wrap;
+  }
+
+  .form-sublabel {
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--color-text-muted);
+  }
+  .stage-btn-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.5rem;
+    margin-top: 0.35rem;
+  }
+  .stage-quick-btn {
+    padding: 0.45rem 0.6rem;
+    font-size: 0.78rem;
+    font-weight: 600;
+    border-radius: 8px;
+    border: 1px solid var(--color-border);
+    background: var(--color-bg);
+    color: var(--color-text-main);
+    cursor: pointer;
+    transition: all 0.2s ease;
+  }
+  .stage-quick-btn:hover {
+    border-color: var(--color-primary);
+    color: var(--color-primary);
+  }
+  .stage-quick-btn.active {
+    background: rgba(99, 102, 241, 0.15);
+    border-color: var(--color-primary);
+    color: var(--color-primary);
+    font-weight: 700;
+  }
+  .stage-quick-btn.danger.active {
+    background: rgba(239, 68, 68, 0.15);
+    border-color: #ef4444;
+    color: #ef4444;
+  }
+
+  @media (max-width: 900px) {
+    .main-grid { grid-template-columns: 1fr; }
+    .contact-grid { grid-template-columns: 1fr; }
+    .ai-hero-header { flex-direction: column; align-items: flex-start; gap: 0.75rem; }
+  }
+
+  @media (max-width: 640px) {
+    .candidate-header {
+      flex-direction: column !important;
+      align-items: flex-start !important;
+      gap: 1rem !important;
+    }
+    .p-4 {
+      padding: 1rem 0.75rem !important;
+    }
+    .resume-preview-button {
+      flex-direction: column !important;
+      align-items: flex-start !important;
+      gap: 0.75rem !important;
+    }
+    .stage-btn-grid {
+      grid-template-columns: 1fr !important;
+    }
+  }
+</style>
+
+<script>
+  (window as any).setQuickStage = function(targetStage: string) {
+    const select = document.getElementById('status') as HTMLSelectElement | null;
+    if (select) {
+      select.value = targetStage;
+      document.querySelectorAll('.stage-quick-btn').forEach(btn => btn.classList.remove('active'));
+      const activeBtn = document.querySelector(`.stage-quick-btn[onclick*="${targetStage}"]`);
+      if (activeBtn) activeBtn.classList.add('active');
+    }
+  };
+  const form = document.getElementById(
+    "app-status-form",
+  ) as HTMLFormElement | null;
+  const saveBtn = document.getElementById(
+    "save-app-btn",
+  ) as HTMLButtonElement | null;
+
+  if (form && saveBtn) {
+    // Handle star selection visual update
+    const stars = form.querySelectorAll(".star-label");
+    stars.forEach((star, idx) => {
+      star.addEventListener("click", () => {
+        // Highlight all stars up to selected
+        stars.forEach((s, i) => {
+          const icon = s.querySelector(".star-icon");
+          if (icon) {
+            if (i <= idx) {
+              icon.setAttribute("style", "color: #F59E0B;");
+            } else {
+              icon.setAttribute("style", "color: #E2E8F0;");
+            }
+          }
+        });
+      });
+    });
+
+    // Handle form submit
+    form.addEventListener("submit", async (e) => {
+      e.preventDefault();
+
+      const formData = new FormData(e.target as HTMLFormElement);
+      const data = Object.fromEntries(formData.entries());
+
+      const originalText = saveBtn.innerText;
+      saveBtn.innerText = "Saving Updates...";
+      saveBtn.disabled = true;
+
+      try {
+        const res = await fetch("/api/employer/applications/update", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          credentials: "same-origin",
+          body: JSON.stringify(data),
+        });
+
+        if (res.ok) {
+          showToast("Application updated successfully!");
+          window.location.reload();
+        } else {
+          const result = await res.json();
+          showToast(result.error || "Failed to update application");
+        }
+      } catch (err) {
+        showToast("A network error occurred. Please try again.");
+      } finally {
+        saveBtn.innerText = originalText;
+        saveBtn.disabled = false;
+      }
+    });
+  }
+</script>

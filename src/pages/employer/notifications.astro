@@ -1,0 +1,556 @@
+---
+import DashboardLayout from '../../layouts/DashboardLayout.astro';
+import { getDb } from '../../lib/db';
+import { applications, jobPostings, users, notifications as systemNotifications } from '../../db/schema';
+import { eq, desc } from 'drizzle-orm';
+
+const payload = Astro.locals.user;
+if (!payload || payload.userType !== 'employer') {
+  return Astro.redirect('/login');
+}
+
+const db = getDb();
+
+// 1. Fetch application notifications for employer's jobs
+const apps = await db.select({
+  id: applications.id,
+  jobPostingId: applications.jobPostingId,
+  status: applications.status,
+  appliedAt: applications.appliedAt,
+  jobTitle: jobPostings.jobTitle,
+  applicantFirstName: users.firstName,
+  applicantLastName: users.lastName,
+  applicantAvatar: users.avatarUrl
+})
+.from(applications)
+.innerJoin(jobPostings, eq(applications.jobPostingId, jobPostings.id))
+.innerJoin(users, eq(applications.applicantId, users.id))
+.where(eq(applications.employerId, payload.userId))
+.orderBy(desc(applications.appliedAt))
+.all();
+
+// 2. Fetch direct system notifications if any
+let systemNotifs: any[] = [];
+try {
+  systemNotifs = await db.select()
+    .from(systemNotifications)
+    .where(eq(systemNotifications.userId, payload.userId))
+    .orderBy(desc(systemNotifications.createdAt))
+    .all();
+} catch (e) {
+  console.error('Error loading system notifications for employer:', e);
+}
+
+// Combine and map notifications
+const appNotifs = apps.map(app => ({
+  id: app.id,
+  type: 'application',
+  title: 'New Job Application',
+  text: `${app.applicantFirstName || 'Candidate'} ${app.applicantLastName || ''} applied for "${app.jobTitle}".`,
+  time: app.appliedAt ? new Date(app.appliedAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : 'Recently',
+  unread: app.status === 'received',
+  avatar: app.applicantAvatar,
+  initials: `${(app.applicantFirstName || 'C').charAt(0)}${(app.applicantLastName || '').charAt(0)}`.toUpperCase(),
+  link: `/employer/applications`
+}));
+
+const sysNotifs = systemNotifs.map(n => ({
+  id: n.id,
+  type: 'system',
+  title: n.title || 'System Notification',
+  text: n.message,
+  time: n.createdAt ? new Date(n.createdAt instanceof Date ? n.createdAt : n.createdAt * 1000).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : 'Recently',
+  unread: !n.isRead,
+  avatar: null,
+  initials: '🔔',
+  link: null
+}));
+
+const allNotifications = [...appNotifs, ...sysNotifs];
+const unreadCount = allNotifications.filter(n => n.unread).length;
+---
+
+<DashboardLayout title="Notifications" userType="employer" activePath="/employer/notifications">
+  <div class="notifications-page-wrapper">
+    <div class="page-header">
+      <div class="header-left">
+        <div class="title-badge-row">
+          <h1 class="page-title">Notifications</h1>
+          {unreadCount > 0 && (
+            <span class="unread-pill" id="headerUnreadPill">
+              <span class="pulse-dot"></span>
+              <span id="unreadCountText">{unreadCount} Unread</span>
+            </span>
+          )}
+        </div>
+        <p class="page-subtitle">Real-time alerts for candidate applications and candidate updates.</p>
+      </div>
+
+      {unreadCount > 0 && (
+        <button type="button" id="markAllReadBtn" class="btn btn-outline-primary" onclick="markAllNotificationsRead()">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="20 6 9 17 4 12"></polyline>
+          </svg>
+          Mark all as read
+        </button>
+      )}
+    </div>
+
+    <div class="notifications-container">
+      {allNotifications.length === 0 ? (
+        <div class="card empty-state-box">
+          <div class="empty-icon">🔔</div>
+          <h3>You're all caught up!</h3>
+          <p>No notifications yet. New candidate applications and updates will appear here.</p>
+        </div>
+      ) : (
+        <div class="notifications-list card">
+          {allNotifications.map((notif) => (
+            <div class={`notification-item ${notif.unread ? 'unread' : ''}`} id={`notif-item-${notif.id}`} data-notif-id={notif.id} data-notif-type={notif.type}>
+              <div class="notif-avatar-col">
+                {notif.avatar ? (
+                  <img src={notif.avatar} alt="Candidate" class="notif-avatar-img" />
+                ) : (
+                  <div class={`notif-avatar-fallback ${notif.type === 'system' ? 'avatar-system' : ''}`}>
+                    {notif.initials}
+                  </div>
+                )}
+                {notif.unread && <span class="unread-pulse-dot" title="Unread notification"></span>}
+              </div>
+
+              <div class="notif-body-col">
+                <div class="notif-top-meta">
+                  <span class={`notif-type-tag ${notif.type === 'application' ? 'tag-app' : 'tag-sys'}`}>
+                    {notif.type === 'application' ? '📄 Application' : '🔔 Alert'}
+                  </span>
+                  <span class="notif-time-text">{notif.time}</span>
+                </div>
+
+                <p class="notif-main-text">{notif.text}</p>
+
+                <div class="notif-actions-row">
+                  {notif.link && (
+                    <a href={notif.link} class="notif-btn-link">
+                      <span>Review Application</span>
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"></polyline></svg>
+                    </a>
+                  )}
+
+                  {notif.unread ? (
+                    <button
+                      type="button"
+                      class="btn-mark-read"
+                      onclick={`markSingleNotificationRead('${notif.id}', '${notif.type}', this)`}
+                    >
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                      Mark as read
+                    </button>
+                  ) : (
+                    <span class="read-status-label">✓ Read</span>
+                  )}
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  </div>
+</DashboardLayout>
+
+<style>
+  .notifications-page-wrapper {
+    max-width: 900px;
+    margin: 0 auto;
+    width: 100%;
+    box-sizing: border-box;
+  }
+
+  .page-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 1.5rem;
+    gap: 1rem;
+    flex-wrap: wrap;
+  }
+
+  .title-badge-row {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    margin-bottom: 0.25rem;
+  }
+
+  .page-title {
+    font-size: 1.65rem;
+    font-weight: 700;
+    margin: 0;
+    color: var(--color-text-main);
+  }
+
+  .page-subtitle {
+    font-size: 0.875rem;
+    color: var(--color-text-muted);
+    margin: 0;
+  }
+
+  .unread-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.2rem 0.65rem;
+    background: rgba(167, 139, 250, 0.15);
+    border: 1px solid rgba(167, 139, 250, 0.3);
+    color: var(--color-primary);
+    border-radius: 9999px;
+    font-size: 0.75rem;
+    font-weight: 700;
+  }
+
+  .pulse-dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background-color: var(--color-primary);
+    box-shadow: 0 0 8px var(--color-primary);
+    animation: pulseGlow 1.5s infinite;
+  }
+
+  @keyframes pulseGlow {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.4; transform: scale(1.3); }
+  }
+
+  .btn-outline-primary {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+    padding: 0.45rem 0.95rem;
+    background: var(--color-surface);
+    border: 1px solid var(--color-primary);
+    color: var(--color-primary);
+    border-radius: var(--border-radius-md);
+    font-size: 0.825rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+  }
+  .btn-outline-primary:hover {
+    background: var(--color-primary);
+    color: white;
+  }
+
+  .notifications-container {
+    width: 100%;
+  }
+
+  .card {
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--border-radius-lg);
+    overflow: hidden;
+  }
+
+  .empty-state-box {
+    text-align: center;
+    padding: 3.5rem 1.5rem;
+    color: var(--color-text-muted);
+  }
+  .empty-icon {
+    font-size: 2.5rem;
+    margin-bottom: 0.75rem;
+  }
+  .empty-state-box h3 {
+    font-size: 1.15rem;
+    font-weight: 700;
+    color: var(--color-text-main);
+    margin: 0 0 0.4rem 0;
+  }
+  .empty-state-box p {
+    font-size: 0.875rem;
+    margin: 0;
+  }
+
+  .notifications-list {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .notification-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 1rem;
+    padding: 1.25rem 1.5rem;
+    border-bottom: 1px solid var(--color-border);
+    transition: background-color 0.2s ease;
+    position: relative;
+  }
+  .notification-item:last-child {
+    border-bottom: none;
+  }
+  .notification-item:hover {
+    background-color: var(--color-surface-hover);
+  }
+
+  .notification-item.unread {
+    background: rgba(167, 139, 250, 0.04);
+    border-left: 3px solid var(--color-primary);
+  }
+
+  .notif-avatar-col {
+    position: relative;
+    flex-shrink: 0;
+  }
+
+  .notif-avatar-img {
+    width: 42px;
+    height: 42px;
+    border-radius: 50%;
+    object-fit: cover;
+    border: 1px solid var(--color-border);
+  }
+
+  .notif-avatar-fallback {
+    width: 42px;
+    height: 42px;
+    border-radius: 50%;
+    background: var(--color-surface-hover);
+    border: 1px solid var(--color-border);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 700;
+    font-size: 0.9rem;
+    color: var(--color-primary);
+  }
+  .avatar-system {
+    background: rgba(59, 130, 246, 0.1);
+    color: #3b82f6;
+  }
+
+  .unread-pulse-dot {
+    position: absolute;
+    top: -2px;
+    right: -2px;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: var(--color-primary);
+    border: 2px solid var(--color-bg);
+  }
+
+  .notif-body-col {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .notif-top-meta {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 0.5rem;
+    margin-bottom: 0.35rem;
+    flex-wrap: wrap;
+  }
+
+  .notif-type-tag {
+    font-size: 0.72rem;
+    font-weight: 700;
+    padding: 0.15rem 0.5rem;
+    border-radius: 9999px;
+  }
+  .tag-app {
+    background: rgba(16, 185, 129, 0.12);
+    color: #059669;
+    border: 1px solid rgba(16, 185, 129, 0.25);
+  }
+  .tag-sys {
+    background: rgba(59, 130, 246, 0.12);
+    color: #3b82f6;
+    border: 1px solid rgba(59, 130, 246, 0.25);
+  }
+
+  .notif-time-text {
+    font-size: 0.775rem;
+    color: var(--color-text-muted);
+  }
+
+  .notif-main-text {
+    margin: 0 0 0.75rem 0;
+    font-size: 0.925rem;
+    color: var(--color-text-main);
+    line-height: 1.45;
+    word-break: break-word;
+  }
+
+  .notif-actions-row {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+  }
+
+  .notif-btn-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--color-primary);
+    text-decoration: none;
+    padding: 0.3rem 0.65rem;
+    background: var(--color-surface-hover);
+    border: 1px solid var(--color-border);
+    border-radius: var(--border-radius-sm);
+    transition: all 0.2s ease;
+  }
+  .notif-btn-link:hover {
+    border-color: var(--color-primary);
+    background: rgba(167, 139, 250, 0.1);
+  }
+
+  .btn-mark-read {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    font-size: 0.775rem;
+    font-weight: 600;
+    color: var(--color-text-muted);
+    background: transparent;
+    border: 1px solid var(--color-border);
+    border-radius: var(--border-radius-sm);
+    padding: 0.3rem 0.65rem;
+    cursor: pointer;
+    transition: all 0.2s ease;
+  }
+  .btn-mark-read:hover {
+    color: var(--color-primary);
+    border-color: var(--color-primary);
+    background: var(--color-surface-hover);
+  }
+
+  .read-status-label {
+    font-size: 0.75rem;
+    color: var(--color-text-muted);
+    font-weight: 500;
+  }
+
+  @media (max-width: 600px) {
+    .notification-item {
+      padding: 1rem;
+      gap: 0.75rem;
+    }
+    .notif-avatar-img, .notif-avatar-fallback {
+      width: 36px;
+      height: 36px;
+      font-size: 0.8rem;
+    }
+    .page-title {
+      font-size: 1.4rem;
+    }
+  }
+</style>
+
+<script is:inline>
+  async function markAllNotificationsRead() {
+    const markBtn = document.getElementById('markAllReadBtn');
+    if (markBtn) markBtn.disabled = true;
+
+    try {
+      const res = await fetch('/api/notifications/read', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ all: true })
+      });
+
+      if (res.ok) {
+        document.querySelectorAll('.notification-item.unread').forEach(item => {
+          item.classList.remove('unread');
+          const pulse = item.querySelector('.unread-pulse-dot');
+          if (pulse) pulse.remove();
+          const markBtn = item.querySelector('.btn-mark-read');
+          if (markBtn) {
+            const span = document.createElement('span');
+            span.className = 'read-status-label';
+            span.textContent = '✓ Read';
+            markBtn.replaceWith(span);
+          }
+        });
+
+        const pill = document.getElementById('headerUnreadPill');
+        if (pill) pill.remove();
+        if (markBtn) markBtn.remove();
+
+        if (typeof window.clearNotificationBadge === 'function') {
+          window.clearNotificationBadge();
+        }
+        const topbarBadge = document.getElementById('topbarNotificationBadge');
+        if (topbarBadge) topbarBadge.remove();
+
+        if (typeof window.showToast === 'function') {
+          window.showToast('All notifications marked as read ✓');
+        }
+      }
+    } catch (err) {
+      console.error('Failed to mark all notifications as read:', err);
+    } finally {
+      if (markBtn) markBtn.disabled = false;
+    }
+  }
+
+  async function markSingleNotificationRead(id, type, btn) {
+    if (btn) btn.disabled = true;
+
+    try {
+      const payload = type === 'application' ? { applicationId: id } : { notificationId: id };
+      const res = await fetch('/api/notifications/read', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+
+      if (res.ok) {
+        const item = document.getElementById(`notif-item-${id}`);
+        if (item) {
+          item.classList.remove('unread');
+          const pulse = item.querySelector('.unread-pulse-dot');
+          if (pulse) pulse.remove();
+        }
+
+        if (btn) {
+          const span = document.createElement('span');
+          span.className = 'read-status-label';
+          span.textContent = '✓ Read';
+          btn.replaceWith(span);
+        }
+
+        // Decrement badge count
+        if (typeof window.decrementNotificationBadge === 'function') {
+          window.decrementNotificationBadge(1);
+        }
+
+        // Update header pill
+        const unreadItems = document.querySelectorAll('.notification-item.unread').length;
+        const countText = document.getElementById('unreadCountText');
+        const pill = document.getElementById('headerUnreadPill');
+        const markAllBtn = document.getElementById('markAllReadBtn');
+
+        if (unreadItems > 0) {
+          if (countText) countText.textContent = `${unreadItems} Unread`;
+        } else {
+          if (pill) pill.remove();
+          if (markAllBtn) markAllBtn.remove();
+        }
+
+        if (typeof window.showToast === 'function') {
+          window.showToast('Notification marked as read');
+        }
+      }
+    } catch (err) {
+      console.error('Failed to mark notification read:', err);
+    } finally {
+      if (btn) btn.disabled = false;
+    }
+  }
+</script>

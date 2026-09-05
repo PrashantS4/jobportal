@@ -1,0 +1,470 @@
+---
+import DashboardLayout from '../../layouts/DashboardLayout.astro';
+import { getDb } from '../../lib/db';
+import { users, plans } from '../../db/schema';
+import { eq } from 'drizzle-orm';
+
+const payload = Astro.locals.user;
+if (!payload || payload.userType !== 'employer') {
+  return Astro.redirect('/login');
+}
+
+const db = getDb();
+
+const userRecord = await db.select()
+  .from(users)
+  .where(eq(users.id, payload.userId))
+  .get();
+
+if (!userRecord) {
+  return Astro.redirect('/login');
+}
+
+let planName = 'Free Starter';
+if (userRecord.planId) {
+  const planRecord = await db.select()
+    .from(plans)
+    .where(eq(plans.planId, userRecord.planId))
+    .get();
+  if (planRecord) {
+    planName = planRecord.planName;
+  }
+}
+---
+
+<DashboardLayout title="Company & Account Settings" userType="employer" activePath="/employer/settings">
+  <div class="settings-header mb-4">
+    <div class="header-titles">
+      <span class="badge-tag">Preferences</span>
+      <h1>Company & Account Settings</h1>
+      <p class="subtitle">Update company branding, recruiter contact info, and security credentials.</p>
+    </div>
+  </div>
+
+  <div class="settings-grid">
+    <div class="settings-main">
+      <form id="settings-form" class="settings-form-card">
+        
+        <!-- Recruiter Profile Section -->
+        <div class="form-section">
+          <h3>Recruiter Personal Details</h3>
+          
+          <!-- Avatar Uploader -->
+          <div class="photo-uploader-row">
+            <div class="avatar-large-wrap">
+              <img id="photo-preview" src={userRecord.avatarUrl || `/images/default-avatar.png`} alt="Avatar" class="avatar-img" />
+            </div>
+            <div class="photo-actions">
+              <input type="file" id="photo-input" name="photo" accept="image/*" style="display: none;" />
+              <button type="button" class="btn btn-outline btn-sm" id="upload-photo-btn">Change Photo</button>
+              <span class="photo-hint">PNG, JPG or WebP up to 5MB</span>
+            </div>
+          </div>
+
+          <div class="form-grid mt-3">
+            <div class="form-group">
+              <label for="firstName">First Name <span class="req">*</span></label>
+              <input type="text" id="firstName" name="firstName" value={userRecord.firstName} required />
+            </div>
+            <div class="form-group">
+              <label for="lastName">Last Name <span class="req">*</span></label>
+              <input type="text" id="lastName" name="lastName" value={userRecord.lastName} required />
+            </div>
+          </div>
+
+          <div class="form-grid">
+            <div class="form-group">
+              <label for="email">Account Email</label>
+              <input type="email" id="email" value={userRecord.email} disabled class="disabled-input" />
+            </div>
+            <div class="form-group">
+              <label for="phone">Direct Phone</label>
+              <input type="tel" id="phone" name="phone" value={userRecord.phone || ''} placeholder="+1 (555) 000-0000" />
+            </div>
+          </div>
+        </div>
+
+        <div class="form-divider"></div>
+
+        <!-- Company Branding Section -->
+        <div class="form-section">
+          <h3>Company Branding & Info</h3>
+
+          <div class="form-grid">
+            <div class="form-group">
+              <label for="companyName">Company / Organization Name</label>
+              <input type="text" id="companyName" name="companyName" value={userRecord.companyName || ''} placeholder="e.g. Stripe Inc." />
+            </div>
+            <div class="form-group">
+              <label for="companyWebsite">Official Website</label>
+              <input type="url" id="companyWebsite" name="companyWebsite" value={userRecord.companyWebsite || ''} placeholder="https://company.com" />
+            </div>
+          </div>
+
+          <div class="form-grid">
+            <div class="form-group">
+              <label for="companyIndustry">Industry</label>
+              <select id="companyIndustry" name="companyIndustry">
+                <option value="">Select Industry</option>
+                <option value="Technology" selected={userRecord.companyIndustry === 'Technology'}>Technology / Software</option>
+                <option value="Healthcare" selected={userRecord.companyIndustry === 'Healthcare'}>Healthcare / Biotech</option>
+                <option value="Finance" selected={userRecord.companyIndustry === 'Finance'}>Finance / Fintech</option>
+                <option value="Education" selected={userRecord.companyIndustry === 'Education'}>Education</option>
+                <option value="Other" selected={userRecord.companyIndustry === 'Other'}>Other</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label for="companySize">Organization Size</label>
+              <select id="companySize" name="companySize">
+                <option value="">Select Size</option>
+                <option value="1-10" selected={userRecord.companySize === '1-10'}>1-10 Employees (Seed / Early)</option>
+                <option value="11-50" selected={userRecord.companySize === '11-50'}>11-50 Employees (Growth)</option>
+                <option value="51-200" selected={userRecord.companySize === '51-200'}>51-200 Employees (Scale-up)</option>
+                <option value="201-500" selected={userRecord.companySize === '201-500'}>201-500 Employees</option>
+                <option value="501+" selected={userRecord.companySize === '501+'}>500+ Enterprise</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label for="companyBio">Company Summary / About</label>
+            <textarea id="companyBio" name="companyBio" rows="4" placeholder="Highlight company mission, engineering culture, and values...">{userRecord.companyBio || ''}</textarea>
+          </div>
+        </div>
+
+        <div class="form-submit-bar">
+          <button type="submit" class="btn btn-primary btn-glow" id="save-btn">Save All Changes</button>
+        </div>
+
+      </form>
+    </div>
+
+    <!-- Quick Info Sidebar -->
+    <div class="settings-sidebar">
+      <div class="sidebar-card">
+        <h3>Plan & Membership</h3>
+        <div class="plan-pill-row">
+          <span class="plan-label">Tier:</span>
+          <span class="status-pill">{planName}</span>
+        </div>
+        <div class="plan-pill-row">
+          <span class="plan-label">Company Verification:</span>
+          <span class={`status-pill ${userRecord.verifiedStatus === 'verified' ? 'status-active' : 'status-pending'}`}>
+            {userRecord.verifiedStatus === 'verified' ? '✓ Verified Employer' : '⏳ Pending Verification'}
+          </span>
+        </div>
+        <a href="/employer/billing" class="btn btn-outline btn-sm w-full mt-3 text-center">Manage Billing & Quota</a>
+      </div>
+
+      <div class="sidebar-card mt-3">
+        <h3>Security & Auth</h3>
+        <p class="sec-text">Passwords and credentials are encrypted using PBKDF2 hashing with secure cookies.</p>
+        <a href="/forgot-password" class="btn btn-outline btn-sm w-full text-center">Reset Password</a>
+      </div>
+
+      <div class="sidebar-card mt-3 danger-card">
+        <h3 class="danger-title">Account Session</h3>
+        <p class="sec-text">Sign out of your active employer account session across this device.</p>
+        <a href="/logout" class="logout-red-btn">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
+            <polyline points="16 17 21 12 16 7"></polyline>
+            <line x1="21" y1="12" x2="9" y2="12"></line>
+          </svg>
+          Log Out
+        </a>
+      </div>
+    </div>
+  </div>
+</DashboardLayout>
+
+<style>
+  .mb-4 { margin-bottom: 1.75rem; }
+  .mt-3 { margin-top: 1rem; }
+  .w-full { width: 100%; box-sizing: border-box; }
+  .text-center { text-align: center; justify-content: center; }
+
+  .badge-tag {
+    display: inline-block;
+    padding: 0.25rem 0.75rem;
+    background: rgba(99, 102, 241, 0.15);
+    color: var(--color-primary);
+    border-radius: 9999px;
+    font-size: 0.75rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin-bottom: 0.4rem;
+  }
+
+  .header-titles h1 {
+    margin: 0 0 0.3rem 0;
+    font-size: 1.75rem;
+    font-weight: 800;
+    color: var(--color-text-main);
+  }
+
+  .subtitle {
+    margin: 0;
+    font-size: 0.95rem;
+    color: var(--color-text-muted);
+  }
+
+  .settings-grid {
+    display: grid;
+    grid-template-columns: 2fr 1fr;
+    gap: 1.75rem;
+  }
+
+  .settings-form-card {
+    background: var(--color-surface);
+    backdrop-filter: blur(16px);
+    border: 1px solid var(--color-border);
+    border-radius: var(--border-radius-lg);
+    padding: 2.25rem;
+    display: flex;
+    flex-direction: column;
+    gap: 1.75rem;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.04);
+  }
+
+  .form-section h3 {
+    margin: 0 0 1.25rem 0;
+    font-size: 1.15rem;
+    font-weight: 700;
+    color: var(--color-text-main);
+    border-bottom: 1px solid var(--color-border);
+    padding-bottom: 0.6rem;
+  }
+
+  .photo-uploader-row {
+    display: flex;
+    align-items: center;
+    gap: 1.25rem;
+    margin-bottom: 1rem;
+  }
+
+  .avatar-large-wrap {
+    width: 72px;
+    height: 72px;
+    border-radius: 50%;
+    overflow: hidden;
+    border: 2px solid var(--color-primary);
+    flex-shrink: 0;
+  }
+
+  .avatar-img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+
+  .photo-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+  }
+
+  .photo-hint {
+    font-size: 0.75rem;
+    color: var(--color-text-muted);
+  }
+
+  .form-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1.25rem;
+    margin-bottom: 1rem;
+  }
+
+  .form-group {
+    display: flex;
+    flex-direction: column;
+    gap: 0.45rem;
+  }
+
+  .form-group label {
+    font-size: 0.88rem;
+    font-weight: 600;
+    color: var(--color-text-main);
+  }
+
+  .req { color: #ef4444; }
+
+  .form-group input, .form-group select, .form-group textarea {
+    padding: 0.75rem 1rem;
+    border: 1px solid var(--color-border);
+    border-radius: 10px;
+    font-size: 0.95rem;
+    font-family: inherit;
+    background: var(--color-bg);
+    color: var(--color-text-main);
+    transition: all 0.2s ease;
+  }
+
+  .form-group input:focus, .form-group select:focus, .form-group textarea:focus {
+    outline: none;
+    border-color: var(--color-primary);
+    box-shadow: 0 0 0 3px var(--color-primary-light);
+  }
+
+  .disabled-input {
+    background: var(--color-border) !important;
+    opacity: 0.7;
+    cursor: not-allowed;
+  }
+
+  .form-divider {
+    border-top: 1px solid var(--color-border);
+    margin: 0.5rem 0;
+  }
+
+  .form-submit-bar {
+    display: flex;
+    justify-content: flex-end;
+    padding-top: 0.5rem;
+  }
+
+  .btn-glow {
+    box-shadow: 0 4px 14px rgba(99, 102, 241, 0.35);
+  }
+
+  /* Sidebar */
+  .sidebar-card {
+    background: var(--color-surface);
+    backdrop-filter: blur(16px);
+    border: 1px solid var(--color-border);
+    border-radius: var(--border-radius-lg);
+    padding: 1.5rem;
+  }
+
+  .sidebar-card h3 {
+    margin: 0 0 1rem 0;
+    font-size: 1.05rem;
+    font-weight: 700;
+    color: var(--color-text-main);
+  }
+
+  .plan-pill-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.5rem 0;
+    font-size: 0.88rem;
+  }
+
+  .plan-label { color: var(--color-text-muted); }
+
+  .status-pill {
+    padding: 0.2rem 0.65rem;
+    border-radius: 9999px;
+    background: rgba(99, 102, 241, 0.15);
+    color: var(--color-primary);
+    font-size: 0.75rem;
+    font-weight: 700;
+  }
+
+  .status-active {
+    background: rgba(16, 185, 129, 0.15);
+    color: #10b981;
+  }
+
+  .sec-text {
+    font-size: 0.85rem;
+    color: var(--color-text-muted);
+    margin: 0 0 0.8rem 0;
+  }
+
+  .danger-card {
+    border-color: rgba(244, 63, 94, 0.25) !important;
+    background: rgba(244, 63, 94, 0.03) !important;
+  }
+  .danger-title {
+    color: #F43F5E !important;
+  }
+  .logout-red-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    width: 100%;
+    padding: 0.75rem 1.25rem;
+    background: rgba(244, 63, 94, 0.08);
+    border: 1px solid rgba(244, 63, 94, 0.3);
+    border-radius: var(--border-radius-md, 10px);
+    color: #F43F5E !important;
+    font-weight: 700;
+    font-size: 0.95rem;
+    text-decoration: none;
+    transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+    box-sizing: border-box;
+    cursor: pointer;
+  }
+  .logout-red-btn:hover {
+    background: #F43F5E !important;
+    border-color: #F43F5E !important;
+    color: #FFFFFF !important;
+    box-shadow: 0 4px 16px rgba(244, 63, 94, 0.35);
+    transform: translateY(-2px);
+  }
+
+  @media (max-width: 900px) {
+    .settings-grid { grid-template-columns: 1fr; }
+    .form-grid { grid-template-columns: 1fr; }
+  }
+  @media (max-width: 640px) {
+    .card { padding: 1rem 0.75rem !important; }
+  }
+</style>
+
+<script>
+  const form = document.getElementById('settings-form') as HTMLFormElement | null;
+  const saveBtn = document.getElementById('save-btn') as HTMLButtonElement | null;
+  const photoInput = document.getElementById('photo-input') as HTMLInputElement | null;
+  const uploadPhotoBtn = document.getElementById('upload-photo-btn') as HTMLButtonElement | null;
+  const photoPreview = document.getElementById('photo-preview') as HTMLImageElement | null;
+
+  if (uploadPhotoBtn && photoInput && photoPreview) {
+    uploadPhotoBtn.addEventListener('click', () => photoInput.click());
+    photoInput.addEventListener('change', () => {
+      const file = photoInput.files?.[0];
+      if (file) {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+          if (photoPreview && e.target?.result) photoPreview.src = e.target.result as string;
+        };
+        reader.readAsDataURL(file);
+      }
+    });
+  }
+
+  if (form && saveBtn) {
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const formData = new FormData(e.target as HTMLFormElement);
+      const originalText = saveBtn.innerText;
+      saveBtn.innerText = 'Saving...';
+      saveBtn.disabled = true;
+      
+      try {
+        const res = await fetch('/api/employer/profile', {
+          method: 'PUT',
+          credentials: 'same-origin',
+          body: formData
+        });
+        const result = await res.json();
+        if (res.ok) {
+          showToast('Profile updated successfully!');
+          window.location.reload();
+        } else {
+          showToast(result.error || 'Failed to update profile');
+        }
+      } catch (err) {
+        showToast('An error occurred while saving.');
+      } finally {
+        saveBtn.innerText = originalText;
+        saveBtn.disabled = false;
+      }
+    });
+  }
+</script>

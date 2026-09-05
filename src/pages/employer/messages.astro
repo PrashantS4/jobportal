@@ -1,0 +1,574 @@
+---
+import DashboardLayout from '../../layouts/DashboardLayout.astro';
+import { getDb } from '../../lib/db';
+import { conversations, messages, users, plans } from '../../db/schema';
+import { eq, or, and, desc, inArray, asc } from 'drizzle-orm';
+
+const payload = Astro.locals.user;
+if (!payload || payload.userType !== 'employer') {
+  return Astro.redirect('/login');
+}
+
+const db = getDb();
+const userId = payload.userId;
+
+// Feature Gating Check
+const userRecord = await db.select({ planFeatures: plans.features }).from(users).leftJoin(plans, eq(users.planId, plans.planId)).where(eq(users.id, userId)).get();
+if (userRecord && userRecord.planFeatures) {
+  const featureFlags = typeof userRecord.planFeatures === 'string' ? JSON.parse(userRecord.planFeatures) : userRecord.planFeatures;
+  if (featureFlags && featureFlags.hasOwnProperty('messaging') && featureFlags.messaging === false) {
+    return Astro.redirect('/pricing?upgrade=true&reason=messaging');
+  }
+}
+
+// Fetch all conversations for user
+const userConversations = await db.select()
+  .from(conversations)
+  .where(or(eq(conversations.participant1Id, userId), eq(conversations.participant2Id, userId)))
+  .orderBy(desc(conversations.updatedAt))
+  .all();
+
+const userIds = new Set<string>();
+userConversations.forEach(c => {
+   userIds.add(c.participant1Id);
+   userIds.add(c.participant2Id);
+});
+
+// Also add a target user if passed via query param (e.g., from "Contact Candidate")
+const targetUserId = Astro.url.searchParams.get('userId');
+if (targetUserId) {
+   userIds.add(targetUserId);
+}
+
+const participants = userIds.size > 0 
+    ? await db.select().from(users).where(inArray(users.id, Array.from(userIds))).all()
+    : [];
+const userMap = new Map(participants.map(u => [u.id, u]));
+
+let targetUser = null;
+let activeConversationId = Astro.url.searchParams.get('c') || null;
+
+if (targetUserId && !activeConversationId) {
+   targetUser = userMap.get(targetUserId);
+   // See if conversation already exists
+   const existing = userConversations.find(c => 
+      (c.participant1Id === userId && c.participant2Id === targetUserId) ||
+      (c.participant1Id === targetUserId && c.participant2Id === userId)
+   );
+   if (existing) {
+       activeConversationId = existing.id;
+   }
+}
+
+// Map conversations for sidebar
+const chatList = [];
+for (const conv of userConversations) {
+   const otherUserId = conv.participant1Id === userId ? conv.participant2Id : conv.participant1Id;
+   const otherUser = userMap.get(otherUserId);
+   
+   const latestMsg = await db.select()
+     .from(messages)
+     .where(eq(messages.conversationId, conv.id))
+     .orderBy(desc(messages.createdAt))
+     .limit(1)
+     .get();
+     
+   chatList.push({
+      id: conv.id,
+      otherUser,
+      latestMsg,
+      updatedAt: conv.updatedAt
+   });
+}
+
+// Fetch active conversation messages
+let activeMessages = [];
+if (activeConversationId) {
+   activeMessages = await db.select()
+      .from(messages)
+      .where(eq(messages.conversationId, activeConversationId))
+      .orderBy(asc(messages.createdAt))
+      .all();
+      
+   const conv = userConversations.find(c => c.id === activeConversationId);
+   if (conv) {
+      const otherUserId = conv.participant1Id === userId ? conv.participant2Id : conv.participant1Id;
+      targetUser = userMap.get(otherUserId);
+   }
+}
+
+---
+
+<DashboardLayout title="Messages" userType="employer" activePath="/employer/messages">
+  <div class={`messages-container ${targetUser || activeConversationId ? 'has-active-chat' : ''}`}>
+    <div class="sidebar card">
+      <div class="sidebar-header">
+        <h3>Messages</h3>
+      </div>
+      <div class="chat-list">
+        {chatList.length === 0 && !targetUserId && (
+           <div class="empty-state">No conversations yet.</div>
+        )}
+        {targetUserId && !chatList.find(c => c.otherUser?.id === targetUserId) && targetUser && (
+           <a href={`/employer/messages?userId=${targetUserId}`} class={`chat-item active`}>
+             <div class="avatar-placeholder" style={`background: hsl(${Math.abs((targetUser.firstName || 'X').charCodeAt(0) * 11) % 360}, 60%, 52%)`}>
+               {targetUser.firstName.charAt(0).toUpperCase()}
+             </div>
+             <div class="chat-info">
+               <div class="chat-name">{targetUser.firstName} {targetUser.lastName}</div>
+               <div class="chat-preview text-muted">New Conversation</div>
+             </div>
+           </a>
+        )}
+        {chatList.map(chat => {
+           const initials = chat.otherUser 
+             ? `${chat.otherUser.firstName.charAt(0).toUpperCase()}${chat.otherUser.lastName ? chat.otherUser.lastName.charAt(0).toUpperCase() : ''}`
+             : '?';
+           const color = `hsl(${Math.abs((chat.otherUser?.firstName || 'X').charCodeAt(0) * 11) % 360}, 60%, 52%)`;
+           return (
+             <a href={`/employer/messages?c=${chat.id}`} class={`chat-item ${activeConversationId === chat.id ? 'active' : ''}`}>
+               <div class="avatar-placeholder" style={`background: ${color}`}>
+                 {initials}
+               </div>
+               <div class="chat-info">
+                 <div class="chat-name">{chat.otherUser?.firstName} {chat.otherUser?.lastName}</div>
+                 <div class="chat-preview text-muted">{chat.latestMsg?.content || 'No messages yet'}</div>
+               </div>
+             </a>
+           );
+        })}
+      </div>
+    </div>
+    
+    <div class="chat-window card">
+      {targetUser || activeConversationId ? (
+         <>
+            <div class="chat-header">
+               <a href="/employer/messages" class="mobile-back-btn" title="Back to messages" aria-label="Back">
+                 <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline></svg>
+               </a>
+               <div class="avatar-placeholder" style={`background: hsl(${Math.abs((targetUser?.firstName || 'X').charCodeAt(0) * 11) % 360}, 60%, 52%)`}>
+                 {targetUser?.firstName.charAt(0).toUpperCase()}
+               </div>
+               <div class="chat-header-info">
+                 <h4>{targetUser?.firstName} {targetUser?.lastName}</h4>
+                 <span class="status-indicator-dot online">Active Conversation</span>
+               </div>
+            </div>
+            
+            <div class="chat-messages" id="messages-container">
+               {activeMessages.length === 0 ? (
+                  <div class="empty-chat">Say hello to start the conversation!</div>
+               ) : (
+                  activeMessages.map(msg => (
+                     <div class={`message ${msg.senderId === userId ? 'sent' : 'received'}`}>
+                        <div class="bubble">{msg.content}</div>
+                     </div>
+                  ))
+               )}
+            </div>
+            
+            <div class="chat-input-area">
+               <input type="hidden" id="receiver-id" value={targetUser?.id} />
+               <input type="hidden" id="conversation-id" value={activeConversationId || ''} />
+               <input type="text" id="message-input" placeholder="Type your message here..." autocomplete="off" />
+               <button id="send-button" class="btn btn-primary">
+                 Send
+                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-left: 6px;"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
+               </button>
+            </div>
+         </>
+      ) : (
+         <div class="no-chat-selected">
+            <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"></path></svg>
+            <p>Select a conversation from the sidebar to start messaging</p>
+         </div>
+      )}
+    </div>
+  </div>
+
+  <script>
+    const sendBtn = document.getElementById('send-button');
+    const msgInput = document.getElementById('message-input') as HTMLInputElement;
+    const msgContainer = document.getElementById('messages-container');
+    const receiverId = (document.getElementById('receiver-id') as HTMLInputElement)?.value;
+    const conversationId = (document.getElementById('conversation-id') as HTMLInputElement)?.value;
+    
+    // Scroll to bottom on load
+    if (msgContainer) {
+       msgContainer.scrollTop = msgContainer.scrollHeight;
+    }
+
+    async function sendMessage() {
+       if (!msgInput.value.trim()) return;
+       const content = msgInput.value.trim();
+       
+       sendBtn.disabled = true;
+       const originalText = sendBtn.innerText;
+       sendBtn.innerText = '...';
+       
+       try {
+          const res = await fetch('/api/messages/send', {
+             method: 'POST',
+             headers: { 'Content-Type': 'application/json' },
+             body: JSON.stringify({
+                receiverId,
+                conversationId,
+                content
+             })
+          });
+          
+          if (!res.ok) throw new Error('Failed to send');
+          
+          const data = await res.json();
+          // Reload page to reflect new message and potentially new conversation ID
+          if (!conversationId) {
+             window.location.href = `?c=${data.message.conversationId}`;
+          } else {
+             window.location.reload();
+          }
+       } catch (err) {
+          alert(err.message);
+       } finally {
+          sendBtn.disabled = false;
+          sendBtn.innerText = originalText;
+       }
+    }
+
+    sendBtn?.addEventListener('click', sendMessage);
+    msgInput?.addEventListener('keypress', (e) => {
+       if (e.key === 'Enter') sendMessage();
+    });
+  </script>
+</DashboardLayout>
+
+<style>
+  .messages-container {
+    display: grid;
+    grid-template-columns: 320px 1fr;
+    gap: 1.5rem;
+    height: calc(100vh - 140px);
+    min-height: 550px;
+    margin-top: 0.5rem;
+  }
+  
+  .sidebar {
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--border-radius-lg);
+    box-shadow: var(--shadow-sm);
+  }
+  
+  .sidebar-header {
+    padding: 1.25rem 1.5rem;
+    border-bottom: 1px solid var(--color-border);
+  }
+  
+  .sidebar-header h3 {
+    margin: 0;
+    font-size: 1.25rem;
+    font-weight: 800;
+    color: var(--color-text-main);
+  }
+  
+  .chat-list {
+    flex: 1;
+    overflow-y: auto;
+  }
+
+  /* Thin scrollbar helper */
+  .chat-list::-webkit-scrollbar,
+  .chat-messages::-webkit-scrollbar {
+    width: 6px;
+  }
+  .chat-list::-webkit-scrollbar-track,
+  .chat-messages::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  .chat-list::-webkit-scrollbar-thumb,
+  .chat-messages::-webkit-scrollbar-thumb {
+    background: rgba(156, 163, 175, 0.25);
+    border-radius: 4px;
+  }
+  .chat-list::-webkit-scrollbar-thumb:hover,
+  .chat-messages::-webkit-scrollbar-thumb:hover {
+    background: rgba(156, 163, 175, 0.45);
+  }
+  
+  .chat-item {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    padding: 1rem 1.25rem;
+    border-bottom: 1px solid var(--color-border);
+    text-decoration: none;
+    color: inherit;
+    transition: all 0.2s ease;
+  }
+  
+  .chat-item:hover {
+    background: rgba(99, 102, 241, 0.03);
+  }
+  
+  .chat-item.active {
+    background: rgba(99, 102, 241, 0.07);
+    border-left: 4px solid var(--color-primary);
+    box-shadow: inset 1px 0 0 rgba(99, 102, 241, 0.1);
+  }
+  
+  .avatar-placeholder {
+    width: 42px;
+    height: 42px;
+    border-radius: 50%;
+    color: white;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 700;
+    font-size: 1.05rem;
+    flex-shrink: 0;
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.08);
+  }
+  
+  .chat-info {
+    overflow: hidden;
+    flex: 1;
+  }
+  
+  .chat-name {
+    font-weight: 700;
+    font-size: 0.95rem;
+    margin-bottom: 0.2rem;
+    color: var(--color-text-main);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  
+  .chat-preview {
+    font-size: 0.8rem;
+    color: var(--color-text-muted);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  
+  .text-muted { color: var(--color-text-muted); }
+  
+  .chat-window {
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--border-radius-lg);
+    box-shadow: var(--shadow-sm);
+  }
+  
+  .chat-header {
+    padding: 1.1rem 1.5rem;
+    border-bottom: 1px solid var(--color-border);
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    background: rgba(255, 255, 255, 0.01);
+  }
+  
+  .chat-header .avatar-placeholder {
+    width: 44px;
+    height: 44px;
+    font-size: 1.1rem;
+  }
+  
+  .chat-header-info {
+    display: flex;
+    flex-direction: column;
+    gap: 0.2rem;
+  }
+
+  .chat-header-info h4 {
+    margin: 0;
+    font-weight: 800;
+    font-size: 1.1rem;
+    color: var(--color-text-main);
+  }
+
+  .status-indicator-dot {
+    font-size: 0.75rem;
+    color: var(--color-text-muted);
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+  }
+
+  .status-indicator-dot::before {
+    content: '';
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background-color: #10b981;
+  }
+  
+  .chat-messages {
+    flex: 1;
+    overflow-y: auto;
+    padding: 1.75rem;
+    display: flex;
+    flex-direction: column;
+    gap: 1.1rem;
+    background: var(--color-bg);
+  }
+  
+  .message {
+    display: flex;
+    max-width: 70%;
+  }
+  
+  .message.sent {
+    align-self: flex-end;
+  }
+  
+  .message.received {
+    align-self: flex-start;
+  }
+  
+  .bubble {
+    padding: 0.75rem 1.1rem;
+    border-radius: 1.15rem;
+    line-height: 1.5;
+    font-size: 0.95rem;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+  }
+  
+  .sent .bubble {
+    background: linear-gradient(135deg, var(--color-primary), #4f46e5);
+    color: white;
+    border-bottom-right-radius: 0.25rem;
+  }
+  
+  .received .bubble {
+    background: var(--color-surface);
+    color: var(--color-text-main);
+    border-bottom-left-radius: 0.25rem;
+    border: 1px solid var(--color-border);
+  }
+  
+  .chat-input-area {
+    padding: 1.25rem 1.5rem;
+    border-top: 1px solid var(--color-border);
+    display: flex;
+    gap: 0.85rem;
+    background: var(--color-surface);
+  }
+  
+  #message-input {
+    flex: 1;
+    background: var(--color-bg);
+    border: 1px solid var(--color-border);
+    padding: 0.8rem 1.25rem;
+    border-radius: 2rem;
+    color: var(--color-text-main);
+    font-size: 0.95rem;
+    transition: all 0.2s ease;
+  }
+  
+  #message-input:focus {
+    outline: none;
+    border-color: var(--color-primary);
+    box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.15);
+  }
+
+  #send-button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 2rem;
+    padding: 0 1.5rem;
+    font-weight: 600;
+  }
+  
+  .no-chat-selected, .empty-chat, .empty-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    color: var(--color-text-muted);
+    gap: 1rem;
+    padding: 2.5rem;
+    text-align: center;
+  }
+
+  .no-chat-selected svg {
+    color: var(--color-border);
+    margin-bottom: 0.5rem;
+  }
+
+  .no-chat-selected p {
+    font-size: 0.95rem;
+  }
+
+  .mobile-back-btn {
+    display: none;
+    color: var(--color-text-main);
+    text-decoration: none;
+    padding: 0.5rem;
+    margin-left: -0.5rem;
+    margin-right: 0.25rem;
+  }
+  .mobile-back-btn:hover {
+    color: var(--color-primary);
+  }
+
+  @media (max-width: 768px) {
+    .messages-container {
+      display: flex;
+      flex-direction: column;
+      height: calc(100vh - 120px);
+    }
+    
+    .sidebar {
+      flex: 1;
+      display: flex;
+    }
+
+    .chat-window {
+      flex: 1;
+      display: none;
+    }
+
+    /* Toggle visibility based on active chat */
+    .messages-container.has-active-chat .sidebar {
+      display: none;
+    }
+
+    .messages-container.has-active-chat .chat-window {
+      display: flex;
+    }
+
+    .mobile-back-btn {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .chat-header {
+      padding: 0.9rem 1rem;
+    }
+    .chat-input-area {
+      padding: 0.9rem 1rem;
+    }
+    #message-input {
+      padding: 0.65rem 1rem;
+    }
+    .sidebar-header {
+      padding: 0.9rem 1.25rem;
+    }
+    .chat-item {
+      padding: 0.8rem 1.25rem;
+    }
+  }
+</style>

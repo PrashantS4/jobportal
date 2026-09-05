@@ -1,0 +1,861 @@
+---
+import DashboardLayout from '../../layouts/DashboardLayout.astro';
+import { getDb } from '../../lib/db';
+import { users, applications } from '../../db/schema';
+import { eq, desc, count } from 'drizzle-orm';
+
+const payload = Astro.locals.user;
+if (!payload || (payload.userType !== 'admin' && payload.userType !== 'superadmin')) {
+  return Astro.redirect('/login');
+}
+
+const db = getDb();
+
+// Fetch ONLY candidates / employees
+const candidates = await db.select().from(users).where(
+  eq(users.userType, 'employee')
+).orderBy(desc(users.createdAt)).all();
+
+// Fetch application counts per candidate
+const appCounts = await db.select({
+  applicantId: applications.applicantId,
+  appCount: count()
+}).from(applications).groupBy(applications.applicantId).all();
+
+const appCountMap = new Map(appCounts.map(a => [a.applicantId, a.appCount]));
+---
+
+<DashboardLayout title="Candidate Directory - Admin" userType="admin" activePath="/admin/users">
+  <div class="dashboard-header mb-4">
+    <div class="header-titles">
+      <span class="badge-tag">Platform Moderation</span>
+      <h1>Candidate Directory & Accounts</h1>
+      <p class="subtitle">Review candidate profiles, track job applications, edit details, or manage accounts.</p>
+    </div>
+    <div class="stats-counter-pill">
+      <strong>{candidates.length}</strong> Registered Candidates
+    </div>
+  </div>
+
+  <script>
+  // Search Filter Logic
+  const searchInput = document.getElementById('candidateSearchInput') as HTMLInputElement | null;
+  if (searchInput) {
+    searchInput.addEventListener('input', (e) => {
+      const term = (e.target as HTMLInputElement).value.toLowerCase();
+      const rows = document.querySelectorAll('.candidate-row');
+      rows.forEach(row => {
+        const textContent = row.textContent?.toLowerCase() || '';
+        if (textContent.includes(term)) {
+          (row as HTMLElement).style.display = '';
+        } else {
+          (row as HTMLElement).style.display = 'none';
+        }
+      });
+    });
+  }
+
+  async function impersonateUser(targetUserId: string) {
+    // Impersonation logic placeholder
+  }
+  </script>
+
+  <!-- Search Section -->
+  <div class="search-bar-container mb-4">
+    <div class="search-input-wrapper">
+      <span class="search-icon">🔍</span>
+      <input type="text" id="candidateSearchInput" class="search-input" placeholder="Search candidates by name, headline, email or location..." />
+    </div>
+  </div>
+
+  <div class="table-card">
+    <div class="table-responsive">
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>Candidate & Headline</th>
+            <th>Contact Email</th>
+            <th>Location & Exp</th>
+            <th>Applications</th>
+            <th>Account Status</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {candidates.length === 0 ? (
+            <tr>
+              <td colspan="6" class="empty-cell">
+                <div class="empty-state">
+                  <div class="empty-icon">👥</div>
+                  <h3>No Candidates Found</h3>
+                  <p>No registered candidate accounts exist in the database.</p>
+                </div>
+              </td>
+            </tr>
+          ) : (
+            candidates.map((cand) => {
+              const totalApps = appCountMap.get(cand.id) || 0;
+              const isBlocked = cand.isActive === false;
+
+              let skillsArr: string[] = [];
+              if (cand.skills) {
+                try {
+                  const p = typeof cand.skills === 'string' ? JSON.parse(cand.skills) : cand.skills;
+                  if (Array.isArray(p)) skillsArr = p;
+                } catch (e) {}
+              }
+
+              return (
+                <tr class={`candidate-row ${isBlocked ? 'blocked-row' : ''}`} data-user-id={cand.id}>
+                  <td>
+                    <div class="user-meta-cell">
+                      <div class="user-avatar-circle">
+                        {cand.firstName.charAt(0).toUpperCase()}
+                      </div>
+                      <div>
+                        <strong class="user-name-txt">{cand.firstName} {cand.lastName}</strong>
+                        <div class="user-headline-sub">{cand.headline || 'Job Seeker'}</div>
+                      </div>
+                    </div>
+                  </td>
+                  <td>
+                    <span class="email-txt">{cand.email}</span>
+                  </td>
+                  <td>
+                    <div class="location-exp-cell">
+                      <span>📍 {cand.location || 'Not Specified'}</span>
+                      <small>⏱ {cand.experienceYears ? `${cand.experienceYears} Yrs Exp` : 'Fresh / Entry'}</small>
+                    </div>
+                  </td>
+                  <td>
+                    <span class="apps-badge">
+                      <strong>{totalApps}</strong> Applied
+                    </span>
+                  </td>
+                  <td>
+                    <span class={`account-pill ${isBlocked ? 'pill-blocked' : 'pill-active'}`}>
+                      {isBlocked ? '🔴 Suspended' : '🟢 Active'}
+                    </span>
+                  </td>
+                  <td>
+                    <div class="actions-group">
+                      <!-- Quick View Modal Button -->
+                      <button 
+                        type="button" 
+                        class="btn-action-icon view-cand-btn" 
+                        title="View Candidate Profile Details"
+                        data-id={cand.id}
+                        data-name={`${cand.firstName} ${cand.lastName}`}
+                        data-headline={cand.headline || 'Job Seeker'}
+                        data-email={cand.email}
+                        data-phone={cand.phone || 'N/A'}
+                        data-location={cand.location || 'N/A'}
+                        data-exp={cand.experienceYears ? `${cand.experienceYears} Years` : 'Fresh / Entry'}
+                        data-skills={JSON.stringify(skillsArr)}
+                        data-bio={cand.bio || 'No biography provided.'}
+                        data-linkedin={cand.linkedinUrl || ''}
+                        data-portfolio={cand.portfolioUrl || ''}
+                        data-verified={cand.verifiedStatus}
+                        data-active={cand.isActive !== false ? 'Active' : 'Suspended'}
+                      >
+                        👁️
+                      </button>
+
+                      <!-- Edit Button -->
+                      <a href={`/admin/users/${cand.id}/edit`} class="btn-action-icon edit-action" title="Edit Candidate Profile">
+                        ✏️
+                      </a>
+
+                      <!-- Block / Unblock Button -->
+                      <button 
+                        type="button" 
+                        class={`btn-action-icon block-btn ${isBlocked ? 'unblock-action' : 'block-action'}`} 
+                        title={isBlocked ? 'Reactivate Candidate Account' : 'Block / Suspend Candidate'}
+                        data-id={cand.id}
+                        data-action={isBlocked ? 'unblock' : 'block'}
+                      >
+                        {isBlocked ? '🟢' : '🚫'}
+                      </button>
+
+                      <!-- Delete Button -->
+                      <button 
+                        type="button" 
+                        class="btn-action-icon delete-action delete-cand-btn" 
+                        title="Delete Candidate Account"
+                        data-id={cand.id}
+                        data-name={`${cand.firstName} ${cand.lastName}`}
+                      >
+                        🗑️
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              );
+            })
+          )}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Candidate View Modal -->
+  <div id="candModal" class="modal-backdrop" style="display: none;">
+    <div class="modal-card">
+      <div class="modal-header">
+        <div class="modal-title-wrap">
+          <div class="modal-avatar" id="cAvatar">U</div>
+          <div>
+            <h2 id="cName">Candidate Name</h2>
+            <p id="cHeadline">Professional Headline</p>
+          </div>
+        </div>
+        <button type="button" class="modal-close" id="closeModal">✕</button>
+      </div>
+
+      <div class="modal-body">
+        <div class="modal-info-grid">
+          <div class="info-item">
+            <span class="lbl">Email</span>
+            <span class="val" id="cEmail">—</span>
+          </div>
+          <div class="info-item">
+            <span class="lbl">Phone</span>
+            <span class="val" id="cPhone">—</span>
+          </div>
+          <div class="info-item">
+            <span class="lbl">Location</span>
+            <span class="val" id="cLocation">—</span>
+          </div>
+          <div class="info-item">
+            <span class="lbl">Experience</span>
+            <span class="val" id="cExp">—</span>
+          </div>
+        </div>
+
+        <div class="modal-section-title">Key Skills</div>
+        <div class="skills-tags-wrap" id="cSkills">
+          <span class="no-skills">No skills listed</span>
+        </div>
+
+        <div class="modal-section-title">Biography & Summary</div>
+        <p class="bio-text" id="cBio">Biography details...</p>
+
+        <div class="modal-section-title">Professional Links</div>
+        <div class="links-row">
+          <a id="cLinkedin" href="#" target="_blank" class="link-pill" style="display: none;">
+            <span>🔗</span> LinkedIn Profile ↗
+          </a>
+          <a id="cPortfolio" href="#" target="_blank" class="link-pill" style="display: none;">
+            <span>🌐</span> Portfolio Website ↗
+          </a>
+          <span id="cNoLinks" class="no-links-txt">No professional links added.</span>
+        </div>
+      </div>
+
+      <div class="modal-footer">
+        <button type="button" class="btn btn-outline" id="closeModalBtn">Close</button>
+      </div>
+    </div>
+  </div>
+</DashboardLayout>
+
+<script>
+  // Block / Unblock Logic
+  document.querySelectorAll('.block-btn').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const b = btn as HTMLButtonElement;
+      const userId = b.dataset.id;
+      const action = b.dataset.action;
+      if (!userId || !action) return;
+
+      const confirmMsg = action === 'block' 
+        ? 'Are you sure you want to SUSPEND/BLOCK this candidate? They will be unable to apply to jobs or access candidate features.' 
+        : 'Reactivate this candidate account?';
+
+      if (!confirm(confirmMsg)) return;
+
+      try {
+        const res = await fetch('/api/admin/users/status', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'same-origin',
+          body: JSON.stringify({ userId, action })
+        });
+
+        if (res.ok) {
+          // @ts-ignore
+          if (window.showToast) window.showToast(`Candidate ${action === 'block' ? 'suspended' : 'reactivated'} successfully!`);
+          window.location.reload();
+        } else {
+          const result = await res.json();
+          // @ts-ignore
+          if (window.showToast) window.showToast(result.error || 'Operation failed', 'error');
+        }
+      } catch (err) {
+        // @ts-ignore
+        if (window.showToast) window.showToast('Error updating account status', 'error');
+      }
+    });
+  });
+
+  // Delete Candidate Logic
+  document.querySelectorAll('.delete-cand-btn').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const b = btn as HTMLButtonElement;
+      const userId = b.dataset.id;
+      const name = b.dataset.name;
+      if (!userId) return;
+
+      if (!confirm(`Are you sure you want to PERMANENTLY DELETE candidate "${name}"? All submitted applications will be deleted.`)) {
+        return;
+      }
+
+      try {
+        const res = await fetch('/api/admin/users/delete', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'same-origin',
+          body: JSON.stringify({ userId })
+        });
+
+        if (res.ok) {
+          // @ts-ignore
+          if (window.showToast) window.showToast('Candidate deleted successfully.');
+          window.location.reload();
+        } else {
+          const result = await res.json();
+          // @ts-ignore
+          if (window.showToast) window.showToast(result.error || 'Failed to delete candidate', 'error');
+        }
+      } catch (err) {
+        // @ts-ignore
+        if (window.showToast) window.showToast('An error occurred during deletion.', 'error');
+      }
+    });
+  });
+</script>
+
+<style>
+  .mb-4 { margin-bottom: 1.75rem; }
+
+  .dashboard-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-end;
+    flex-wrap: wrap;
+    gap: 1rem;
+  }
+
+  .badge-tag {
+    display: inline-block;
+    padding: 0.25rem 0.75rem;
+    background: rgba(99, 102, 241, 0.15);
+    color: var(--color-primary);
+    border-radius: 9999px;
+    font-size: 0.75rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin-bottom: 0.4rem;
+  }
+
+  .header-titles h1 {
+    margin: 0 0 0.3rem 0;
+    font-size: 1.75rem;
+    font-weight: 800;
+    color: var(--color-text-main);
+  }
+
+  .subtitle {
+    margin: 0;
+    font-size: 0.95rem;
+    color: var(--color-text-muted);
+  }
+
+  .stats-counter-pill {
+    padding: 0.5rem 1rem;
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: 12px;
+    font-size: 0.88rem;
+    color: var(--color-text-muted);
+  }
+  .stats-counter-pill strong {
+    color: var(--color-primary);
+    font-size: 1.1rem;
+  }
+
+  .search-bar-container {
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--border-radius-lg);
+    padding: 1rem 1.25rem;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.02);
+  }
+  
+  .search-input-wrapper {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    background: var(--color-bg);
+    border: 1px solid var(--color-border);
+    border-radius: 10px;
+    padding: 0.75rem 1rem;
+    transition: all 0.2s ease;
+  }
+  
+  .search-input-wrapper:focus-within {
+    border-color: var(--color-primary);
+    box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.15);
+  }
+
+  .search-icon {
+    font-size: 1.1rem;
+    opacity: 0.6;
+  }
+
+  .search-input {
+    flex: 1;
+    border: none;
+    background: transparent;
+    color: var(--color-text-main);
+    font-size: 0.95rem;
+    outline: none;
+    font-family: inherit;
+  }
+
+  .search-input::placeholder {
+    color: var(--color-text-muted);
+  }
+
+  .table-card {
+    background: var(--color-surface);
+    backdrop-filter: blur(16px);
+    border: 1px solid var(--color-border);
+    border-radius: var(--border-radius-lg);
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.04);
+    overflow: hidden;
+  }
+
+  .table-responsive {
+    overflow-x: auto;
+    width: 100%;
+  }
+
+  .data-table {
+    width: 100%;
+    border-collapse: collapse;
+    text-align: left;
+  }
+
+  .data-table th {
+    padding: 1.1rem 1.25rem;
+    font-weight: 700;
+    color: var(--color-text-muted);
+    font-size: 0.8rem;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    border-bottom: 1px solid var(--color-border);
+    background: rgba(255, 255, 255, 0.02);
+    white-space: nowrap;
+  }
+
+  .data-table td {
+    padding: 1.1rem 1.25rem;
+    border-bottom: 1px solid var(--color-border);
+    vertical-align: middle;
+    white-space: nowrap;
+  }
+
+  .candidate-row:hover {
+    background: rgba(99, 102, 241, 0.02);
+  }
+
+  .blocked-row {
+    opacity: 0.75;
+    background: rgba(239, 68, 68, 0.03);
+  }
+
+  .user-meta-cell {
+    display: flex;
+    align-items: center;
+    gap: 0.85rem;
+    white-space: nowrap;
+  }
+
+  .user-avatar-circle {
+    width: 42px;
+    height: 42px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #6366f1, #8b5cf6);
+    color: white;
+    font-weight: 800;
+    font-size: 1.1rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 4px 10px rgba(99, 102, 241, 0.25);
+    flex-shrink: 0;
+  }
+
+  .user-name-txt {
+    font-size: 1rem;
+    font-weight: 700;
+    color: var(--color-text-main);
+    white-space: nowrap;
+  }
+
+  .user-headline-sub {
+    font-size: 0.78rem;
+    color: var(--color-text-muted);
+    margin-top: 0.2rem;
+    white-space: nowrap;
+  }
+
+  .email-txt {
+    font-size: 0.88rem;
+    color: var(--color-text-main);
+    font-weight: 500;
+    white-space: nowrap;
+  }
+
+  .location-exp-cell {
+    display: flex;
+    flex-direction: column;
+    gap: 0.2rem;
+    font-size: 0.85rem;
+    color: var(--color-text-main);
+    white-space: nowrap;
+  }
+  .location-exp-cell span, .location-exp-cell small {
+    white-space: nowrap;
+  }
+  .location-exp-cell small {
+    font-size: 0.76rem;
+    color: var(--color-text-muted);
+  }
+
+  .apps-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    padding: 0.3rem 0.75rem;
+    background: var(--color-bg);
+    border: 1px solid var(--color-border);
+    border-radius: 6px;
+    font-size: 0.82rem;
+    color: var(--color-text-muted);
+    white-space: nowrap;
+  }
+  .apps-badge strong { color: var(--color-primary); }
+
+  .status-pill {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0.3rem 0.75rem;
+    border-radius: 9999px;
+    font-size: 0.78rem;
+    font-weight: 700;
+    white-space: nowrap;
+  }
+  .status-verified { background: rgba(16, 185, 129, 0.15); color: #10b981; }
+  .status-pending { background: rgba(245, 158, 11, 0.15); color: #f59e0b; }
+  .status-rejected { background: rgba(239, 68, 68, 0.15); color: #ef4444; }
+
+  .account-pill {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0.3rem 0.75rem;
+    border-radius: 9999px;
+    font-size: 0.78rem;
+    font-weight: 700;
+    white-space: nowrap;
+  }
+  .pill-active { background: rgba(16, 185, 129, 0.15); color: #10b981; }
+  .pill-blocked { background: rgba(239, 68, 68, 0.15); color: #ef4444; }
+
+  .actions-group {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+
+  .btn-action-icon {
+    width: 34px;
+    height: 34px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 8px;
+    background: var(--color-bg);
+    border: 1px solid var(--color-border);
+    cursor: pointer;
+    text-decoration: none;
+    font-size: 0.9rem;
+    transition: all 0.2s ease;
+  }
+  .btn-action-icon:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
+  }
+  .delete-action:hover { background: rgba(239, 68, 68, 0.2); border-color: #ef4444; }
+
+  /* Modal */
+  .modal-backdrop {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    background: rgba(0, 0, 0, 0.72);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    z-index: 99999;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 1.5rem;
+    box-sizing: border-box;
+  }
+
+  .modal-card {
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--border-radius-lg);
+    width: 100%;
+    max-width: 580px;
+    max-height: 85vh;
+    display: flex;
+    flex-direction: column;
+    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+    overflow: hidden;
+    animation: modalPop 0.22s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  }
+
+  @keyframes modalPop {
+    0% { opacity: 0; transform: scale(0.94) translateY(10px); }
+    100% { opacity: 1; transform: scale(1) translateY(0); }
+  }
+
+  .modal-header {
+    padding: 1.5rem;
+    border-bottom: 1px solid var(--color-border);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+
+  .modal-title-wrap {
+    display: flex;
+    align-items: center;
+    gap: 0.85rem;
+  }
+
+  .modal-avatar {
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #6366f1, #8b5cf6);
+    color: white;
+    font-size: 1.2rem;
+    font-weight: 800;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .modal-header h2 {
+    margin: 0 0 0.2rem 0;
+    font-size: 1.25rem;
+    color: var(--color-text-main);
+  }
+  .modal-header p {
+    margin: 0;
+    font-size: 0.82rem;
+    color: var(--color-text-muted);
+  }
+
+  .modal-close {
+    background: none;
+    border: none;
+    font-size: 1.25rem;
+    color: var(--color-text-muted);
+    cursor: pointer;
+  }
+
+  .modal-body {
+    padding: 1.5rem;
+    display: flex;
+    flex-direction: column;
+    gap: 1.25rem;
+    overflow-y: auto;
+  }
+
+  .modal-info-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1rem;
+    background: var(--color-bg);
+    padding: 1.25rem;
+    border-radius: 12px;
+    border: 1px solid var(--color-border);
+  }
+
+  .info-item {
+    display: flex;
+    flex-direction: column;
+    gap: 0.2rem;
+  }
+  .info-item .lbl { font-size: 0.75rem; color: var(--color-text-muted); text-transform: uppercase; font-weight: 700; }
+  .info-item .val { font-size: 0.9rem; color: var(--color-text-main); font-weight: 600; }
+
+  .modal-section-title {
+    font-size: 0.85rem;
+    font-weight: 700;
+    color: var(--color-text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+
+  .skills-tags-wrap {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+  }
+
+  .skill-tag {
+    background: rgba(99, 102, 241, 0.12);
+    color: var(--color-primary);
+    border: 1px solid rgba(99, 102, 241, 0.25);
+    padding: 0.25rem 0.65rem;
+    border-radius: 6px;
+    font-size: 0.8rem;
+    font-weight: 600;
+  }
+
+  .no-skills, .no-links-txt {
+    font-size: 0.85rem;
+    color: var(--color-text-muted);
+    font-style: italic;
+  }
+
+  .bio-text {
+    margin: 0;
+    font-size: 0.9rem;
+    color: var(--color-text-main);
+    line-height: 1.5;
+  }
+
+  .links-row {
+    display: flex;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+  }
+
+  .link-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.4rem 0.85rem;
+    border-radius: 8px;
+    background: var(--color-bg);
+    border: 1px solid var(--color-border);
+    font-size: 0.82rem;
+    font-weight: 600;
+    color: var(--color-primary);
+    text-decoration: none;
+    transition: all 0.2s ease;
+  }
+  .link-pill:hover {
+    background: var(--color-primary);
+    color: white;
+    border-color: var(--color-primary);
+  }
+
+  .modal-footer {
+    padding: 1rem 1.5rem;
+    border-top: 1px solid var(--color-border);
+    display: flex;
+    justify-content: flex-end;
+  }
+
+  .empty-cell {
+    padding: 4rem 2rem !important;
+    text-align: center;
+  }
+  .empty-icon { font-size: 2.5rem; margin-bottom: 0.5rem; }
+
+  @media (max-width: 768px) {
+    .dashboard-header {
+      flex-direction: column !important;
+      align-items: flex-start !important;
+      gap: 1rem !important;
+    }
+    .stats-counter-pill {
+      width: 100% !important;
+      justify-content: center !important;
+      box-sizing: border-box !important;
+    }
+    .table-card {
+      background: transparent !important;
+      border: none !important;
+      box-shadow: none !important;
+      overflow: visible !important;
+    }
+
+    .table-responsive {
+      overflow: visible !important;
+    }
+
+    .data-table,
+    .data-table thead,
+    .data-table tbody {
+      display: block !important;
+      width: 100% !important;
+      box-sizing: border-box !important;
+    }
+
+    .data-table thead {
+      display: none !important;
+    }
+
+    .candidate-row {
+      background: var(--color-surface) !important;
+      backdrop-filter: blur(16px) !important;
+      border: 1px solid var(--color-border) !important;
+      border-radius: var(--border-radius-md) !important;
+      padding: 1.15rem 1rem !important;
+      margin-bottom: 1rem !important;
+      display: flex !important;
+      flex-direction: column !important;
+      gap: 0.75rem !important;
+      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.04) !important;
+    }
+
+    .data-table td {
+      padding: 0 !important;
+      border: none !important;
+    }
+
+    .actions-group {
+      width: 100% !important;
+      justify-content: flex-start !important;
+      gap: 0.5rem !important;
+      padding-top: 0.65rem !important;
+      border-top: 1px solid var(--color-border) !important;
+      margin-top: 0.25rem !important;
+    }
+
+    .modal-card {
+      max-width: 94vw !important;
+      max-height: 90vh !important;
+    }
+    .modal-info-grid {
+      grid-template-columns: 1fr !important;
+    }
+  }
+</style>

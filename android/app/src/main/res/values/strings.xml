@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">RecruitNest</string>
+    <string name="title_activity_main">RecruitNest</string>
+    <string name="package_name">com.recruitnest.app</string>
+    <string name="custom_url_scheme">com.recruitnest.app</string>
+</resources>

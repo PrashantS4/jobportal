@@ -1,0 +1,959 @@
+---
+import Layout from '../layouts/Layout.astro';
+---
+
+<Layout>
+  <!-- Navigation Header -->
+  <header class="landing-nav">
+    <div class="nav-container">
+      <div class="logo">
+        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" class="logo-icon">
+          <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path>
+          <polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline>
+          <line x1="12" y1="22.08" x2="12" y2="12"></line>
+        </svg>
+        <span>RecruitNest</span>
+      </div>
+      <nav class="nav-links" style="margin-left: auto; margin-right: 2rem;">
+        <a href="/pricing">Pricing</a>
+        <a href="/about">About</a>
+      </nav>
+      <div class="nav-actions">
+        <button type="button" class="theme-toggle-btn" aria-label="Toggle Light/Dark Theme" title="Toggle Light/Dark Theme">
+          <svg class="sun-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"></circle><line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line><line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line></svg>
+          <svg class="moon-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>
+        </button>
+        <a href="/login" class="btn btn-outline">Log in</a>
+        <a href="/register" class="btn btn-primary">Sign up</a>
+      </div>
+    </div>
+  </header>
+
+  <main>
+    <!-- Hero Section -->
+    <section class="hero">
+      <div class="hero-container">
+        <div class="hero-content">
+          <div class="badge-pill">
+            <span class="dot-green"></span> Connecting Talent with Opportunity
+          </div>
+          <h1 class="hero-title">
+            Find Your Dream Job<br />Build Your <span class="text-primary">Future</span>
+          </h1>
+          <p class="hero-subtitle">
+            Discover thousands of opportunities from top companies and take the next step in your career.
+          </p>
+          
+          <div class="search-box">
+            <div class="search-input-group">
+              <svg class="search-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+              <input type="text" placeholder="Job title, keywords, or company" />
+            </div>
+            <div class="search-divider"></div>
+            <div class="search-input-group">
+              <svg class="search-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path><circle cx="12" cy="10" r="3"></circle></svg>
+              <input type="text" placeholder="Location" />
+            </div>
+            <a href="/login" class="btn btn-primary btn-search">Search Jobs</a>
+          </div>
+          
+          <div class="popular-searches">
+            <span class="popular-label">Popular Searches:</span>
+            <a href="#" class="search-tag">UI/UX Designer</a>
+            <a href="#" class="search-tag">React Developer</a>
+            <a href="#" class="search-tag">Product Manager</a>
+            <a href="#" class="search-tag">Data Scientist</a>
+          </div>
+        </div>
+        
+        <div class="hero-image">
+          <div class="animated-hero-graphic">
+            <div class="glow-orb orb-1"></div>
+            <div class="glow-orb orb-2"></div>
+            
+            <div class="glass-dashboard animate-float">
+              <div class="dashboard-header">
+                <div class="window-controls">
+                  <span class="control-dot close"></span>
+                  <span class="control-dot minimize"></span>
+                  <span class="control-dot maximize"></span>
+                </div>
+                <div class="dashboard-title">AI Match Engine</div>
+              </div>
+              
+              <div class="dashboard-body">
+                <div class="match-ring-container">
+                  <svg class="match-ring" viewBox="0 0 100 100">
+                    <circle cx="50" cy="50" r="42" fill="none" stroke="rgba(255,255,255,0.05)" stroke-width="8"></circle>
+                    <circle cx="50" cy="50" r="42" fill="none" stroke="url(#ringGradient)" stroke-width="8" stroke-dasharray="264" stroke-dashoffset="60" stroke-linecap="round" class="ring-progress"></circle>
+                    <defs>
+                      <linearGradient id="ringGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+                        <stop offset="0%" stop-color="#A78BFA" />
+                        <stop offset="100%" stop-color="#60A5FA" />
+                      </linearGradient>
+                    </defs>
+                  </svg>
+                  <div class="match-score">
+                    <span class="score-number">98<span class="percent">%</span></span>
+                    <span class="score-text">Match</span>
+                  </div>
+                </div>
+                
+                <div class="dashboard-stats">
+                  <div class="stat-bar-group">
+                    <div class="stat-label">Skills Alignment</div>
+                    <div class="stat-bar"><div class="stat-fill" style="width: 95%; background: var(--color-primary);"></div></div>
+                  </div>
+                  <div class="stat-bar-group">
+                    <div class="stat-label">Experience Level</div>
+                    <div class="stat-bar"><div class="stat-fill" style="width: 100%; background: #60A5FA;"></div></div>
+                  </div>
+                  <div class="stat-bar-group">
+                    <div class="stat-label">Culture Fit</div>
+                    <div class="stat-bar"><div class="stat-fill" style="width: 85%; background: #FDBA74;"></div></div>
+                  </div>
+                </div>
+              </div>
+              
+              <div class="dashboard-footer">
+                <div class="candidate-pulse">
+                  <div class="pulse-dot"></div>
+                  <span>Analyzing opportunities...</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Stats Section -->
+    <section class="stats">
+      <div class="stats-container">
+        <div class="stat-card reveal-on-scroll delay-100">
+          <div class="stat-icon-wrapper">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="7" width="20" height="14" rx="2" ry="2"></rect><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"></path></svg>
+          </div>
+          <div class="stat-info">
+            <h3>9,999+</h3>
+            <p>Active Job Listings</p>
+          </div>
+        </div>
+        
+        <div class="stat-card reveal-on-scroll delay-200">
+          <div class="stat-icon-wrapper">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
+          </div>
+          <div class="stat-info">
+            <h3>100K+</h3>
+            <p>Resumes Added</p>
+          </div>
+        </div>
+        
+        <div class="stat-card reveal-on-scroll delay-300">
+          <div class="stat-icon-wrapper">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path><polyline points="9 22 9 12 15 12 15 22"></polyline></svg>
+          </div>
+          <div class="stat-info">
+            <h3>10K+</h3>
+            <p>Companies Hiring</p>
+          </div>
+        </div>
+        
+        <div class="stat-card reveal-on-scroll delay-400">
+          <div class="stat-icon-wrapper">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
+          </div>
+          <div class="stat-info">
+            <h3>50K+</h3>
+            <p>Happy Candidates</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Trusted By -->
+    <section class="trusted-by">
+      <p class="trusted-label">TRUSTED BY INNOVATIVE COMPANIES WORLDWIDE</p>
+      <div class="trusted-logos">
+        <span>Enterprises</span>
+        <span class="dot-separator">•</span>
+        <span>Acme Corp</span>
+        <span class="dot-separator">•</span>
+        <span>Globex</span>
+        <span class="dot-separator">•</span>
+        <span>Soylent</span>
+        <span class="dot-separator">•</span>
+        <span>Initech</span>
+        <span class="dot-separator">•</span>
+        <span>Umbrella Corp</span>
+      </div>
+    </section>
+
+    <!-- How It Works -->
+    <section class="how-it-works">
+      <div class="section-header">
+        <h2>How RecruitNest Works</h2>
+        <p>Three simple steps to your next big career move</p>
+      </div>
+      <div class="steps-grid">
+        <div class="step-card">
+          <div class="step-number">1</div>
+          <h3>Create an Account</h3>
+          <p>Sign up in seconds, build your profile, and tell us what you're looking for.</p>
+        </div>
+        <div class="step-card">
+          <div class="step-number">2</div>
+          <h3>Find Opportunities</h3>
+          <p>Browse thousands of curated jobs or let our smart AI recommend the best matches.</p>
+        </div>
+        <div class="step-card">
+          <div class="step-number">3</div>
+          <h3>Apply & Get Hired</h3>
+          <p>Submit applications with one click, track your status, and land the job.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- Features -->
+    <section class="features">
+      <div class="section-header reveal-on-scroll">
+        <h2>Why Choose RecruitNest?</h2>
+        <p>Smart features to accelerate your career journey</p>
+      </div>
+      
+      <div class="features-grid">
+        <div class="feature-card reveal-on-scroll delay-100">
+          <div class="feature-icon-wrapper">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="1" x2="12" y2="23"></line><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path></svg>
+          </div>
+          <h3>Smart Recommendations</h3>
+          <p>AI-powered matching based on your unique skills and interests to find the perfect fit.</p>
+        </div>
+        
+        <div class="feature-card reveal-on-scroll delay-200">
+          <div class="feature-icon-wrapper">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>
+          </div>
+          <h3>Verified Companies</h3>
+          <p>Every employer is manually verified by our admins to ensure your safety and security.</p>
+        </div>
+        
+        <div class="feature-card reveal-on-scroll delay-300">
+          <div class="feature-icon-wrapper">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline></svg>
+          </div>
+          <h3>Real-time Tracking</h3>
+          <p>Never wonder about your application status again. Get instant updates at every stage.</p>
+        </div>
+        
+        <div class="feature-card reveal-on-scroll delay-400">
+          <div class="feature-icon-wrapper">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
+          </div>
+          <h3>Direct Communication</h3>
+          <p>Message employers directly through our platform once you're shortlisted.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- Testimonials -->
+    <section class="testimonials">
+      <div class="section-header reveal-on-scroll">
+        <h2>Success Stories</h2>
+        <p>Hear from people who found their dream jobs</p>
+      </div>
+      <div class="testimonials-grid">
+        <div class="testimonial-card reveal-on-scroll delay-100">
+          <div class="stars">⭐⭐⭐⭐⭐</div>
+          <p class="quote">"I applied to dozens of places with no luck. Within a week on RecruitNest, I had three interviews and landed a Senior Developer role!"</p>
+          <div class="author">
+            <div class="author-avatar" style="background:#DBEAFE; color:#1D4ED8;">JD</div>
+            <div class="author-info">
+              <strong>John Doe</strong>
+              <span>Software Engineer at Acme</span>
+            </div>
+          </div>
+        </div>
+        
+        <div class="testimonial-card reveal-on-scroll delay-200">
+          <div class="stars">⭐⭐⭐⭐⭐</div>
+          <p class="quote">"The UI is incredibly clean and the AI recommendations actually suggested jobs I wanted. Best job board out there by far."</p>
+          <div class="author">
+            <div class="author-avatar" style="background:#FCE7F3; color:#BE185D;">AS</div>
+            <div class="author-info">
+              <strong>Alice Smith</strong>
+              <span>Product Manager</span>
+            </div>
+          </div>
+        </div>
+        
+        <div class="testimonial-card reveal-on-scroll delay-300">
+          <div class="stars">⭐⭐⭐⭐⭐</div>
+          <p class="quote">"As an employer, the quality of candidates we get from RecruitNest is unmatched. We filled our open positions in half the time."</p>
+          <div class="author">
+            <div class="author-avatar" style="background:#FEF3C7; color:#B45309;">RJ</div>
+            <div class="author-info">
+              <strong>Robert Jones</strong>
+              <span>HR Director at Globex</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- CTA Section -->
+    <section class="bottom-cta">
+      <div class="cta-content">
+        <h2>Ready to take the next step?</h2>
+        <p>Join thousands of companies and professionals already using RecruitNest.</p>
+        <div class="cta-actions">
+          <a href="/pricing" class="btn btn-primary btn-lg">Create an Account</a>
+          <a href="/about" class="btn btn-outline btn-lg" style="background: white;">Learn More</a>
+        </div>
+      </div>
+    </section>
+  </main>
+</Layout>
+
+<style is:global>
+  /* Navigation */
+  .landing-nav {
+    background: var(--color-surface);
+    border-bottom: 1px solid rgba(0,0,0,0.05);
+    position: sticky;
+    top: 0;
+    z-index: 100;
+  }
+  .nav-container {
+    max-width: 1280px;
+    margin: 0 auto;
+    padding: 1rem 2rem;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .logo {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 1.25rem;
+    font-weight: 700;
+    color: var(--color-text-main);
+  }
+  .logo-icon { color: var(--color-primary); }
+  
+  .nav-links { display: flex; gap: 2rem; }
+  .nav-links a {
+    color: var(--color-text-muted);
+    text-decoration: none;
+    font-weight: 500;
+    font-size: 0.95rem;
+    transition: color 0.2s;
+  }
+  .nav-links a:hover { color: var(--color-text-main); }
+
+  .nav-actions { display: flex; gap: 1rem; align-items: center; }
+  
+  /* Buttons */
+  .section-header {
+    text-align: center;
+    margin-bottom: 3.5rem;
+  }
+  .section-header h2 {
+    font-size: 2.25rem;
+    margin: 0 0 0.5rem 0;
+    font-weight: 700;
+  }
+  .section-header p {
+    color: var(--color-text-muted);
+    font-size: 1.1rem;
+    margin: 0;
+  }
+
+  /* Hero Section */
+  .hero {
+    padding: 4rem 2rem 2rem;
+    background: var(--color-surface);
+  }
+  .hero-container {
+    max-width: 1280px;
+    margin: 0 auto;
+    display: grid;
+    grid-template-columns: 1.1fr 0.9fr;
+    gap: 4rem;
+    align-items: center;
+  }
+  
+  .badge-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    background: var(--color-primary-light);
+    color: var(--color-primary-dark);
+    padding: 0.4rem 1rem;
+    border-radius: 2rem;
+    font-size: 0.875rem;
+    font-weight: 500;
+    margin-bottom: 1.5rem;
+  }
+  .dot-green {
+    width: 6px;
+    height: 6px;
+    background: var(--color-primary);
+    border-radius: 50%;
+  }
+
+  .hero-title {
+    font-size: 3.5rem;
+    font-weight: 700;
+    line-height: 1.1;
+    letter-spacing: -0.02em;
+    margin: 0 0 1.25rem 0;
+    color: var(--color-text-main);
+  }
+  .text-primary { color: var(--color-primary); }
+  
+  .hero-subtitle {
+    font-size: 1.1rem;
+    color: var(--color-text-muted);
+    line-height: 1.6;
+    max-width: 500px;
+    margin: 0 0 2rem 0;
+  }
+  
+  /* Search Box */
+  .search-box {
+    display: flex;
+    align-items: center;
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: 0.75rem;
+    padding: 0.5rem;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.2);
+    margin-bottom: 1.5rem;
+    max-width: 600px;
+    backdrop-filter: blur(12px);
+  }
+  .search-input-group {
+    display: flex;
+    align-items: center;
+    flex: 1;
+    padding: 0 0.5rem;
+    gap: 0.75rem;
+  }
+  .search-icon { color: #9CA3AF; flex-shrink: 0; }
+  .search-input-group input {
+    border: none;
+    outline: none;
+    width: 100%;
+    font-size: 0.95rem;
+    color: var(--color-text-main);
+    background: transparent;
+  }
+  .search-input-group input::placeholder { color: #9CA3AF; }
+  .search-divider {
+    width: 1px;
+    height: 24px;
+    background: var(--color-border);
+    margin: 0 0.5rem;
+  }
+  .btn-search {
+    padding: 0.75rem 1.5rem;
+    white-space: nowrap;
+  }
+
+  .popular-searches {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+  }
+  .popular-label {
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--color-text-main);
+  }
+  .search-tag {
+    font-size: 0.75rem;
+    padding: 0.25rem 0.75rem;
+    border: 1px solid var(--color-border);
+    border-radius: 2rem;
+    color: var(--color-text-muted);
+    transition: all 0.2s;
+  }
+  .search-tag:hover {
+    border-color: var(--color-primary);
+    color: var(--color-text-main);
+    background: rgba(167, 139, 250, 0.1);
+  }
+
+  /* Hero Image & Animations */
+  .hero-content {
+    animation: fade-in-up 1s ease-out forwards;
+  }
+  
+  .hero-image {
+    display: flex;
+    justify-content: flex-end;
+    animation: fade-in-up 1s ease-out 0.2s forwards;
+    opacity: 0;
+  }
+
+  .animated-hero-graphic {
+    position: relative;
+    width: 100%;
+    height: 400px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  
+  .glow-orb {
+    position: absolute;
+    border-radius: 50%;
+    filter: blur(60px);
+    opacity: 0.6;
+    animation: pulse-glow 8s infinite alternate;
+  }
+  
+  .orb-1 {
+    width: 250px;
+    height: 250px;
+    background: var(--color-primary);
+    top: 10%;
+    left: 10%;
+    animation-delay: 0s;
+  }
+  
+  .orb-2 {
+    width: 200px;
+    height: 200px;
+    background: #60A5FA;
+    bottom: 0%;
+    right: 15%;
+    animation-delay: -4s;
+  }
+  
+  .glass-dashboard {
+    position: relative;
+    z-index: 10;
+    width: 360px;
+    background: rgba(255, 255, 255, 0.03);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 1.25rem;
+    box-shadow: 0 25px 50px -12px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.1);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+  
+  .dashboard-header {
+    background: rgba(0,0,0,0.2);
+    padding: 1rem 1.25rem;
+    display: flex;
+    align-items: center;
+    border-bottom: 1px solid rgba(255,255,255,0.05);
+  }
+  
+  .window-controls {
+    display: flex;
+    gap: 0.4rem;
+    margin-right: 1rem;
+  }
+  
+  .control-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+  }
+  .control-dot.close { background: #EF4444; }
+  .control-dot.minimize { background: #F59E0B; }
+  .control-dot.maximize { background: #10B981; }
+  
+  .dashboard-title {
+    font-size: 0.75rem;
+    font-weight: 600;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    color: var(--color-text-muted);
+    margin: 0 auto;
+    padding-right: 2rem;
+  }
+  
+  .dashboard-body {
+    padding: 2rem;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2rem;
+  }
+  
+  .match-ring-container {
+    position: relative;
+    width: 140px;
+    height: 140px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  
+  .match-ring {
+    position: absolute;
+    top: 0; left: 0; width: 100%; height: 100%;
+    transform: rotate(-90deg);
+  }
+  
+  .ring-progress {
+    animation: drawRing 2s ease-out forwards;
+  }
+  
+  .match-score {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    z-index: 2;
+  }
+  
+  .score-number {
+    font-size: 2.5rem;
+    font-weight: 700;
+    color: var(--color-text-main);
+    line-height: 1;
+  }
+  .score-number .percent {
+    font-size: 1.25rem;
+    color: var(--color-text-muted);
+  }
+  
+  .score-text {
+    font-size: 0.85rem;
+    color: var(--color-primary);
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin-top: 0.25rem;
+  }
+  
+  .dashboard-stats {
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+  }
+  
+  .stat-bar-group {
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+  }
+  
+  .stat-label {
+    font-size: 0.75rem;
+    color: var(--color-text-muted);
+    font-weight: 500;
+  }
+  
+  .stat-bar {
+    width: 100%;
+    height: 6px;
+    background: rgba(255,255,255,0.05);
+    border-radius: 1rem;
+    overflow: hidden;
+  }
+  
+  .stat-fill {
+    height: 100%;
+    border-radius: 1rem;
+    animation: fillBar 1.5s ease-out forwards;
+    transform-origin: left;
+  }
+  
+  .dashboard-footer {
+    padding: 1rem 2rem;
+    background: rgba(0,0,0,0.1);
+    border-top: 1px solid rgba(255,255,255,0.05);
+  }
+  
+  .candidate-pulse {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.75rem;
+    font-size: 0.8rem;
+    color: var(--color-text-muted);
+  }
+  
+  .pulse-dot {
+    width: 8px;
+    height: 8px;
+    background: var(--color-primary);
+    border-radius: 50%;
+    box-shadow: 0 0 10px var(--color-primary);
+    animation: pulse-dot-anim 2s infinite;
+  }
+  
+  @keyframes drawRing {
+    from { stroke-dashoffset: 264; }
+    to { stroke-dashoffset: 60; }
+  }
+  
+  @keyframes fillBar {
+    from { transform: scaleX(0); }
+    to { transform: scaleX(1); }
+  }
+  
+  @keyframes pulse-dot-anim {
+    0% { transform: scale(0.95); opacity: 0.5; box-shadow: 0 0 0 0 rgba(167, 139, 250, 0.4); }
+    70% { transform: scale(1); opacity: 1; box-shadow: 0 0 0 6px rgba(167, 139, 250, 0); }
+    100% { transform: scale(0.95); opacity: 0.5; box-shadow: 0 0 0 0 rgba(167, 139, 250, 0); }
+  }
+
+  @keyframes float {
+    0% { transform: translateY(0px); }
+    50% { transform: translateY(-15px); }
+    100% { transform: translateY(0px); }
+  }
+  
+  @keyframes pulse-glow {
+    0% { transform: scale(1); opacity: 0.3; }
+    100% { transform: scale(1.2); opacity: 0.7; }
+  }
+
+  @keyframes fade-in-up {
+    from { opacity: 0; transform: translateY(30px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  /* Stats Section */
+  .stats {
+    background: var(--color-bg);
+    padding: 4rem 2rem;
+  }
+  .stats-container {
+    max-width: 1280px;
+    margin: 0 auto;
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 1.5rem;
+  }
+  .stat-card {
+    background: var(--color-surface);
+    backdrop-filter: blur(12px);
+    padding: 1.5rem;
+    border-radius: 1rem;
+    display: flex;
+    align-items: center;
+    gap: 1.25rem;
+    box-shadow: 0 4px 6px -1px rgba(0,0,0,0.2);
+    border: 1px solid var(--color-border);
+  }
+  .stat-icon-wrapper {
+    width: 52px;
+    height: 52px;
+    border-radius: 0.75rem;
+    background: rgba(167, 139, 250, 0.1);
+    color: var(--color-primary);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+  }
+  .stat-info h3 {
+    margin: 0 0 0.25rem 0;
+    font-size: 1.5rem;
+    font-weight: 700;
+  }
+  .stat-info p {
+    margin: 0;
+    font-size: 0.85rem;
+    color: var(--color-text-muted);
+  }
+
+  /* Trusted By */
+  .trusted-by {
+    padding: 3rem 2rem 5rem;
+    text-align: center;
+    background: var(--color-bg);
+  }
+  .trusted-label {
+    font-size: 0.75rem;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    color: #9CA3AF;
+    margin: 0 0 2rem 0;
+  }
+  .trusted-logos {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 2rem;
+    color: #9CA3AF;
+    font-size: 1.5rem;
+    font-weight: 700;
+    opacity: 0.5;
+  }
+  .dot-separator { font-size: 0.5rem; }
+
+  /* How It Works */
+  .how-it-works {
+    padding: 6rem 2rem;
+    background: var(--color-surface);
+  }
+  .steps-grid {
+    max-width: 1000px;
+    margin: 0 auto;
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 3rem;
+  }
+  .step-card {
+    text-align: center;
+  }
+  .step-number {
+    width: 60px;
+    height: 60px;
+    background: rgba(167, 139, 250, 0.1);
+    color: var(--color-primary);
+    font-size: 1.5rem;
+    font-weight: 700;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0 auto 1.5rem;
+  }
+  .step-card h3 {
+    font-size: 1.25rem;
+    margin: 0 0 0.75rem 0;
+  }
+  .step-card p {
+    color: var(--color-text-muted);
+    line-height: 1.6;
+    margin: 0;
+  }
+
+  /* Features */
+  .features {
+    padding: 6rem 2rem;
+    background: var(--color-bg);
+  }
+  .features-grid {
+    max-width: 1000px;
+    margin: 0 auto;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 2rem;
+  }
+  .feature-card {
+    background: var(--color-surface);
+    backdrop-filter: blur(12px);
+    padding: 2.5rem;
+    border-radius: 1rem;
+    border: 1px solid var(--color-border);
+    transition: transform 0.2s, box-shadow 0.2s;
+  }
+  .feature-card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 0 15px rgba(167, 139, 250, 0.2);
+  }
+  .feature-icon-wrapper {
+    width: 56px;
+    height: 56px;
+    border-radius: 50%;
+    background: rgba(167, 139, 250, 0.1);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--color-primary);
+    margin-bottom: 1.5rem;
+  }
+  .feature-card h3 { margin: 0 0 0.75rem 0; font-size: 1.25rem; }
+  .feature-card p { margin: 0; color: var(--color-text-muted); line-height: 1.6; }
+
+  /* Testimonials */
+  .testimonials {
+    padding: 6rem 2rem;
+    background: var(--color-surface);
+  }
+  .testimonials-grid {
+    max-width: 1200px;
+    margin: 0 auto;
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 2rem;
+  }
+  .testimonial-card {
+    background: var(--color-surface);
+    backdrop-filter: blur(12px);
+    border: 1px solid var(--color-border);
+    padding: 2rem;
+    border-radius: 1rem;
+    display: flex;
+    flex-direction: column;
+  }
+  .stars {
+    font-size: 1.25rem;
+    margin-bottom: 1rem;
+    letter-spacing: 2px;
+  }
+  .quote {
+    color: var(--color-text-main);
+    font-size: 1.05rem;
+    line-height: 1.6;
+    margin: 0 0 1.5rem 0;
+    flex: 1;
+    font-style: italic;
+  }
+  .author {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+  }
+  .author-avatar {
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 700;
+  }
+  .author-info {
+    display: flex;
+    flex-direction: column;
+  }
+  .author-info strong { font-size: 0.95rem; }
+  .author-info span { font-size: 0.8rem; color: var(--color-text-muted); }
+
+  /* CTA Section */
+  .bottom-cta {
+    padding: 6rem 2rem;
+    background: var(--color-surface);
+    text-align: center;
+    border-top: 1px solid var(--color-border);
+  }
+  .cta-content {
+    max-width: 600px;
+    margin: 0 auto;
+  }
+  .cta-content h2 {
+    font-size: 2.5rem;
+    color: var(--color-text-main);
+    margin: 0 0 1rem 0;
+  }
+  .cta-content p {
+    font-size: 1.1rem;
+    color: var(--color-text-main);
+    opacity: 0.8;
+    margin: 0 0 2rem 0;
+  }
+  .cta-actions {
+    display: flex;
+    justify-content: center;
+    gap: 1rem;
+  }
+</style>

@@ -1,0 +1,656 @@
+---
+import DashboardLayout from '../../layouts/DashboardLayout.astro';
+import { getDb } from '../../lib/db';
+import { users } from '../../db/schema';
+import { eq } from 'drizzle-orm';
+
+// @ts-ignore
+const payload = Astro.locals.user;
+if (!payload || payload.userType !== 'superadmin') {
+  return Astro.redirect('/login');
+}
+
+const db = getDb();
+const userRecord = await db.select().from(users).where(eq(users.id, payload.userId)).get();
+
+if (!userRecord) {
+  return Astro.redirect('/login');
+}
+
+const avatarSrc = userRecord.avatarUrl || '/images/default-avatar.png';
+const formattedJoinedDate = userRecord.createdAt
+  ? new Date(userRecord.createdAt instanceof Date ? userRecord.createdAt : userRecord.createdAt * 1000)
+      .toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
+  : 'System Admin';
+---
+
+<DashboardLayout title="Super Admin Profile" userType="superadmin" activePath="/superadmin/profile">
+  <div class="admin-profile-page">
+    
+    <!-- Page Header -->
+    <div class="page-header">
+      <div class="page-title-group">
+        <div class="admin-crown-icon">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M2 4l3 12h14l3-12-6 7-4-7-4 7-6-7zm3 16h14"></path>
+          </svg>
+        </div>
+        <div>
+          <div class="header-badge-row">
+            <h1>Super Admin Profile</h1>
+            <span class="role-pill superadmin-pill">👑 Super Administrator</span>
+          </div>
+          <p class="page-subtitle">Manage system credentials, personal information, and administrative settings</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Layout Grid -->
+    <div class="admin-profile-grid">
+      
+      <!-- Left Column: Admin Identity & Photo Card -->
+      <div class="card admin-identity-card">
+        <form id="admin-photo-form" enctype="multipart/form-data">
+          <div class="avatar-uploader-container">
+            <div class="avatar-large-wrapper">
+              <img id="avatar-preview" src={avatarSrc} alt="Super Admin Avatar" class="admin-avatar-img" />
+              <label for="photo-file-input" class="avatar-edit-overlay" title="Upload new photo">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path>
+                  <circle cx="12" cy="13" r="4"></circle>
+                </svg>
+              </label>
+              <input type="file" id="photo-file-input" name="photo" accept="image/png,image/jpeg,image/webp" style="display: none;" />
+            </div>
+            
+            <div class="admin-name-wrap">
+              <h2 id="display-admin-name">{userRecord.firstName} {userRecord.lastName}</h2>
+              <p class="admin-email">{userRecord.email}</p>
+            </div>
+          </div>
+        </form>
+
+        <div class="admin-meta-list">
+          <div class="meta-item">
+            <span class="meta-label">Access Level:</span>
+            <span class="meta-value text-purple font-bold">Full Root Control</span>
+          </div>
+          <div class="meta-item">
+            <span class="meta-label">Account Status:</span>
+            <span class="status-pill status-verified">✓ System Verified</span>
+          </div>
+          <div class="meta-item">
+            <span class="meta-label">Admin Since:</span>
+            <span class="meta-value">{formattedJoinedDate}</span>
+          </div>
+        </div>
+
+        <div class="identity-card-footer">
+          <a href="/logout" class="logout-red-btn">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
+              <polyline points="16 17 21 12 16 7"></polyline>
+              <line x1="21" y1="12" x2="9" y2="12"></line>
+            </svg>
+            Log Out
+          </a>
+        </div>
+      </div>
+
+      <!-- Right Column: Personal Info & Security -->
+      <div class="admin-content-column">
+        
+        <!-- Account Details Form Card -->
+        <div class="card form-card">
+          <div class="card-header-row">
+            <h2 class="card-title">Personal Information</h2>
+            <span class="info-badge">Editable Credentials</span>
+          </div>
+
+          <form id="admin-profile-form">
+            <div class="form-grid">
+              <div class="form-group">
+                <label for="firstName" class="form-label">First Name <span class="required">*</span></label>
+                <input
+                  type="text"
+                  id="firstName"
+                  name="firstName"
+                  class="input-field"
+                  value={userRecord.firstName}
+                  required
+                  placeholder="Super Admin First Name"
+                />
+              </div>
+
+              <div class="form-group">
+                <label for="lastName" class="form-label">Last Name <span class="required">*</span></label>
+                <input
+                  type="text"
+                  id="lastName"
+                  name="lastName"
+                  class="input-field"
+                  value={userRecord.lastName}
+                  required
+                  placeholder="Super Admin Last Name"
+                />
+              </div>
+            </div>
+
+            <div class="form-grid">
+              <div class="form-group">
+                <label for="email" class="form-label">Email Address <span class="lock-tag">🔒 System Locked</span></label>
+                <input
+                  type="email"
+                  id="email"
+                  class="input-field readonly-field"
+                  value={userRecord.email}
+                  disabled
+                  readonly
+                />
+              </div>
+
+              <div class="form-group">
+                <label for="phone" class="form-label">Contact Phone Number</label>
+                <input
+                  type="tel"
+                  id="phone"
+                  name="phone"
+                  class="input-field"
+                  value={userRecord.phone || ''}
+                  placeholder="+1 (555) 000-0000"
+                />
+              </div>
+            </div>
+
+            <div class="form-actions">
+              <button type="submit" class="btn btn-primary" id="save-profile-btn">
+                <span id="save-btn-text">Save Changes</span>
+                <span id="save-btn-spinner" class="spinner" style="display: none;"></span>
+              </button>
+            </div>
+          </form>
+        </div>
+
+        <!-- Security & Authentication Card -->
+        <div class="card form-card">
+          <div class="card-header-row">
+            <h2 class="card-title">Security & Credentials</h2>
+            <span class="security-shield">🛡️ Protected Session</span>
+          </div>
+          
+          <p class="sec-desc">
+            Your administrator account credentials are secured with PBKDF2 hashing, HTTP-only session tokens, and strict Cloudflare Workers edge security.
+          </p>
+
+          <div class="security-actions-row">
+            <a href="/forgot-password" class="btn btn-outline">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+                <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+              </svg>
+              Reset Administrator Password
+            </a>
+          </div>
+        </div>
+
+        <!-- System Privileges Overview Card -->
+        <div class="card privileges-card">
+          <h2 class="card-title mb-3">Super Admin System Privileges</h2>
+          <div class="privilege-tags-grid">
+            <div class="priv-tag">⚡ Full Platform Control</div>
+            <div class="priv-tag">👥 User & Role Management</div>
+            <div class="priv-tag">🏢 Employer Approvals</div>
+            <div class="priv-tag">📊 Financial & Analytics Access</div>
+            <div class="priv-tag">👑 Impersonate Accounts</div>
+            <div class="priv-tag">🔒 System Logs & Auditing</div>
+          </div>
+        </div>
+
+      </div>
+
+    </div>
+
+  </div>
+</DashboardLayout>
+
+<style>
+  .admin-profile-page {
+    max-width: 1000px;
+    margin: 0 auto;
+    width: 100%;
+    box-sizing: border-box;
+  }
+
+  .page-header {
+    margin-bottom: 2rem;
+  }
+
+  .page-title-group {
+    display: flex;
+    align-items: center;
+    gap: 1.25rem;
+  }
+
+  .admin-crown-icon {
+    width: 52px;
+    height: 52px;
+    background: rgba(139, 92, 246, 0.12);
+    border: 1px solid rgba(139, 92, 246, 0.3);
+    color: #8B5CF6;
+    border-radius: var(--border-radius-md, 14px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+  }
+
+  .header-badge-row {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+  }
+
+  .header-badge-row h1 {
+    margin: 0;
+    font-size: 1.8rem;
+    font-weight: 800;
+    color: var(--color-text-main);
+  }
+
+  .superadmin-pill {
+    background: linear-gradient(135deg, rgba(139, 92, 246, 0.2), rgba(16, 185, 129, 0.2));
+    border: 1px solid rgba(139, 92, 246, 0.4);
+    color: #A78BFA;
+    padding: 0.25rem 0.75rem;
+    border-radius: 999px;
+    font-size: 0.78rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+
+  .page-subtitle {
+    margin: 0.35rem 0 0 0;
+    font-size: 0.95rem;
+    color: var(--color-text-muted);
+  }
+
+  /* Grid Layout */
+  .admin-profile-grid {
+    display: grid;
+    grid-template-columns: 320px 1fr;
+    gap: 1.75rem;
+    align-items: start;
+    width: 100%;
+    box-sizing: border-box;
+  }
+
+  .card {
+    background: var(--color-surface);
+    backdrop-filter: blur(16px);
+    border: 1px solid var(--color-border);
+    border-radius: var(--border-radius-lg, 16px);
+    padding: 1.75rem;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.04);
+    min-width: 0;
+    box-sizing: border-box;
+  }
+
+  /* Identity Card */
+  .admin-identity-card {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+  }
+
+  .avatar-uploader-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    margin-bottom: 1.5rem;
+    width: 100%;
+  }
+
+  .avatar-large-wrapper {
+    position: relative;
+    width: 110px;
+    height: 110px;
+    border-radius: 50%;
+    margin-bottom: 1rem;
+    border: 3px solid #8B5CF6;
+    box-shadow: 0 8px 24px rgba(139, 92, 246, 0.25);
+    flex-shrink: 0;
+  }
+
+  .admin-avatar-img {
+    width: 100%;
+    height: 100%;
+    border-radius: 50%;
+    object-fit: cover;
+  }
+
+  .avatar-edit-overlay {
+    position: absolute;
+    bottom: 2px;
+    right: 2px;
+    width: 34px;
+    height: 34px;
+    background: #8B5CF6;
+    color: #FFFFFF;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3);
+    transition: all 0.2s ease;
+  }
+
+  .avatar-edit-overlay:hover {
+    transform: scale(1.1);
+    background: #7C3AED;
+  }
+
+  .admin-name-wrap h2 {
+    margin: 0;
+    font-size: 1.35rem;
+    font-weight: 800;
+    color: var(--color-text-main);
+    word-break: break-word;
+  }
+
+  .admin-email {
+    margin: 0.25rem 0 0 0;
+    font-size: 0.88rem;
+    color: var(--color-text-muted);
+    word-break: break-all;
+  }
+
+  .admin-meta-list {
+    width: 100%;
+    border-top: 1px solid var(--color-border);
+    border-bottom: 1px solid var(--color-border);
+    padding: 1.25rem 0;
+    margin-bottom: 1.5rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.85rem;
+  }
+
+  .meta-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-size: 0.88rem;
+  }
+
+  .meta-label {
+    color: var(--color-text-muted);
+  }
+
+  .meta-value {
+    font-weight: 600;
+    color: var(--color-text-main);
+  }
+
+  .text-purple { color: #8B5CF6; }
+  .font-bold { font-weight: 700; }
+
+  .status-verified {
+    background: rgba(16, 185, 129, 0.12);
+    color: #10B981;
+    border: 1px solid rgba(16, 185, 129, 0.3);
+    padding: 0.2rem 0.6rem;
+    border-radius: 999px;
+    font-size: 0.78rem;
+    font-weight: 700;
+  }
+
+  .identity-card-footer {
+    width: 100%;
+  }
+
+  .logout-red-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    width: 100%;
+    padding: 0.75rem 1.25rem;
+    background: rgba(244, 63, 94, 0.08);
+    border: 1px solid rgba(244, 63, 94, 0.3);
+    border-radius: var(--border-radius-md, 10px);
+    color: #F43F5E !important;
+    font-weight: 700;
+    font-size: 0.95rem;
+    text-decoration: none;
+    transition: all 0.25s ease;
+    box-sizing: border-box;
+  }
+
+  .logout-red-btn:hover {
+    background: #F43F5E !important;
+    color: #FFFFFF !important;
+    box-shadow: 0 4px 16px rgba(244, 63, 94, 0.35);
+    transform: translateY(-2px);
+  }
+
+  /* Right Column Forms */
+  .admin-content-column {
+    display: flex;
+    flex-direction: column;
+    gap: 1.75rem;
+    width: 100%;
+    min-width: 0;
+  }
+
+  .card-header-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 1.25rem;
+    border-bottom: 1px solid var(--color-border);
+    padding-bottom: 0.8rem;
+  }
+
+  .card-title {
+    margin: 0;
+    font-size: 1.2rem;
+    font-weight: 700;
+    color: var(--color-text-main);
+  }
+
+  .info-badge, .security-shield {
+    font-size: 0.78rem;
+    font-weight: 600;
+    color: var(--color-text-muted);
+  }
+
+  .form-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1.25rem;
+    margin-bottom: 1.25rem;
+  }
+
+  .form-group {
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+  }
+
+  .form-label {
+    font-size: 0.88rem;
+    font-weight: 600;
+    color: var(--color-text-main);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .required { color: #F43F5E; }
+  .lock-tag { font-size: 0.75rem; color: var(--color-text-muted); font-weight: 500; }
+
+  .input-field {
+    width: 100%;
+    padding: 0.75rem 1rem;
+    background: var(--color-bg);
+    border: 1px solid var(--color-border);
+    border-radius: var(--border-radius-md, 10px);
+    color: var(--color-text-main);
+    font-size: 0.95rem;
+    box-sizing: border-box;
+    transition: all 0.2s ease;
+  }
+
+  .input-field:focus {
+    outline: none;
+    border-color: #8B5CF6;
+    box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.15);
+  }
+
+  .readonly-field {
+    opacity: 0.7;
+    cursor: not-allowed;
+  }
+
+  .form-actions {
+    display: flex;
+    justify-content: flex-end;
+    margin-top: 0.5rem;
+  }
+
+  .sec-desc {
+    font-size: 0.9rem;
+    color: var(--color-text-muted);
+    line-height: 1.5;
+    margin: 0 0 1.25rem 0;
+  }
+
+  .security-actions-row {
+    display: flex;
+    gap: 1rem;
+  }
+
+  .privilege-tags-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.65rem;
+  }
+
+  .priv-tag {
+    background: rgba(139, 92, 246, 0.1);
+    border: 1px solid rgba(139, 92, 246, 0.25);
+    color: #A78BFA;
+    padding: 0.4rem 0.85rem;
+    border-radius: 999px;
+    font-size: 0.82rem;
+    font-weight: 600;
+  }
+
+  /* Responsive Media Queries */
+  @media (max-width: 900px) {
+    .admin-profile-grid {
+      grid-template-columns: 1fr !important;
+      gap: 1.25rem !important;
+    }
+
+    .form-grid {
+      grid-template-columns: 1fr !important;
+      gap: 1rem !important;
+    }
+
+    .header-badge-row h1 {
+      font-size: 1.4rem;
+    }
+  }
+</style>
+
+<script is:inline>
+  document.addEventListener('DOMContentLoaded', () => {
+    const photoInput = document.getElementById('photo-file-input');
+    const avatarPreview = document.getElementById('avatar-preview');
+    const profileForm = document.getElementById('admin-profile-form');
+    const saveBtn = document.getElementById('save-profile-btn');
+    const saveBtnText = document.getElementById('save-btn-text');
+    const saveBtnSpinner = document.getElementById('save-btn-spinner');
+    const displayAdminName = document.getElementById('display-admin-name');
+
+    // Auto-upload photo on selection
+    if (photoInput && avatarPreview) {
+      photoInput.addEventListener('change', async () => {
+        const file = photoInput.files?.[0];
+        if (!file) return;
+
+        const reader = new FileReader();
+        reader.onload = (e) => {
+          if (e.target?.result) avatarPreview.src = e.target.result;
+        };
+        reader.readAsDataURL(file);
+
+        // Upload to server immediately
+        const formData = new FormData();
+        formData.append('photo', file);
+        formData.append('firstName', document.getElementById('firstName').value || 'Super');
+        formData.append('lastName', document.getElementById('lastName').value || 'Admin');
+
+        try {
+          const res = await fetch('/api/admin/profile', {
+            method: 'PUT',
+            credentials: 'same-origin',
+            body: formData
+          });
+          const result = await res.json();
+          if (res.ok) {
+            if (window.showToast) window.showToast('Profile photo updated!');
+          } else {
+            if (window.showToast) window.showToast(result.error || 'Failed to upload photo', 'error');
+          }
+        } catch (err) {
+          if (window.showToast) window.showToast('Error uploading photo', 'error');
+        }
+      });
+    }
+
+    // Form submit
+    if (profileForm && saveBtn) {
+      profileForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        
+        saveBtnText.style.display = 'none';
+        saveBtnSpinner.style.display = 'inline-block';
+        saveBtn.disabled = true;
+
+        const formData = new FormData(profileForm);
+
+        try {
+          const res = await fetch('/api/admin/profile', {
+            method: 'PUT',
+            credentials: 'same-origin',
+            body: formData
+          });
+          const result = await res.json();
+
+          if (res.ok) {
+            if (window.showToast) window.showToast('Super Admin profile updated successfully!');
+            const fn = formData.get('firstName');
+            const ln = formData.get('lastName');
+            if (displayAdminName && fn && ln) {
+              displayAdminName.textContent = `${fn} ${ln}`;
+            }
+          } else {
+            if (window.showToast) window.showToast(result.error || 'Failed to update profile', 'error');
+          }
+        } catch (err) {
+          if (window.showToast) window.showToast('An error occurred while saving profile', 'error');
+        } finally {
+          saveBtnText.style.display = 'inline-block';
+          saveBtnSpinner.style.display = 'none';
+          saveBtn.disabled = false;
+        }
+      });
+    }
+  });
+</script>

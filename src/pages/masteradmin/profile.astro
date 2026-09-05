@@ -1,0 +1,130 @@
+---
+import DashboardLayout from '../../layouts/DashboardLayout.astro';
+import { getDb } from '../../lib/db';
+import { users } from '../../db/schema';
+import { eq } from 'drizzle-orm';
+
+const payload = Astro.locals.user;
+if (!payload || (payload.userType !== 'masteradmin' && payload.userType !== 'superadmin')) {
+  return Astro.redirect('/login');
+}
+
+const db = getDb();
+const url = new URL(Astro.request.url);
+const targetUserId = url.searchParams.get('id') || payload.userId;
+
+const userRecord = await db.select().from(users).where(eq(users.id, targetUserId)).get();
+---
+
+<DashboardLayout title="MasterAdmin Profile Oversight" userType="masteradmin" activePath="/masteradmin/users">
+  <div class="dashboard-header mb-4">
+    <div class="header-titles">
+      <span class="badge-tag">Account Profile Inspection</span>
+      <h1>{userRecord ? `${userRecord.firstName} ${userRecord.lastName}` : 'MasterAdmin Profile'}</h1>
+      <p class="subtitle">{userRecord?.email || 'masteradmin@recruitnest.com'}</p>
+    </div>
+  </div>
+
+  <div class="card profile-card">
+    <div class="profile-header">
+      <img src={userRecord?.avatarUrl || '/images/default-avatar.png'} class="profile-avatar" alt="Avatar" />
+      <div>
+        <h2>{userRecord?.firstName} {userRecord?.lastName}</h2>
+        <span class="badge badge-purple" style="text-transform: capitalize;">{userRecord?.userType || 'masteradmin'}</span>
+        <span class={`status-pill status-${userRecord?.verifiedStatus === 'verified' ? 'success' : 'warning'}`} style="margin-left: 0.5rem;">
+          {userRecord?.verifiedStatus || 'verified'}
+        </span>
+      </div>
+    </div>
+
+    <div class="profile-details">
+      <div class="detail-group">
+        <label>Email Address</label>
+        <div>{userRecord?.email}</div>
+      </div>
+      <div class="detail-group">
+        <label>Company / Organization</label>
+        <div>{userRecord?.companyName || 'RecruitNest System Governance'}</div>
+      </div>
+      <div class="detail-group">
+        <label>Industry</label>
+        <div>{userRecord?.companyIndustry || 'Software & Recruitment AI'}</div>
+      </div>
+      <div class="detail-group">
+        <label>Subscription Plan</label>
+        <div>{userRecord?.planId || 'Master Access Tier'}</div>
+      </div>
+    </div>
+  </div>
+</DashboardLayout>
+
+<style>
+  .dashboard-header {
+    margin-bottom: 2rem;
+  }
+  .badge-tag {
+    font-size: 0.75rem;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: #A78BFA;
+    background: rgba(167, 139, 250, 0.12);
+    padding: 0.2rem 0.6rem;
+    border-radius: 6px;
+  }
+  .header-titles h1 {
+    font-size: 1.75rem;
+    font-weight: 800;
+    color: var(--color-text-main);
+    margin: 0.3rem 0 0.2rem 0;
+  }
+  .subtitle {
+    font-size: 0.92rem;
+    color: var(--color-text-muted);
+    margin: 0;
+  }
+
+  .profile-card {
+    padding: 2rem;
+    max-width: 650px;
+  }
+  .profile-header {
+    display: flex;
+    align-items: center;
+    gap: 1.25rem;
+    padding-bottom: 1.5rem;
+    border-bottom: 1px solid var(--color-border);
+    margin-bottom: 1.5rem;
+  }
+  .profile-avatar {
+    width: 64px;
+    height: 64px;
+    border-radius: 50%;
+    object-fit: cover;
+  }
+  .profile-header h2 {
+    font-size: 1.35rem;
+    font-weight: 800;
+    color: var(--color-text-main);
+    margin: 0 0 0.35rem 0;
+  }
+
+  .profile-details {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1.25rem;
+  }
+  .detail-group label {
+    font-size: 0.78rem;
+    font-weight: 700;
+    color: var(--color-text-muted);
+    text-transform: uppercase;
+    margin-bottom: 0.25rem;
+    display: block;
+  }
+  .detail-group div {
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: var(--color-text-main);
+  }
+</style>

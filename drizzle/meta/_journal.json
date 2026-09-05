@@ -1,0 +1,76 @@
+{
+  "version": "7",
+  "dialect": "sqlite",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "6",
+      "when": 1785868946610,
+      "tag": "0000_slim_bullseye",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "6",
+      "when": 1786175676906,
+      "tag": "0001_tense_vin_gonzales",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1786175834111,
+      "tag": "0002_graceful_hitman",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "6",
+      "when": 1786186119024,
+      "tag": "0003_young_venus",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "6",
+      "when": 1786693644851,
+      "tag": "0004_petite_meggan",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "6",
+      "when": 1786775024287,
+      "tag": "0005_last_eternals",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "6",
+      "when": 1787040971794,
+      "tag": "0006_lumpy_maverick",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "6",
+      "when": 1787046739120,
+      "tag": "0007_faulty_franklin_storm",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "6",
+      "when": 1787139716466,
+      "tag": "0008_pretty_susan_delgado",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "6",
+      "when": 1787811541154,
+      "tag": "0009_rapid_talos",
+      "breakpoints": true
+    }
+  ]
+}

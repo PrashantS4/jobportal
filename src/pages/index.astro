@@ -1,0 +1,3063 @@
+---
+import Layout from "../layouts/Layout.astro";
+
+// Redirect logged-in users to their respective role dashboard
+const payload = Astro.locals.user as any;
+if (payload) {
+  if (payload.userType === "employer") {
+    return Astro.redirect("/employer");
+  } else if (payload.userType === "employee") {
+    return Astro.redirect("/dashboard");
+  } else if (payload.userType === "admin") {
+    return Astro.redirect("/admin");
+  } else if (payload.userType === "superadmin") {
+    return Astro.redirect("/superadmin");
+  } else if (payload.userType === "masteradmin") {
+    return Astro.redirect("/masteradmin");
+  }
+}
+---
+
+<Layout
+  title="RecruitNest - AI-Powered Job & Talent Matching Platform"
+  description="Discover top tech jobs or hire world-class candidates with AI candidate screening, real-time application tracking, and automated interview scheduling."
+  keywords="tech jobs, AI hiring, candidate screening, developer jobs, recruitment software, remote jobs, SaaS hiring platform"
+  schemaType="SoftwareApplication"
+>
+  <!-- Navigation Header -->
+  <header class="landing-nav">
+    <div class="nav-container">
+      <div class="logo">
+        <a
+          href="/"
+          style="display: flex; align-items: center; gap: 0.5rem; text-decoration: none; color: inherit;"
+        >
+          <svg
+            width="28"
+            height="28"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2.5"
+            class="logo-icon"
+          >
+            <path
+              d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"
+            ></path>
+            <polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline>
+            <line x1="12" y1="22.08" x2="12" y2="12"></line>
+          </svg>
+          <span>RecruitNest</span>
+        </a>
+      </div>
+      <nav class="nav-links">
+        <a href="/" class="active">Home</a>
+        <a href="/pricing">Pricing</a>
+        <a href="/about">About</a>
+      </nav>
+      <div class="nav-actions">
+        <button
+          type="button"
+          class="theme-toggle-btn"
+          aria-label="Toggle Light/Dark Theme"
+          title="Toggle Light/Dark Theme"
+        >
+          <svg
+            class="sun-icon"
+            width="20"
+            height="20"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            ><circle cx="12" cy="12" r="5"></circle><line
+              x1="12"
+              y1="1"
+              x2="12"
+              y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line><line
+              x1="4.22"
+              y1="4.22"
+              x2="5.64"
+              y2="5.64"></line><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"
+            ></line><line x1="1" y1="12" x2="3" y2="12"></line><line
+              x1="21"
+              y1="12"
+              x2="23"
+              y2="12"></line><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"
+            ></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line></svg
+          >
+          <svg
+            class="moon-icon"
+            width="20"
+            height="20"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            ><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"
+            ></path></svg
+          >
+        </button>
+        <a href="/login" class="btn btn-outline">Log in</a>
+        <a href="/pricing" class="btn btn-primary btn-glow">
+          <span class="btn-text-desktop">Get Started Free</span>
+          <span class="btn-text-mobile">Get Started</span>
+        </a>
+      </div>
+    </div>
+  </header>
+
+  <main>
+    <!-- Hero Section -->
+    <section class="hero">
+      <div class="hero-container">
+        <div class="hero-content">
+          <div class="badge-pill">
+            <span class="dot-green"></span> Connecting Talent with Opportunity
+          </div>
+          <h1 class="hero-title reveal-on-scroll">
+            Find Your Dream Job <br /> Build Your <span class="text-gradient"
+              >Future</span
+            >
+          </h1>
+          <p class="hero-subtitle">
+            Discover thousands of opportunities from top companies and take the
+            next step in your career.
+          </p>
+
+          <div class="search-box">
+            <div class="search-input-group">
+              <svg
+                class="search-icon"
+                width="18"
+                height="18"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                ><circle cx="11" cy="11" r="8"></circle><line
+                  x1="21"
+                  y1="21"
+                  x2="16.65"
+                  y2="16.65"></line></svg
+              >
+              <input
+                type="text"
+                placeholder="Job title, keywords, or company"
+              />
+            </div>
+            <div class="search-divider"></div>
+            <div class="search-input-group">
+              <svg
+                class="search-icon"
+                width="18"
+                height="18"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                ><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"
+                ></path><circle cx="12" cy="10" r="3"></circle></svg
+              >
+              <input type="text" placeholder="Location" />
+            </div>
+            <a href="/jobs" class="btn btn-primary btn-search btn-glow"
+              >Search Jobs &rarr;</a
+            >
+          </div>
+
+          <div class="popular-searches">
+            <span class="popular-label">Popular Searches:</span>
+            <a href="#" class="search-tag">UI/UX Designer</a>
+            <a href="#" class="search-tag">React Developer</a>
+            <a href="#" class="search-tag">Product Manager</a>
+            <a href="#" class="search-tag">Data Scientist</a>
+          </div>
+        </div>
+
+        <div class="hero-image">
+          <div class="animated-hero-graphic">
+            <div class="glow-orb orb-1"></div>
+            <div class="glow-orb orb-2"></div>
+
+            <div class="glass-dashboard animate-float">
+              <div class="dashboard-header reveal-on-scroll">
+                <div class="window-controls">
+                  <span class="control-dot close"></span>
+                  <span class="control-dot minimize"></span>
+                  <span class="control-dot maximize"></span>
+                </div>
+                <div class="dashboard-title text-gradient">AI Match Engine</div>
+              </div>
+
+              <div class="dashboard-body">
+                <div class="match-ring-container">
+                  <svg class="match-ring" viewBox="0 0 100 100">
+                    <circle
+                      cx="50"
+                      cy="50"
+                      r="42"
+                      fill="none"
+                      stroke="rgba(255,255,255,0.05)"
+                      stroke-width="8"></circle>
+                    <circle
+                      cx="50"
+                      cy="50"
+                      r="42"
+                      fill="none"
+                      stroke="url(#ringGradient)"
+                      stroke-width="8"
+                      stroke-dasharray="264"
+                      stroke-dashoffset="60"
+                      stroke-linecap="round"
+                      class="ring-progress"></circle>
+                    <defs>
+                      <linearGradient
+                        id="ringGradient"
+                        x1="0%"
+                        y1="0%"
+                        x2="100%"
+                        y2="100%"
+                      >
+                        <stop offset="0%" stop-color="#A78BFA"></stop>
+                        <stop offset="100%" stop-color="#60A5FA"></stop>
+                      </linearGradient>
+                    </defs>
+                  </svg>
+                  <div class="match-score">
+                    <span class="score-number"
+                      >98<span class="percent">%</span></span
+                    >
+                    <span class="score-text">Match</span>
+                  </div>
+                </div>
+
+                <div class="dashboard-stats">
+                  <div class="stat-bar-group">
+                    <div class="stat-label">Skills Alignment</div>
+                    <div class="stat-bar">
+                      <div
+                        class="stat-fill"
+                        style="width: 95%; background: var(--color-primary);"
+                      >
+                      </div>
+                    </div>
+                  </div>
+                  <div class="stat-bar-group">
+                    <div class="stat-label">Experience Level</div>
+                    <div class="stat-bar">
+                      <div
+                        class="stat-fill"
+                        style="width: 100%; background: #60A5FA;"
+                      >
+                      </div>
+                    </div>
+                  </div>
+                  <div class="stat-bar-group">
+                    <div class="stat-label">Culture Fit</div>
+                    <div class="stat-bar">
+                      <div
+                        class="stat-fill"
+                        style="width: 85%; background: #FDBA74;"
+                      >
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="dashboard-footer">
+                <div class="candidate-pulse">
+                  <div class="pulse-dot"></div>
+                  <span>Analyzing opportunities...</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Stats Section -->
+    <section class="stats">
+      <div class="stats-container">
+        <div class="stat-card reveal-on-scroll delay-100">
+          <div class="stat-icon-wrapper">
+            <svg
+              width="24"
+              height="24"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              ><rect x="2" y="7" width="20" height="14" rx="2" ry="2"
+              ></rect><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"
+              ></path></svg
+            >
+          </div>
+          <div class="stat-info">
+            <h3>9,999+</h3>
+            <p>Active Job Listings</p>
+          </div>
+        </div>
+
+        <div class="stat-card reveal-on-scroll delay-200">
+          <div class="stat-icon-wrapper">
+            <svg
+              width="24"
+              height="24"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              ><path
+                d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"
+              ></path><polyline points="14 2 14 8 20 8"></polyline><line
+                x1="16"
+                y1="13"
+                x2="8"
+                y2="13"></line><line x1="16" y1="17" x2="8" y2="17"
+              ></line><polyline points="10 9 9 9 8 9"></polyline></svg
+            >
+          </div>
+          <div class="stat-info">
+            <h3>100K+</h3>
+            <p>Resumes Added</p>
+          </div>
+        </div>
+
+        <div class="stat-card reveal-on-scroll delay-300">
+          <div class="stat-icon-wrapper">
+            <svg
+              width="24"
+              height="24"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              ><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"
+              ></path><polyline points="9 22 9 12 15 12 15 22"></polyline></svg
+            >
+          </div>
+          <div class="stat-info">
+            <h3>10K+</h3>
+            <p>Companies Hiring</p>
+          </div>
+        </div>
+
+        <div class="stat-card reveal-on-scroll delay-400">
+          <div class="stat-icon-wrapper">
+            <svg
+              width="24"
+              height="24"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              ><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"
+              ></path><circle cx="12" cy="7" r="4"></circle></svg
+            >
+          </div>
+          <div class="stat-info">
+            <h3>50K+</h3>
+            <p>Happy Candidates</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Trusted By -->
+    <section class="trusted-by">
+      <p class="trusted-label">TRUSTED BY INNOVATIVE COMPANIES WORLDWIDE</p>
+      <div class="marquee-wrapper">
+        <div class="trusted-logos marquee">
+          <span>Enterprises</span><span class="dot-separator">•</span>
+          <span>Acme Corp</span><span class="dot-separator">•</span>
+          <span>Globex</span><span class="dot-separator">•</span>
+          <span>Soylent</span><span class="dot-separator">•</span>
+          <span>Initech</span><span class="dot-separator">•</span>
+          <span>Umbrella Corp</span><span class="dot-separator">•</span>
+          <!-- Duplicate for seamless scrolling -->
+          <span>Enterprises</span><span class="dot-separator">•</span>
+          <span>Acme Corp</span><span class="dot-separator">•</span>
+          <span>Globex</span><span class="dot-separator">•</span>
+          <span>Soylent</span><span class="dot-separator">•</span>
+          <span>Initech</span><span class="dot-separator">•</span>
+          <span>Umbrella Corp</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- How It Works -->
+    <section class="how-it-works">
+      <div class="section-header reveal-on-scroll">
+        <h2>How RecruitNest Works</h2>
+        <p>Three simple steps to your next big career move</p>
+      </div>
+      <div class="steps-grid">
+        <div class="step-card reveal-on-scroll delay-100">
+          <div class="step-number">1</div>
+          <h3>Create an Account</h3>
+          <p>
+            Sign up in seconds, build your profile, and tell us what you're
+            looking for.
+          </p>
+        </div>
+        <div class="step-card reveal-on-scroll delay-200">
+          <div class="step-number">2</div>
+          <h3>Find Opportunities</h3>
+          <p>
+            Browse thousands of curated jobs or let our smart AI recommend the
+            best matches.
+          </p>
+        </div>
+        <div class="step-card reveal-on-scroll delay-300">
+          <div class="step-number">3</div>
+          <h3>Apply & Get Hired</h3>
+          <p>
+            Submit applications with one click, track your status, and land the
+            job.
+          </p>
+        </div>
+      </div>
+    </section>
+
+    <!-- Bento Features Section -->
+    <section class="bento-features">
+      <div class="section-header reveal-on-scroll">
+        <div class="bento-badge">Premium Software</div>
+        <h2>Powerful tools to accelerate your career</h2>
+        <p>
+          Everything you need to find, apply, and land your dream job, all in
+          one platform.
+        </p>
+      </div>
+
+      <div class="bento-grid">
+        <!-- Card 1: Large AI Match -->
+        <div class="bento-card bento-large reveal-on-scroll delay-100">
+          <div class="bento-content">
+            <div class="bento-icon-wrapper">
+              <svg
+                width="24"
+                height="24"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                ><line x1="12" y1="1" x2="12" y2="23"></line><path
+                  d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"
+                ></path></svg
+              >
+            </div>
+            <h3>AI-Powered Matching Engine</h3>
+            <p>
+              Our intelligent algorithm analyzes your skills, experience, and
+              preferences to recommend jobs where you have the highest
+              probability of success.
+            </p>
+          </div>
+          <div class="bento-visual match-visual">
+            <div class="mock-ui">
+              <div class="mock-ring">
+                <svg viewBox="0 0 36 36" class="circular-chart"
+                  ><path
+                    class="circle-bg"
+                    d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
+                  ></path><path
+                    class="circle"
+                    stroke-dasharray="98, 100"
+                    d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
+                  ></path><text x="18" y="20.35" class="percentage">98%</text
+                  ></svg
+                >
+              </div>
+              <div class="mock-lines">
+                <div
+                  class="ml-line"
+                  style="width: 80%; background: var(--color-primary)"
+                >
+                </div>
+                <div class="ml-line" style="width: 60%; background: #60A5FA">
+                </div>
+                <div class="ml-line" style="width: 90%; background: #F59E0B">
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Card 2: Small Tracking -->
+        <div class="bento-card bento-small reveal-on-scroll delay-200">
+          <div class="bento-content">
+            <div class="bento-icon-wrapper blue">
+              <svg
+                width="24"
+                height="24"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                ><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"
+                ></polyline></svg
+              >
+            </div>
+            <h3>Real-time Tracking</h3>
+            <p>
+              Never wonder about your application status again. Get instant push
+              notifications.
+            </p>
+          </div>
+        </div>
+
+        <!-- Card 3: Small Verified -->
+        <div class="bento-card bento-small reveal-on-scroll delay-300">
+          <div class="bento-content">
+            <div class="bento-icon-wrapper green">
+              <svg
+                width="24"
+                height="24"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                ><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline
+                  points="22 4 12 14.01 9 11.01"></polyline></svg
+              >
+            </div>
+            <h3>Verified Employers</h3>
+            <p>
+              Every company is manually vetted by our team to ensure your
+              complete safety.
+            </p>
+          </div>
+        </div>
+
+        <!-- Card 4: Wide 1-Click Apply -->
+        <div class="bento-card bento-wide reveal-on-scroll delay-400">
+          <div class="bento-content">
+            <div class="bento-icon-wrapper orange">
+              <svg
+                width="24"
+                height="24"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                ><path d="M5 12h14"></path><path d="m12 5 7 7-7 7"></path></svg
+              >
+            </div>
+            <h3>1-Click Application</h3>
+            <p>
+              Say goodbye to long repetitive forms. Upload your resume once and
+              apply to hundreds of opportunities instantly.
+            </p>
+          </div>
+          <div class="bento-visual apply-visual">
+            <a href="/pricing" class="mock-btn" style="text-decoration: none;"
+              >Apply Now <svg
+                width="16"
+                height="16"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                ><polyline points="20 6 9 17 4 12"></polyline></svg
+              ></a
+            >
+          </div>
+        </div>
+
+        <!-- Card 5: Small Messaging -->
+        <div class="bento-card bento-small reveal-on-scroll delay-500">
+          <div class="bento-content">
+            <div
+              class="bento-icon-wrapper"
+              style="background: rgba(236, 72, 153, 0.1); color: #EC4899; border-color: rgba(236, 72, 153, 0.2);"
+            >
+              <svg
+                width="24"
+                height="24"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                ><path
+                  d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"
+                ></path></svg
+              >
+            </div>
+            <h3>Direct Chat</h3>
+            <p>
+              Message employers directly through our platform once you're
+              shortlisted.
+            </p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Interactive AI Career Simulator Showcase -->
+    <section class="interactive-showcase">
+      <div class="glow-backdrop">
+        <div class="interactive-glow orb-purple"></div>
+        <div class="interactive-glow orb-cyan"></div>
+      </div>
+
+      <div class="showcase-container">
+        <div class="showcase-header text-center reveal-on-scroll">
+          <div
+            class="bento-badge"
+            style="background: rgba(167, 139, 250, 0.15); border-color: rgba(167, 139, 250, 0.4);"
+          >
+            ✨ Universal AI Career Simulator
+          </div>
+          <h2>
+            See How RecruitNest Matches You To <br class="desktop-br" /><span
+              class="gradient-text">Top Careers Across Every Industry</span
+            >
+          </h2>
+          <p class="showcase-subtitle">
+            Select any industry track below to simulate real-time AI scoring,
+            ATS match estimation, and market salary benchmarks.
+          </p>
+        </div>
+
+        <!-- Role Selector Pills Across Diverse Industries -->
+        <div class="role-selector reveal-on-scroll">
+          <button type="button" class="role-btn active" data-role="react">
+            <span class="role-icon"
+              ><svg
+                width="15"
+                height="15"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2.2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                ><polyline points="16 18 22 12 16 6"></polyline><polyline
+                  points="8 6 2 12 8 18"></polyline></svg
+              ></span
+            > Software &amp; FullStack
+          </button>
+          <button type="button" class="role-btn" data-role="ai">
+            <span class="role-icon"
+              ><svg
+                width="15"
+                height="15"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2.2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                ><rect x="2" y="3" width="20" height="14" rx="2"></rect><path
+                  d="M8 21h8M12 17v4"></path><circle
+                  cx="8.5"
+                  cy="10"
+                  r="1.5"
+                  fill="currentColor"></circle><circle
+                  cx="15.5"
+                  cy="10"
+                  r="1.5"
+                  fill="currentColor"></circle><path
+                  d="M9 13s1 1.5 3 1.5 3-1.5 3-1.5"></path></svg
+              ></span
+            > AI &amp; Machine Learning
+          </button>
+          <button type="button" class="role-btn" data-role="design">
+            <span class="role-icon"
+              ><svg
+                width="15"
+                height="15"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2.2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                ><circle cx="12" cy="12" r="3"></circle><path
+                  d="M12 1v4M12 19v4M4.22 4.22l2.83 2.83M16.95 16.95l2.83 2.83M1 12h4M19 12h4M4.22 19.78l2.83-2.83M16.95 7.05l2.83-2.83"
+                ></path></svg
+              ></span
+            > UI/UX &amp; Product Design
+          </button>
+          <button type="button" class="role-btn" data-role="marketing">
+            <span class="role-icon"
+              ><svg
+                width="15"
+                height="15"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2.2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                ><path d="M22 12h-4l-3 9L9 3l-3 9H2"></path></svg
+              ></span
+            > Growth &amp; Marketing
+          </button>
+          <button type="button" class="role-btn" data-role="sales">
+            <span class="role-icon"
+              ><svg
+                width="15"
+                height="15"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2.2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                ><rect x="2" y="7" width="20" height="14" rx="2"></rect><path
+                  d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"></path></svg
+              ></span
+            > Enterprise Sales
+          </button>
+          <button type="button" class="role-btn" data-role="finance">
+            <span class="role-icon"
+              ><svg
+                width="15"
+                height="15"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2.2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                ><line x1="12" y1="1" x2="12" y2="23"></line><path
+                  d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"
+                ></path></svg
+              ></span
+            > Finance &amp; Operations
+          </button>
+          <button type="button" class="role-btn" data-role="security">
+            <span class="role-icon"
+              ><svg
+                width="15"
+                height="15"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2.2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                ><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"
+                ></path></svg
+              ></span
+            > Cloud &amp; Cybersecurity
+          </button>
+          <button type="button" class="role-btn" data-role="hr">
+            <span class="role-icon"
+              ><svg
+                width="15"
+                height="15"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2.2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                ><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"
+                ></path><circle cx="9" cy="7" r="4"></circle><path
+                  d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"
+                ></path></svg
+              ></span
+            > HR &amp; Talent Lead
+          </button>
+          <button type="button" class="role-btn" data-role="product">
+            <span class="role-icon"
+              ><svg
+                width="15"
+                height="15"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2.2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                ><path d="M12 20h9"></path><path
+                  d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"
+                ></path></svg
+              ></span
+            > Product Manager
+          </button>
+          <button type="button" class="role-btn" data-role="data">
+            <span class="role-icon"
+              ><svg
+                width="15"
+                height="15"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2.2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                ><line x1="18" y1="20" x2="18" y2="10"></line><line
+                  x1="12"
+                  y1="20"
+                  x2="12"
+                  y2="4"></line><line x1="6" y1="20" x2="6" y2="14"></line><line
+                  x1="2"
+                  y1="20"
+                  x2="22"
+                  y2="20"></line></svg
+              ></span
+            > Data Scientist
+          </button>
+        </div>
+
+        <!-- Interactive Glass Dashboard -->
+        <div class="interactive-card glass-panel reveal-on-scroll">
+          <div class="interactive-grid">
+            <!-- Left Side: Dynamic Match Stats -->
+            <div class="interactive-left">
+              <div class="active-role-badge">
+                <span id="displayRoleName">React / FullStack Dev</span>
+              </div>
+              <div class="match-score-hero">
+                <div class="score-ring-wrapper">
+                  <svg viewBox="0 0 100 100" class="hero-ring">
+                    <circle
+                      cx="50"
+                      cy="50"
+                      r="42"
+                      fill="none"
+                      class="ring-bg-circle"
+                      stroke-width="8"></circle>
+                    <circle
+                      id="heroScoreCircle"
+                      cx="50"
+                      cy="50"
+                      r="42"
+                      fill="none"
+                      stroke="url(#heroGradient)"
+                      stroke-width="8"
+                      stroke-dasharray="264"
+                      stroke-dashoffset="15"
+                      stroke-linecap="round"
+                      class="ring-progress-anim"></circle>
+                    <defs>
+                      <linearGradient
+                        id="heroGradient"
+                        x1="0%"
+                        y1="0%"
+                        x2="100%"
+                        y2="100%"
+                      >
+                        <stop offset="0%" stop-color="#A78BFA"></stop>
+                        <stop offset="50%" stop-color="#60A5FA"></stop>
+                        <stop offset="100%" stop-color="#EC4899"></stop>
+                      </linearGradient>
+                    </defs>
+                  </svg>
+                  <div class="score-center-text">
+                    <span id="heroScoreNum">96%</span>
+                    <small>MATCH</small>
+                  </div>
+                </div>
+                <div class="salary-estimate-box">
+                  <span class="salary-label">ESTIMATED SALARY RANGE</span>
+                  <h3 id="heroSalaryVal">
+                    $120,000 - $165,000<small>/yr</small>
+                  </h3>
+                  <div id="heroDemandTag" class="salary-tag">
+                    🔥 High Demand (420+ Openings)
+                  </div>
+                </div>
+              </div>
+
+              <!-- Skill Progress Bars -->
+              <div class="skills-breakdown">
+                <div class="skill-item">
+                  <div class="skill-meta">
+                    <span id="skill1Name">Frontend Core (React/Next)</span>
+                    <strong id="skill1Val">98%</strong>
+                  </div>
+                  <div class="bar-track">
+                    <div
+                      id="skill1Bar"
+                      class="bar-fill bg-purple"
+                      style="width: 98%;"
+                    >
+                    </div>
+                  </div>
+                </div>
+
+                <div class="skill-item">
+                  <div class="skill-meta">
+                    <span id="skill2Name">Backend APIs & DB</span>
+                    <strong id="skill2Val">92%</strong>
+                  </div>
+                  <div class="bar-track">
+                    <div
+                      id="skill2Bar"
+                      class="bar-fill bg-cyan"
+                      style="width: 92%;"
+                    >
+                    </div>
+                  </div>
+                </div>
+
+                <div class="skill-item">
+                  <div class="skill-meta">
+                    <span id="skill3Name">System Architecture</span>
+                    <strong id="skill3Val">88%</strong>
+                  </div>
+                  <div class="bar-track">
+                    <div
+                      id="skill3Bar"
+                      class="bar-fill bg-amber"
+                      style="width: 88%;"
+                    >
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Right Side: Live AI Insight & Instant Action -->
+            <div class="interactive-right">
+              <div class="ai-insight-box">
+                <div class="ai-box-header">
+                  <span class="sparkle-icon">✨</span>
+                  <h4>AI Recruiter Recommendation</h4>
+                </div>
+                <p id="heroAiInsightText">
+                  "Your candidate profile scores in the top 4% of applicants for
+                  FullStack roles. Employers respond 3.5x faster when you apply
+                  with a verified profile."
+                </p>
+                <div class="ats-badge">
+                  <span>ATS Resume Compatibility:</span>
+                  <strong id="heroAtsScore">98/100 PASSED</strong>
+                </div>
+              </div>
+
+              <div class="cta-glow-card">
+                <h3>Ready to land your dream role?</h3>
+                <p>
+                  Build your profile in 60 seconds and let top tech employers
+                  compete for you.
+                </p>
+                <a href="/pricing" class="btn btn-gradient-glow">
+                  <span>Create Account Now</span>
+                  <svg
+                    width="18"
+                    height="18"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2.5"
+                    ><line x1="5" y1="12" x2="19" y2="12"></line><polyline
+                      points="12 5 19 12 12 19"></polyline></svg
+                  >
+                </a>
+                <small class="guarantee-note"
+                  >🔒 Join thousands of professionals • Takes < 1 min</small
+                >
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Testimonials -->
+    <section class="testimonials">
+      <div class="section-header reveal-on-scroll">
+        <h2>Success Stories</h2>
+        <p>Hear from people who found their dream jobs</p>
+      </div>
+      <div class="testimonials-grid">
+        <div class="testimonial-card reveal-on-scroll delay-100">
+          <div class="stars">⭐⭐⭐⭐⭐</div>
+          <p class="quote">
+            "I applied to dozens of places with no luck. Within a week on
+            RecruitNest, I had three interviews and landed a Senior Developer
+            role!"
+          </p>
+          <div class="author">
+            <div
+              class="author-avatar"
+              style="background:#DBEAFE; color:#1D4ED8;"
+            >
+              JD
+            </div>
+            <div class="author-info">
+              <strong>John Doe</strong>
+              <span>Software Engineer at Acme</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="testimonial-card reveal-on-scroll delay-200">
+          <div class="stars">⭐⭐⭐⭐⭐</div>
+          <p class="quote">
+            "The UI is incredibly clean and the AI recommendations actually
+            suggested jobs I wanted. Best job board out there by far."
+          </p>
+          <div class="author">
+            <div
+              class="author-avatar"
+              style="background:#FCE7F3; color:#BE185D;"
+            >
+              AS
+            </div>
+            <div class="author-info">
+              <strong>Alice Smith</strong>
+              <span>Product Manager</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="testimonial-card reveal-on-scroll delay-300">
+          <div class="stars">⭐⭐⭐⭐⭐</div>
+          <p class="quote">
+            "As an employer, the quality of candidates we get from RecruitNest
+            is unmatched. We filled our open positions in half the time."
+          </p>
+          <div class="author">
+            <div
+              class="author-avatar"
+              style="background:#FEF3C7; color:#B45309;"
+            >
+              RJ
+            </div>
+            <div class="author-info">
+              <strong>Robert Jones</strong>
+              <span>HR Director at Globex</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- CTA Section -->
+    <section class="bottom-cta">
+      <div class="cta-content">
+        <h2>Ready to take the next step?</h2>
+        <p>
+          Join thousands of companies and professionals already using
+          RecruitNest.
+        </p>
+        <div class="cta-actions">
+          <a href="/pricing" class="btn btn-primary btn-lg btn-glow"
+            >Create Free Account</a
+          >
+          <a href="/about" class="btn btn-outline btn-lg">Learn More &rarr;</a>
+        </div>
+      </div>
+    </section>
+  </main>
+</Layout>
+
+<style is:global>
+  /* Buttons */
+  .section-header {
+    text-align: center;
+    margin-bottom: 3.5rem;
+  }
+  .section-header h2 {
+    font-size: 2.25rem;
+    margin: 0 0 0.5rem 0;
+    font-weight: 700;
+  }
+  .section-header p {
+    color: var(--color-text-muted);
+    font-size: 1.1rem;
+    margin: 0;
+  }
+
+  /* Hero Section */
+  .hero {
+    padding: 4rem 2rem 2rem;
+    background: var(--color-surface);
+    position: relative;
+    overflow: hidden;
+  }
+  .hero::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background-image:
+      linear-gradient(to right, var(--color-border) 1px, transparent 1px),
+      linear-gradient(to bottom, var(--color-border) 1px, transparent 1px);
+    background-size: 40px 40px;
+    mask-image: radial-gradient(
+      circle at top center,
+      black 40%,
+      transparent 80%
+    );
+    -webkit-mask-image: radial-gradient(
+      circle at top center,
+      black 40%,
+      transparent 80%
+    );
+    opacity: 0.4;
+    z-index: 0;
+    pointer-events: none;
+  }
+  .hero-container {
+    max-width: 1180px;
+    margin: 0 auto;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 3rem;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+    z-index: 1;
+    padding: 0 1.5rem;
+  }
+
+  .badge-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    background: var(--color-primary-light);
+    color: var(--color-primary-dark);
+    padding: 0.4rem 1rem;
+    border-radius: 2rem;
+    font-size: 0.875rem;
+    font-weight: 500;
+    margin-bottom: 1.5rem;
+  }
+  .dot-green {
+    width: 6px;
+    height: 6px;
+    background: var(--color-primary);
+    border-radius: 50%;
+  }
+
+  .hero-title {
+    font-size: 3.5rem;
+    font-weight: 700;
+    line-height: 1.1;
+    letter-spacing: -0.02em;
+    margin: 0 0 1.25rem 0;
+    color: var(--color-text-main);
+  }
+  .text-primary {
+    color: var(--color-primary);
+  }
+
+  .hero-subtitle {
+    font-size: 1.1rem;
+    color: var(--color-text-muted);
+    line-height: 1.6;
+    max-width: 500px;
+    margin: 0 0 2rem 0;
+  }
+
+  /* Search Box */
+  .search-box {
+    display: flex;
+    align-items: center;
+    background: var(--color-surface);
+    backdrop-filter: blur(12px);
+    border: 1px solid var(--color-border);
+    padding: 0.5rem;
+    border-radius: 3rem;
+    margin-bottom: 2rem;
+    max-width: 600px;
+    box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.3);
+    transition:
+      box-shadow 0.3s ease,
+      transform 0.3s ease,
+      border-color 0.3s ease;
+  }
+  .search-box:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 15px 35px -5px rgba(167, 139, 250, 0.2);
+    border-color: rgba(167, 139, 250, 0.4);
+  }
+  .search-input-group {
+    display: flex;
+    align-items: center;
+    flex: 1;
+    padding: 0 0.5rem;
+    gap: 0.75rem;
+  }
+  .search-icon {
+    color: #9ca3af;
+    flex-shrink: 0;
+  }
+  .search-input-group input {
+    border: none;
+    outline: none;
+    width: 100%;
+    font-size: 0.95rem;
+    color: var(--color-text-main);
+    background: transparent;
+  }
+  .search-input-group input::placeholder {
+    color: #9ca3af;
+  }
+  .search-divider {
+    width: 1px;
+    height: 24px;
+    background: var(--color-border);
+    margin: 0 0.5rem;
+  }
+  .btn-search {
+    padding: 0.75rem 1.5rem;
+    white-space: nowrap;
+    border-radius: 2rem;
+    transition:
+      transform 0.2s,
+      box-shadow 0.2s;
+  }
+  .btn-search:hover {
+    transform: scale(1.05);
+    box-shadow: 0 0 20px rgba(167, 139, 250, 0.4);
+  }
+
+  .popular-searches {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+    margin-top: 1.25rem;
+    margin-bottom: 1.75rem;
+  }
+  .popular-label {
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--color-text-main);
+  }
+  .search-tag {
+    font-size: 0.75rem;
+    padding: 0.25rem 0.75rem;
+    border: 1px solid var(--color-border);
+    border-radius: 2rem;
+    color: var(--color-text-muted);
+    transition: all 0.2s;
+  }
+  .search-tag:hover {
+    border-color: var(--color-primary);
+    color: var(--color-text-main);
+    background: rgba(167, 139, 250, 0.1);
+  }
+
+  /* Hero Image & Animations */
+  .hero-content {
+    animation: fade-in-up 1s ease-out forwards;
+    max-width: 540px;
+    margin: 0 auto;
+  }
+
+  .hero-image {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    animation: fade-in-up 1s ease-out 0.2s forwards;
+    opacity: 0;
+  }
+
+  .animated-hero-graphic {
+    position: relative;
+    width: 100%;
+    height: 400px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .glow-orb {
+    position: absolute;
+    border-radius: 50%;
+    filter: blur(60px);
+    opacity: 0.6;
+    animation: pulse-glow 8s infinite alternate;
+  }
+
+  .orb-1 {
+    width: 250px;
+    height: 250px;
+    background: var(--color-primary);
+    top: 10%;
+    left: 10%;
+    animation-delay: 0s;
+  }
+
+  .orb-2 {
+    width: 200px;
+    height: 200px;
+    background: #60a5fa;
+    bottom: 0%;
+    right: 15%;
+    animation-delay: -4s;
+  }
+
+  .glass-dashboard {
+    position: relative;
+    z-index: 10;
+    width: 360px;
+    background: rgba(255, 255, 255, 0.03);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 1.25rem;
+    box-shadow:
+      0 25px 50px -12px rgba(0, 0, 0, 0.5),
+      inset 0 1px 0 rgba(255, 255, 255, 0.1);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  .dashboard-header {
+    background: rgba(0, 0, 0, 0.2);
+    padding: 1rem 1.25rem;
+    display: flex;
+    align-items: center;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  }
+
+  .window-controls {
+    display: flex;
+    gap: 0.4rem;
+    margin-right: 1rem;
+  }
+
+  .control-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+  }
+  .control-dot.close {
+    background: #ef4444;
+  }
+  .control-dot.minimize {
+    background: #f59e0b;
+  }
+  .control-dot.maximize {
+    background: #10b981;
+  }
+
+  .dashboard-title {
+    font-size: 0.75rem;
+    font-weight: 600;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    color: var(--color-text-muted);
+    margin: 0 auto;
+    padding-right: 2rem;
+  }
+
+  .dashboard-body {
+    padding: 2rem;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2rem;
+  }
+
+  .match-ring-container {
+    position: relative;
+    width: 140px;
+    height: 140px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .match-ring {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    transform: rotate(-90deg);
+  }
+
+  .ring-progress {
+    animation: drawRing 2s ease-out forwards;
+  }
+
+  .match-score {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    z-index: 2;
+  }
+
+  .score-number {
+    font-size: 2.5rem;
+    font-weight: 700;
+    color: var(--color-text-main);
+    line-height: 1;
+  }
+  .score-number .percent {
+    font-size: 1.25rem;
+    color: var(--color-text-muted);
+  }
+
+  .score-text {
+    font-size: 0.85rem;
+    color: var(--color-primary);
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin-top: 0.25rem;
+  }
+
+  .dashboard-stats {
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+  }
+
+  .stat-bar-group {
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+  }
+
+  .stat-label {
+    font-size: 0.75rem;
+    color: var(--color-text-muted);
+    font-weight: 500;
+  }
+
+  .stat-bar {
+    width: 100%;
+    height: 6px;
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 1rem;
+    overflow: hidden;
+  }
+
+  .stat-fill {
+    height: 100%;
+    border-radius: 1rem;
+    animation: fillBar 1.5s ease-out forwards;
+    transform-origin: left;
+  }
+
+  .dashboard-footer {
+    padding: 1rem 2rem;
+    background: rgba(0, 0, 0, 0.1);
+    border-top: 1px solid rgba(255, 255, 255, 0.05);
+  }
+
+  .candidate-pulse {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.75rem;
+    font-size: 0.8rem;
+    color: var(--color-text-muted);
+  }
+
+  .pulse-dot {
+    width: 8px;
+    height: 8px;
+    background: var(--color-primary);
+    border-radius: 50%;
+    box-shadow: 0 0 10px var(--color-primary);
+    animation: pulse-dot-anim 2s infinite;
+  }
+
+  @keyframes drawRing {
+    from {
+      stroke-dashoffset: 264;
+    }
+    to {
+      stroke-dashoffset: 60;
+    }
+  }
+
+  @keyframes fillBar {
+    from {
+      transform: scaleX(0);
+    }
+    to {
+      transform: scaleX(1);
+    }
+  }
+
+  @keyframes pulse-dot-anim {
+    0% {
+      transform: scale(0.95);
+      opacity: 0.5;
+      box-shadow: 0 0 0 0 rgba(167, 139, 250, 0.4);
+    }
+    70% {
+      transform: scale(1);
+      opacity: 1;
+      box-shadow: 0 0 0 6px rgba(167, 139, 250, 0);
+    }
+    100% {
+      transform: scale(0.95);
+      opacity: 0.5;
+      box-shadow: 0 0 0 0 rgba(167, 139, 250, 0);
+    }
+  }
+
+  @keyframes float {
+    0% {
+      transform: translateY(0px);
+    }
+    50% {
+      transform: translateY(-15px);
+    }
+    100% {
+      transform: translateY(0px);
+    }
+  }
+
+  @keyframes pulse-glow {
+    0% {
+      transform: scale(1);
+      opacity: 0.3;
+    }
+    100% {
+      transform: scale(1.2);
+      opacity: 0.7;
+    }
+  }
+
+  @keyframes fade-in-up {
+    from {
+      opacity: 0;
+      transform: translateY(30px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  .animate-float {
+    animation: float 6s ease-in-out infinite;
+  }
+
+  /* Stats Section */
+  .stats {
+    background: var(--color-bg);
+    padding: 4rem 2rem;
+  }
+  .stats-container {
+    max-width: 1280px;
+    margin: 0 auto;
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 1.5rem;
+  }
+  .stat-card {
+    background: var(--color-surface);
+    backdrop-filter: blur(12px);
+    padding: 1.5rem;
+    border-radius: 1rem;
+    display: flex;
+    align-items: center;
+    gap: 1.25rem;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.2);
+    border: 1px solid var(--color-border);
+    transition:
+      transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275),
+      box-shadow 0.3s ease,
+      border-color 0.3s ease;
+  }
+  .stat-card:hover {
+    transform: translateY(-8px) scale(1.02);
+    box-shadow:
+      0 20px 25px -5px rgba(167, 139, 250, 0.15),
+      0 10px 10px -5px rgba(167, 139, 250, 0.05);
+    border-color: rgba(167, 139, 250, 0.4);
+  }
+  .stat-icon-wrapper {
+    width: 52px;
+    height: 52px;
+    border-radius: 0.75rem;
+    background: rgba(167, 139, 250, 0.1);
+    color: var(--color-primary);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+  }
+  .stat-info h3 {
+    margin: 0 0 0.25rem 0;
+    font-size: 1.5rem;
+    font-weight: 700;
+  }
+  .stat-info p {
+    margin: 0;
+    font-size: 0.85rem;
+    color: var(--color-text-muted);
+    word-break: normal;
+    overflow-wrap: normal;
+  }
+
+  /* Trusted By */
+  .trusted-by {
+    padding: 3rem 2rem 5rem;
+    text-align: center;
+    background: var(--color-bg);
+  }
+  .trusted-label {
+    font-size: 0.75rem;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    color: #9ca3af;
+    margin: 0 0 2rem 0;
+  }
+  .marquee-wrapper {
+    overflow: hidden;
+    position: relative;
+    width: 100%;
+    mask-image: linear-gradient(
+      to right,
+      transparent,
+      black 15%,
+      black 85%,
+      transparent
+    );
+    -webkit-mask-image: linear-gradient(
+      to right,
+      transparent,
+      black 15%,
+      black 85%,
+      transparent
+    );
+  }
+  .trusted-logos.marquee {
+    display: flex;
+    align-items: center;
+    gap: 3.5rem;
+    color: #9ca3af;
+    font-size: 1.5rem;
+    font-weight: 700;
+    opacity: 0.5;
+    width: max-content;
+    white-space: nowrap;
+    flex-wrap: nowrap;
+    animation: scroll-left 25s linear infinite;
+  }
+  .trusted-logos.marquee span {
+    white-space: nowrap;
+    word-break: normal;
+    overflow-wrap: normal;
+    flex-shrink: 0;
+  }
+  @keyframes scroll-left {
+    0% {
+      transform: translateX(0);
+    }
+    100% {
+      transform: translateX(-50%);
+    }
+  }
+  .dot-separator {
+    font-size: 0.5rem;
+  }
+
+  /* How It Works */
+  .how-it-works {
+    padding: 6rem 2rem;
+    background: var(--color-surface);
+  }
+  .steps-grid {
+    max-width: 1000px;
+    margin: 0 auto;
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 3rem;
+  }
+  .step-card {
+    text-align: center;
+    transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  .step-card:hover {
+    transform: translateY(-10px);
+  }
+  .step-number {
+    width: 60px;
+    height: 60px;
+    background: rgba(167, 139, 250, 0.1);
+    color: var(--color-primary);
+    font-size: 1.5rem;
+    font-weight: 700;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0 auto 1.5rem;
+    transition: all 0.3s ease;
+  }
+  .step-card:hover .step-number {
+    background: var(--color-primary);
+    color: white;
+    transform: scale(1.1);
+    box-shadow: 0 10px 25px rgba(167, 139, 250, 0.4);
+  }
+  .step-card h3 {
+    font-size: 1.25rem;
+    margin: 0 0 0.75rem 0;
+  }
+  .step-card p {
+    color: var(--color-text-muted);
+    line-height: 1.6;
+    margin: 0;
+  }
+
+  /* Bento Features */
+  .bento-features {
+    padding: 8rem 2rem;
+    background: var(--color-bg);
+    overflow: hidden;
+  }
+  .bento-badge {
+    display: inline-block;
+    padding: 0.35rem 1rem;
+    background: rgba(167, 139, 250, 0.1);
+    color: var(--color-primary);
+    border: 1px solid rgba(167, 139, 250, 0.3);
+    border-radius: 2rem;
+    font-size: 0.75rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin-bottom: 1rem;
+  }
+  .bento-grid {
+    max-width: 1100px;
+    margin: 0 auto;
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    grid-template-rows: auto auto;
+    gap: 1.5rem;
+  }
+  .bento-card {
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: 1.5rem;
+    padding: 2.5rem;
+    display: flex;
+    flex-direction: column;
+    position: relative;
+    overflow: hidden;
+    transition:
+      transform 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275),
+      box-shadow 0.4s ease,
+      border-color 0.4s ease;
+  }
+  .bento-card:hover {
+    transform: translateY(-8px);
+    box-shadow: 0 25px 50px -12px rgba(167, 139, 250, 0.15);
+    border-color: rgba(167, 139, 250, 0.4);
+  }
+
+  /* Gradient Hover Effect overlay */
+  .bento-card::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: radial-gradient(
+      circle at 50% 0%,
+      rgba(167, 139, 250, 0.15),
+      transparent 70%
+    );
+    opacity: 0;
+    transition: opacity 0.4s ease;
+    pointer-events: none;
+    z-index: 1;
+  }
+  .bento-card:hover::before {
+    opacity: 1;
+  }
+
+  .bento-large {
+    grid-column: span 2;
+    grid-row: span 2;
+    flex-direction: row;
+    gap: 2rem;
+    align-items: center;
+  }
+  .bento-wide {
+    grid-column: span 2;
+    flex-direction: row;
+    align-items: center;
+    gap: 2rem;
+  }
+  .bento-small {
+    grid-column: span 1;
+  }
+
+  .bento-content {
+    flex: 1;
+    z-index: 2;
+  }
+
+  .bento-icon-wrapper {
+    width: 48px;
+    height: 48px;
+    border-radius: 12px;
+    background: rgba(167, 139, 250, 0.1);
+    color: var(--color-primary);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 1.25rem;
+    border: 1px solid rgba(167, 139, 250, 0.2);
+  }
+  .bento-icon-wrapper.blue {
+    background: rgba(59, 130, 246, 0.1);
+    color: #3b82f6;
+    border-color: rgba(59, 130, 246, 0.2);
+  }
+  .bento-icon-wrapper.green {
+    background: rgba(16, 185, 129, 0.1);
+    color: #10b981;
+    border-color: rgba(16, 185, 129, 0.2);
+  }
+  .bento-icon-wrapper.orange {
+    background: rgba(245, 158, 11, 0.1);
+    color: #f59e0b;
+    border-color: rgba(245, 158, 11, 0.2);
+  }
+
+  .bento-card h3 {
+    font-size: 1.5rem;
+    margin: 0 0 1rem 0;
+    color: var(--color-text-main);
+  }
+  .bento-card p {
+    color: var(--color-text-muted);
+    line-height: 1.6;
+    margin: 0;
+    font-size: 0.95rem;
+  }
+
+  .bento-visual {
+    flex: 1;
+    display: flex;
+    justify-content: flex-end;
+    align-items: center;
+    z-index: 2;
+  }
+
+  .mock-ui {
+    background: rgba(0, 0, 0, 0.3);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 1rem;
+    padding: 2rem;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 1.5rem;
+    width: 100%;
+    max-width: 250px;
+    box-shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.5);
+  }
+  .mock-ring {
+    width: 100px;
+    height: 100px;
+  }
+  .circular-chart {
+    display: block;
+    margin: 0 auto;
+    max-width: 80%;
+    max-height: 250px;
+  }
+  .circle-bg {
+    fill: none;
+    stroke: rgba(255, 255, 255, 0.05);
+    stroke-width: 2.5;
+  }
+  .circle {
+    fill: none;
+    stroke-width: 2.5;
+    stroke-linecap: round;
+    animation: progress 2s ease-out forwards;
+    stroke: var(--color-primary);
+  }
+  @keyframes progress {
+    0% {
+      stroke-dasharray: 0 100;
+    }
+  }
+  .percentage {
+    fill: white;
+    font-family: sans-serif;
+    font-size: 0.5em;
+    text-anchor: middle;
+    font-weight: bold;
+  }
+
+  .mock-lines {
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+  .ml-line {
+    height: 6px;
+    border-radius: 3px;
+  }
+
+  .mock-btn {
+    background: var(--color-primary);
+    color: white;
+    border: none;
+    padding: 0.75rem 1.5rem;
+    border-radius: 2rem;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    cursor: pointer;
+    box-shadow: 0 0 20px rgba(167, 139, 250, 0.4);
+    animation: pulse-dot-anim 2s infinite;
+  }
+
+  @media (max-width: 900px) {
+    .bento-large,
+    .bento-wide {
+      grid-column: span 3;
+      flex-direction: column;
+      text-align: center;
+    }
+    .bento-small {
+      grid-column: span 3;
+      text-align: center;
+    }
+    .bento-visual {
+      justify-content: center;
+      width: 100%;
+      margin-top: 2rem;
+    }
+    .bento-icon-wrapper {
+      margin: 0 auto 1.25rem;
+    }
+  }
+
+  /* Testimonials */
+  .testimonials {
+    padding: 6rem 2rem;
+    background: var(--color-surface);
+  }
+  .testimonials-grid {
+    max-width: 1200px;
+    margin: 0 auto;
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 2rem;
+  }
+  .testimonial-card {
+    background: var(--color-surface);
+    backdrop-filter: blur(12px);
+    border: 1px solid var(--color-border);
+    padding: 2rem;
+    border-radius: 1rem;
+    display: flex;
+    flex-direction: column;
+    transition:
+      transform 0.3s ease,
+      border-color 0.3s ease,
+      box-shadow 0.3s ease;
+  }
+  .testimonial-card:hover {
+    transform: translateY(-8px);
+    border-color: var(--color-primary);
+    box-shadow: 0 12px 30px rgba(167, 139, 250, 0.15);
+  }
+  .stars {
+    font-size: 1.25rem;
+    margin-bottom: 1rem;
+    letter-spacing: 2px;
+  }
+  .quote {
+    color: var(--color-text-main);
+    font-size: 1.05rem;
+    line-height: 1.6;
+    margin: 0 0 1.5rem 0;
+    flex: 1;
+    font-style: italic;
+  }
+  .author {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+  }
+  .author-avatar {
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 700;
+  }
+  .author-info {
+    display: flex;
+    flex-direction: column;
+  }
+  .author-info strong {
+    font-size: 0.95rem;
+  }
+  .author-info span {
+    font-size: 0.8rem;
+    color: var(--color-text-muted);
+  }
+
+  /* CTA Section */
+  .bottom-cta {
+    padding: 6rem 2rem;
+    text-align: center;
+    border-top: 1px solid var(--color-border);
+    position: relative;
+    overflow: hidden;
+    background: linear-gradient(45deg, #7c3aed, #2563eb, #ec4899);
+    background-size: 200% 200%;
+    animation: gradient-shift 10s ease infinite;
+  }
+  @keyframes gradient-shift {
+    0% {
+      background-position: 0% 50%;
+    }
+    50% {
+      background-position: 100% 50%;
+    }
+    100% {
+      background-position: 0% 50%;
+    }
+  }
+  .cta-content {
+    max-width: 600px;
+    margin: 0 auto;
+    position: relative;
+    z-index: 2;
+  }
+  .cta-content h2 {
+    font-size: 2.5rem;
+    color: #ffffff;
+    margin: 0 0 1rem 0;
+    text-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
+  }
+  .cta-content p {
+    font-size: 1.1rem;
+    color: rgba(255, 255, 255, 0.9);
+    margin: 0 0 2rem 0;
+  }
+  .cta-actions {
+    display: flex;
+    justify-content: center;
+    gap: 1rem;
+  }
+  .bottom-cta .btn-primary {
+    background: #ffffff;
+    color: #7c3aed;
+  }
+  .bottom-cta .btn-primary:hover {
+    box-shadow: 0 10px 25px rgba(255, 255, 255, 0.4);
+  }
+  .bottom-cta .btn-outline {
+    border-color: rgba(255, 255, 255, 0.5);
+    color: #ffffff !important;
+    background: transparent !important;
+  }
+  .bottom-cta .btn-outline:hover {
+    background: rgba(255, 255, 255, 0.1) !important;
+    border-color: #ffffff;
+  }
+
+  /* LIGHT MODE ENHANCEMENTS */
+  html[data-theme="light"] body {
+    background: linear-gradient(135deg, #f8fafc 0%, #eff6ff 100%);
+  }
+  html[data-theme="light"] .hero {
+    background:
+      radial-gradient(
+        circle at top right,
+        rgba(167, 139, 250, 0.1),
+        transparent 50%
+      ),
+      radial-gradient(
+        circle at bottom left,
+        rgba(96, 165, 250, 0.1),
+        transparent 50%
+      ),
+      #ffffff;
+  }
+  html[data-theme="light"] .glass-dashboard {
+    background: rgba(255, 255, 255, 0.7);
+    box-shadow:
+      0 25px 50px -12px rgba(124, 58, 237, 0.15),
+      0 0 0 1px rgba(0, 0, 0, 0.05);
+  }
+  html[data-theme="light"] .dashboard-header {
+    background: rgba(255, 255, 255, 0.5);
+    border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+  }
+  html[data-theme="light"] .match-ring circle[stroke="rgba(255,255,255,0.05)"] {
+    stroke: rgba(0, 0, 0, 0.05) !important;
+  }
+  html[data-theme="light"] .dashboard-footer {
+    background: rgba(0, 0, 0, 0.02);
+    border-top: 1px solid rgba(0, 0, 0, 0.05);
+  }
+  html[data-theme="light"] .stat-bar {
+    background: rgba(0, 0, 0, 0.05);
+  }
+  html[data-theme="light"] .mock-ui {
+    background: #ffffff;
+    border: 1px solid #cbd5e1;
+    box-shadow: 0 10px 25px -5px rgba(15, 23, 42, 0.08);
+  }
+  html[data-theme="light"] .circle-bg {
+    stroke: #e2e8f0;
+  }
+  html[data-theme="light"] .circle {
+    stroke: #7c3aed;
+  }
+  html[data-theme="light"] .percentage {
+    fill: #0f172a;
+    font-weight: 800;
+  }
+  html[data-theme="light"] .mock-btn {
+    background: #7c3aed;
+    color: #ffffff;
+    box-shadow: 0 4px 14px rgba(124, 58, 237, 0.35);
+  }
+  html[data-theme="light"] .interactive-card {
+    background: #ffffff;
+    border: 1px solid #cbd5e1;
+    box-shadow: 0 25px 50px -12px rgba(124, 58, 237, 0.15);
+  }
+  html[data-theme="light"] .how-it-works {
+    background: #f1f5f9;
+  }
+  html[data-theme="light"] .step-card {
+    background: #ffffff;
+    padding: 2.25rem 1.75rem;
+    border-radius: 1.5rem;
+    border: 1px solid #cbd5e1;
+    box-shadow:
+      0 10px 25px -5px rgba(15, 23, 42, 0.07),
+      0 4px 6px -2px rgba(15, 23, 42, 0.03);
+  }
+  html[data-theme="light"] .step-number {
+    background: linear-gradient(135deg, #ede9fe 0%, #ddd6fe 100%);
+    color: #6d28d9;
+    border: 1px solid #c4b5fd;
+    box-shadow: 0 4px 12px rgba(109, 40, 217, 0.15);
+    font-weight: 800;
+  }
+  html[data-theme="light"] .bento-features {
+    background: #f8fafc;
+  }
+  html[data-theme="light"] .bento-badge {
+    background: #ede9fe;
+    color: #6d28d9;
+    border: 1px solid #c4b5fd;
+    font-weight: 700;
+    box-shadow: 0 2px 8px rgba(109, 40, 217, 0.08);
+  }
+  html[data-theme="light"] .bento-card {
+    background: #ffffff;
+    border: 1px solid #cbd5e1;
+    box-shadow:
+      0 10px 25px -5px rgba(15, 23, 42, 0.07),
+      0 4px 6px -2px rgba(15, 23, 42, 0.03);
+  }
+  html[data-theme="light"] .bento-icon-wrapper {
+    background: #ede9fe !important;
+    color: #6d28d9 !important;
+    border: 1px solid #c4b5fd !important;
+    box-shadow: 0 2px 8px rgba(109, 40, 217, 0.12);
+  }
+  html[data-theme="light"] .bento-icon-wrapper.blue {
+    background: #dbeafe !important;
+    color: #1d4ed8 !important;
+    border: 1px solid #93c5fd !important;
+    box-shadow: 0 2px 8px rgba(29, 78, 216, 0.12);
+  }
+  html[data-theme="light"] .bento-icon-wrapper.green {
+    background: #d1fae5 !important;
+    color: #047857 !important;
+    border: 1px solid #6ee7b7 !important;
+    box-shadow: 0 2px 8px rgba(4, 120, 87, 0.12);
+  }
+  html[data-theme="light"] .bento-icon-wrapper.orange {
+    background: #fef3c7 !important;
+    color: #b45309 !important;
+    border: 1px solid #fcd34d !important;
+    box-shadow: 0 2px 8px rgba(180, 83, 9, 0.12);
+  }
+  html[data-theme="light"] .bento-card h3,
+  html[data-theme="light"] .step-card h3,
+  html[data-theme="light"] .section-header h2 {
+    color: #0f172a !important;
+    font-weight: 700;
+  }
+  html[data-theme="light"] .bento-card p,
+  html[data-theme="light"] .step-card p {
+    color: #334155 !important;
+    font-weight: 450;
+    line-height: 1.6;
+  }
+  html[data-theme="light"] .section-header p {
+    color: #475569 !important;
+    font-weight: 500;
+  }
+  html[data-theme="light"] .stat-card,
+  html[data-theme="light"] .testimonial-card {
+    background: #ffffff;
+    box-shadow:
+      0 10px 25px -5px rgba(15, 23, 42, 0.07),
+      0 4px 6px -2px rgba(15, 23, 42, 0.03);
+    border: 1px solid #cbd5e1;
+  }
+  html[data-theme="light"] .bento-card:hover,
+  html[data-theme="light"] .stat-card:hover,
+  html[data-theme="light"] .step-card:hover,
+  html[data-theme="light"] .testimonial-card:hover {
+    box-shadow:
+      0 20px 35px -10px rgba(124, 58, 237, 0.18),
+      0 8px 16px -4px rgba(124, 58, 237, 0.06);
+    border-color: #8b5cf6;
+  }
+  html[data-theme="light"] .search-box {
+    background: #ffffff;
+    border-color: #cbd5e1;
+    box-shadow: 0 10px 25px -5px rgba(15, 23, 42, 0.08);
+  }
+  html[data-theme="light"] .search-box:hover {
+    box-shadow: 0 15px 35px -5px rgba(124, 58, 237, 0.15);
+    border-color: rgba(124, 58, 237, 0.4);
+  }
+  html[data-theme="light"] .stats,
+  html[data-theme="light"] .trusted-by {
+    background: linear-gradient(180deg, #f8fafc 0%, #ffffff 100%);
+  }
+  html[data-theme="light"] .interactive-showcase,
+  html[data-theme="light"] .testimonials {
+    background: #f8fafc;
+  }
+  html[data-theme="light"] .hero-title {
+    color: #0f172a;
+  }
+  html[data-theme="light"] .ring-bg-circle {
+    stroke: rgba(0, 0, 0, 0.05) !important;
+  }
+  html[data-theme="light"] .score-center-text span {
+    color: #0f172a;
+  }
+  html[data-theme="light"] .ai-insight-box {
+    background: rgba(124, 58, 237, 0.03);
+    border: 1px solid rgba(124, 58, 237, 0.1);
+  }
+
+  @media (max-width: 992px) {
+    .hero-container {
+      grid-template-columns: minmax(0, 1fr);
+      gap: 3rem;
+      text-align: center;
+    }
+    .hero-subtitle {
+      margin-left: auto;
+      margin-right: auto;
+    }
+    .search-box {
+      margin-left: auto;
+      margin-right: auto;
+    }
+    .popular-searches {
+      justify-content: center;
+      margin-bottom: 2.25rem !important;
+    }
+    .hero-image {
+      justify-content: center;
+      margin-top: 1.5rem !important;
+      width: 100% !important;
+    }
+    .animated-hero-graphic {
+      height: auto !important;
+      min-height: 380px !important;
+    }
+    .stats-container {
+      grid-template-columns: repeat(2, 1fr);
+    }
+    .steps-grid,
+    .testimonials-grid {
+      grid-template-columns: minmax(0, 1fr);
+      gap: 2rem;
+    }
+  }
+
+  .btn-text-mobile { display: none; }
+  @media (max-width: 520px) {
+    .btn-text-desktop { display: none !important; }
+    .btn-text-mobile { display: inline !important; }
+  }
+
+  @media (max-width: 640px) {
+    .hero {
+      padding: 3rem 0.85rem 2rem !important;
+    }
+    .hero-title {
+      font-size: clamp(1.75rem, 6.5vw, 2.5rem) !important;
+      line-height: 1.25 !important;
+      word-break: break-word !important;
+      overflow-wrap: break-word !important;
+    }
+    .search-box {
+      flex-direction: column !important;
+      border-radius: 1.25rem !important;
+      padding: 0.65rem !important;
+      gap: 0.5rem !important;
+      width: 100% !important;
+      max-width: 100% !important;
+      box-sizing: border-box !important;
+    }
+    .popular-searches {
+      margin-bottom: 2rem !important;
+      gap: 0.45rem !important;
+    }
+    .hero-image {
+      margin-top: 1.75rem !important;
+      clear: both !important;
+    }
+    .animated-hero-graphic {
+      height: auto !important;
+      min-height: 350px !important;
+    }
+    .search-divider {
+      display: none !important;
+    }
+    .search-input-group {
+      width: 100% !important;
+      min-width: 0 !important;
+      padding: 0.4rem 0.5rem !important;
+      box-sizing: border-box !important;
+    }
+    .search-input-group input {
+      width: 100% !important;
+      min-width: 0 !important;
+    }
+    .btn-search {
+      width: 100% !important;
+      justify-content: center !important;
+      border-radius: 0.85rem !important;
+    }
+    .stats-container {
+      grid-template-columns: repeat(2, 1fr) !important;
+      gap: 0.85rem !important;
+    }
+    .stat-card {
+      flex-direction: column !important;
+      align-items: flex-start !important;
+      text-align: left !important;
+      padding: 1.15rem 1rem !important;
+      gap: 0.65rem !important;
+      box-sizing: border-box !important;
+    }
+    .stat-icon-wrapper {
+      width: 44px !important;
+      height: 44px !important;
+      border-radius: 0.65rem !important;
+    }
+    .stat-icon-wrapper svg {
+      width: 20px !important;
+      height: 20px !important;
+    }
+    .stat-info h3 {
+      font-size: 1.35rem !important;
+      line-height: 1.2 !important;
+      margin: 0 0 0.2rem 0 !important;
+    }
+    .stat-info p {
+      font-size: 0.78rem !important;
+      line-height: 1.35 !important;
+      word-break: normal !important;
+      overflow-wrap: normal !important;
+      hyphens: none !important;
+      color: var(--color-text-muted) !important;
+    }
+    .marquee-wrapper {
+      overflow: hidden !important;
+      max-width: 100% !important;
+      width: 100% !important;
+    }
+    .trusted-logos.marquee {
+      display: flex !important;
+      align-items: center !important;
+      gap: 1.5rem !important;
+      font-size: 1.1rem !important;
+      white-space: nowrap !important;
+      flex-wrap: nowrap !important;
+      width: max-content !important;
+      animation: scroll-left 15s linear infinite !important;
+    }
+    .cta-content h2 {
+      font-size: 1.6rem !important;
+    }
+    .cta-actions {
+      flex-direction: column !important;
+      width: 100% !important;
+    }
+    .cta-actions .btn {
+      width: 100% !important;
+    }
+    .glass-dashboard {
+      width: 100% !important;
+      max-width: 100% !important;
+      min-width: 0 !important;
+      box-sizing: border-box !important;
+      overflow: hidden !important;
+    }
+  }
+
+  /* Interactive AI Career Simulator Showcase */
+  .interactive-showcase {
+    position: relative;
+    padding: 7rem 2rem;
+    background: radial-gradient(
+      circle at 50% 30%,
+      var(--showcase-glow-bg, rgba(30, 27, 75, 0.5)),
+      var(--color-bg) 70%
+    );
+    overflow: hidden;
+
+    /* Theme Variables - Dark Mode Default */
+    --ring-bg: rgba(255, 255, 255, 0.06);
+    --panel-text: #ffffff;
+    --panel-text-muted: #9ca3af;
+    --panel-text-subtle: #d1d5db;
+    --panel-bg: rgba(15, 17, 26, 0.65);
+    --panel-border: rgba(255, 255, 255, 0.1);
+    --panel-shadow:
+      0 30px 60px -15px rgba(0, 0, 0, 0.6),
+      inset 0 1px 0 rgba(255, 255, 255, 0.15);
+    --inner-card-bg: rgba(0, 0, 0, 0.3);
+    --inner-card-border: rgba(255, 255, 255, 0.08);
+    --ai-box-bg: rgba(167, 139, 250, 0.06);
+    --ai-box-border: rgba(167, 139, 250, 0.25);
+    --role-btn-bg: rgba(255, 255, 255, 0.04);
+    --role-btn-border: rgba(255, 255, 255, 0.1);
+    --role-btn-hover-color: white;
+    --role-btn-hover-bg: rgba(167, 139, 250, 0.15);
+    --role-btn-hover-border: rgba(167, 139, 250, 0.4);
+    --bar-track-bg: rgba(255, 255, 255, 0.08);
+    --showcase-gradient: linear-gradient(
+      135deg,
+      #a78bfa 0%,
+      #60a5fa 50%,
+      #ec4899 100%
+    );
+    --showcase-btn-gradient: linear-gradient(
+      135deg,
+      #a78bfa 0%,
+      #60a5fa 50%,
+      #ec4899 100%
+    );
+    --showcase-btn-shadow: 0 4px 15px rgba(167, 139, 250, 0.3);
+    --showcase-btn-hover-shadow: 0 8px 25px rgba(167, 139, 250, 0.4);
+  }
+
+  /* Light Theme overrides for Interactive Showcase */
+  [data-theme="light"] .interactive-showcase {
+    --showcase-glow-bg: rgba(124, 58, 237, 0.05);
+    --ring-bg: rgba(0, 0, 0, 0.08);
+    --panel-text: var(--color-text-main);
+    --panel-text-muted: var(--color-text-muted);
+    --panel-text-subtle: #475569;
+    --panel-bg: rgba(255, 255, 255, 0.85);
+    --panel-border: rgba(124, 58, 237, 0.15);
+    --panel-shadow:
+      0 20px 40px -15px rgba(15, 23, 42, 0.08),
+      inset 0 1px 0 rgba(255, 255, 255, 0.9);
+    --inner-card-bg: rgba(124, 58, 237, 0.02);
+    --inner-card-border: rgba(124, 58, 237, 0.08);
+    --ai-box-bg: rgba(124, 58, 237, 0.04);
+    --ai-box-border: rgba(124, 58, 237, 0.12);
+    --role-btn-bg: rgba(124, 58, 237, 0.03);
+    --role-btn-border: rgba(124, 58, 237, 0.08);
+    --role-btn-hover-color: var(--color-primary);
+    --role-btn-hover-bg: rgba(124, 58, 237, 0.08);
+    --role-btn-hover-border: rgba(124, 58, 237, 0.25);
+    --bar-track-bg: rgba(124, 58, 237, 0.08);
+    --showcase-gradient: var(--gradient-brand);
+    --showcase-btn-gradient: var(--gradient-brand);
+    --showcase-btn-shadow: 0 4px 15px rgba(124, 58, 237, 0.2);
+    --showcase-btn-hover-shadow: 0 8px 25px rgba(124, 58, 237, 0.35);
+  }
+
+  .glow-backdrop {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+  }
+  .interactive-glow {
+    position: absolute;
+    border-radius: 50%;
+    filter: blur(90px);
+    opacity: 0.15;
+    animation: pulse-glow 10s infinite alternate ease-in-out;
+  }
+  .orb-purple {
+    width: 400px;
+    height: 400px;
+    background: var(--color-primary);
+    top: 5%;
+    left: -100px;
+  }
+  .orb-cyan {
+    width: 350px;
+    height: 350px;
+    background: #60a5fa;
+    bottom: 5%;
+    right: -80px;
+  }
+  .showcase-container {
+    max-width: 1100px;
+    margin: 0 auto;
+    position: relative;
+    z-index: 10;
+  }
+  .showcase-header {
+    text-align: center;
+    max-width: 860px;
+    margin: 0 auto 2.5rem auto;
+  }
+  .showcase-header h2 {
+    font-size: 2.35rem;
+    font-weight: 800;
+    line-height: 1.25;
+    margin: 0 auto 1rem auto;
+    color: var(--color-text-main);
+    text-align: center;
+  }
+  .desktop-br {
+    display: inline;
+  }
+  @media (max-width: 768px) {
+    .desktop-br {
+      display: none;
+    }
+  }
+  .showcase-subtitle {
+    color: var(--color-text-muted);
+    font-size: 1.05rem;
+    max-width: 680px;
+    margin: 0 auto;
+    line-height: 1.6;
+    text-align: center;
+  }
+  .gradient-text {
+    background: var(--showcase-gradient);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+
+  /* Role Selector Tabs */
+  .role-selector {
+    display: flex;
+    justify-content: center;
+    gap: 0.65rem;
+    flex-wrap: wrap;
+    margin-bottom: 2.5rem;
+  }
+  .role-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.75rem 1.5rem;
+    background: var(--role-btn-bg, #ffffff);
+    border: 1px solid var(--role-btn-border, #cbd5e1);
+    border-radius: 2rem;
+    color: var(--color-text-main, #334155);
+    font-size: 0.95rem;
+    font-weight: 600;
+    cursor: pointer;
+    box-shadow: 0 2px 6px rgba(15, 23, 42, 0.05);
+    transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  .role-btn:hover {
+    color: var(--role-btn-hover-color, #6d28d9);
+    background: var(--role-btn-hover-bg, #f3e8ff);
+    border-color: var(--role-btn-hover-border, #a78bfa);
+    transform: translateY(-2px);
+  }
+  .role-btn.active {
+    background: linear-gradient(
+      135deg,
+      var(--color-primary, #7c3aed) 0%,
+      #3b82f6 100%
+    );
+    color: #ffffff !important;
+    border-color: transparent;
+    box-shadow: 0 4px 15px -3px rgba(124, 58, 237, 0.35);
+  }
+  .role-icon {
+    font-size: 1.1rem;
+  }
+
+  /* Glass Panel */
+  .glass-panel {
+    background: var(--panel-bg);
+    backdrop-filter: blur(24px);
+    -webkit-backdrop-filter: blur(24px);
+    border: 1px solid var(--panel-border);
+    border-radius: 1.75rem;
+    padding: 3rem;
+    box-shadow: var(--panel-shadow);
+  }
+  .interactive-grid {
+    display: grid;
+    grid-template-columns: 1.2fr 1fr;
+    gap: 3.5rem;
+    align-items: center;
+  }
+  .active-role-badge {
+    display: inline-block;
+    padding: 0.35rem 1rem;
+    background: rgba(96, 165, 250, 0.12);
+    border: 1px solid rgba(96, 165, 250, 0.3);
+    border-radius: 1rem;
+    color: #60a5fa;
+    font-size: 0.85rem;
+    font-weight: 700;
+    margin-bottom: 1.5rem;
+  }
+  .match-score-hero {
+    display: flex;
+    align-items: center;
+    gap: 2rem;
+    margin-bottom: 2rem;
+  }
+  .score-ring-wrapper {
+    position: relative;
+    width: 110px;
+    height: 110px;
+    min-width: 110px;
+    min-height: 110px;
+    max-width: 110px;
+    max-height: 110px;
+    flex-shrink: 0;
+  }
+  .hero-ring {
+    width: 110px !important;
+    height: 110px !important;
+    max-width: 110px !important;
+    max-height: 110px !important;
+    display: block;
+    transform: rotate(-90deg);
+  }
+  .ring-bg-circle {
+    stroke: var(--ring-bg);
+  }
+  .ring-progress-anim {
+    transition: stroke-dashoffset 1s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  .score-center-text {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+  }
+  .score-center-text span {
+    font-size: 1.75rem;
+    font-weight: 800;
+    color: var(--panel-text);
+    line-height: 1;
+  }
+  .score-center-text small {
+    font-size: 0.65rem;
+    color: var(--color-primary);
+    font-weight: 700;
+    letter-spacing: 0.05em;
+  }
+
+  .salary-estimate-box {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+  }
+  .salary-label {
+    font-size: 0.7rem;
+    font-weight: 700;
+    color: var(--panel-text-muted);
+    letter-spacing: 0.05em;
+  }
+  .salary-estimate-box h3 {
+    font-size: 1.6rem;
+    font-weight: 800;
+    color: var(--panel-text);
+    margin: 0;
+  }
+  .salary-estimate-box h3 small {
+    font-size: 0.9rem;
+    color: var(--panel-text-muted);
+    font-weight: 500;
+  }
+  .salary-tag {
+    font-size: 0.8rem;
+    color: #f59e0b;
+    font-weight: 600;
+  }
+
+  /* Skill Progress Bars */
+  .skills-breakdown {
+    display: flex;
+    flex-direction: column;
+    gap: 1.25rem;
+  }
+  .skill-item {
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+  }
+  .skill-meta {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.875rem;
+    color: var(--color-text-main);
+  }
+  .skill-meta strong {
+    color: var(--color-primary);
+    font-weight: 700;
+  }
+  .bar-track {
+    height: 8px;
+    background: var(--bar-track-bg);
+    border-radius: 4px;
+    overflow: hidden;
+  }
+  .bar-fill {
+    height: 100%;
+    border-radius: 4px;
+    transition: width 1s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  .bg-purple {
+    background: linear-gradient(90deg, #a78bfa, #8b5cf6);
+  }
+  .bg-cyan {
+    background: linear-gradient(90deg, #60a5fa, #3b82f6);
+  }
+  .bg-amber {
+    background: linear-gradient(90deg, #f59e0b, #d97706);
+  }
+
+  /* Right Side AI Box */
+  .ai-insight-box {
+    background: var(--ai-box-bg);
+    border: 1px solid var(--ai-box-border);
+    border-radius: 1.25rem;
+    padding: 1.75rem;
+    margin-bottom: 2rem;
+  }
+  .ai-box-header {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-bottom: 0.75rem;
+  }
+  .sparkle-icon {
+    font-size: 1.25rem;
+  }
+  .ai-box-header h4 {
+    font-size: 1rem;
+    font-weight: 700;
+    color: var(--panel-text);
+    margin: 0;
+  }
+  .ai-insight-box p {
+    color: var(--panel-text-subtle);
+    font-size: 0.925rem;
+    line-height: 1.6;
+    margin: 0 0 1rem 0;
+    font-style: italic;
+  }
+  .ats-badge {
+    font-size: 0.8rem;
+    color: var(--color-text-muted);
+  }
+  .ats-badge strong {
+    color: #10b981;
+  }
+
+  /* CTA Glow Card */
+  .cta-glow-card {
+    text-align: center;
+    background: var(--inner-card-bg);
+    border: 1px solid var(--inner-card-border);
+    border-radius: 1.25rem;
+    padding: 2rem;
+  }
+  .cta-glow-card h3 {
+    font-size: 1.35rem;
+    font-weight: 700;
+    margin: 0 0 0.5rem 0;
+    color: var(--panel-text);
+  }
+  .cta-glow-card p {
+    font-size: 0.9rem;
+    color: var(--color-text-muted);
+    margin: 0 0 1.5rem 0;
+  }
+  .btn-gradient-glow {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.75rem;
+    width: 100%;
+    padding: 0.875rem 2rem;
+    background: var(--showcase-btn-gradient);
+    color: white !important;
+    font-weight: 700;
+    font-size: 1rem;
+    border-radius: 2rem;
+    text-decoration: none;
+    box-shadow: var(--showcase-btn-shadow);
+    transition:
+      transform 0.3s ease,
+      box-shadow 0.3s ease;
+    border: none;
+  }
+  .btn-gradient-glow:hover {
+    transform: translateY(-2px) scale(1.02);
+    box-shadow: var(--showcase-btn-hover-shadow);
+  }
+  .guarantee-note {
+    display: block;
+    font-size: 0.75rem;
+    color: var(--panel-text-muted);
+    margin-top: 0.85rem;
+  }
+
+  @media (max-width: 900px) {
+    .interactive-grid {
+      grid-template-columns: minmax(0, 1fr);
+      gap: 2.5rem;
+    }
+    .glass-panel {
+      padding: 1.75rem;
+    }
+    .showcase-header h2 {
+      font-size: 1.85rem;
+    }
+    .match-score-hero {
+      flex-direction: column;
+      text-align: center;
+      gap: 1rem;
+    }
+  }
+</style>
+
+<script is:inline>
+  document.addEventListener("DOMContentLoaded", () => {
+    const roleData = {
+      react: {
+        name: "Software & FullStack Engineer",
+        score: "96%",
+        dashoffset: 15,
+        salary: "$120,000 - $165,000",
+        demand: "🔥 High Demand (480+ Openings)",
+        s1: {
+          name: "Frontend Core (React/Next.js/TS)",
+          val: "98%",
+          width: "98%",
+        },
+        s2: { name: "Backend APIs & Cloud DBs", val: "92%", width: "92%" },
+        s3: { name: "System Architecture & Scale", val: "88%", width: "88%" },
+        insight:
+          "Your candidate profile scores in the top 4% of applicants for FullStack roles. Employers respond 3.5x faster when you apply with a verified profile.",
+        ats: "98/100 PASSED",
+      },
+      ai: {
+        name: "AI & Machine Learning Engineer",
+        score: "99%",
+        dashoffset: 5,
+        salary: "$145,000 - $210,000",
+        demand: "⚡ Explosive Growth (680+ Openings)",
+        s1: { name: "LLM Orchestration & Python", val: "99%", width: "99%" },
+        s2: { name: "Vector Databases & RAG", val: "95%", width: "95%" },
+        s3: { name: "Model Tuning & PyTorch", val: "91%", width: "91%" },
+        insight:
+          "AI Engineers are in the top 1% highest-paid talent on RecruitNest. Verified AI candidates average 4 interview invites within 72 hours.",
+        ats: "99/100 PASSED",
+      },
+      design: {
+        name: "UI/UX & Product Designer",
+        score: "95%",
+        dashoffset: 18,
+        salary: "$105,000 - $150,000",
+        demand: "✨ Creative Demand (310+ Openings)",
+        s1: { name: "Figma & Design Systems", val: "97%", width: "97%" },
+        s2: { name: "User Research & Usability", val: "92%", width: "92%" },
+        s3: { name: "Interactive Prototyping", val: "89%", width: "89%" },
+        insight:
+          "Designers with structured case studies and measurable impact receive 4.2x more employer interview invitations on RecruitNest.",
+        ats: "96/100 PASSED",
+      },
+      marketing: {
+        name: "Growth & Digital Marketing Lead",
+        score: "94%",
+        dashoffset: 22,
+        salary: "$95,000 - $140,000",
+        demand: "📈 High Demand (390+ Openings)",
+        s1: { name: "Performance & Paid Ads", val: "96%", width: "96%" },
+        s2: { name: "SEO & Content Strategy", val: "91%", width: "91%" },
+        s3: { name: "Funnel Analytics & CRO", val: "87%", width: "87%" },
+        insight:
+          "Data-driven marketing leaders with verified campaign metrics boost candidate interview conversions by over 80%.",
+        ats: "95/100 PASSED",
+      },
+      sales: {
+        name: "Enterprise Sales & Account Executive",
+        score: "97%",
+        dashoffset: 12,
+        salary: "$110,000 - $185,000",
+        demand: "💼 High Demand (520+ Openings)",
+        s1: { name: "B2B Pipeline & Deal Closing", val: "98%", width: "98%" },
+        s2: { name: "Enterprise Solution Selling", val: "94%", width: "94%" },
+        s3: { name: "CRM, Negotiation & Retention", val: "90%", width: "90%" },
+        insight:
+          "Enterprise account executives with proven quota attainment are fast-tracked by top scaleups with direct recruiter outreach.",
+        ats: "97/100 PASSED",
+      },
+      finance: {
+        name: "Finance & Operations Manager",
+        score: "95%",
+        dashoffset: 18,
+        salary: "$115,000 - $160,000",
+        demand: "📊 Strong Demand (290+ Openings)",
+        s1: { name: "Financial Modeling & Planning", val: "96%", width: "96%" },
+        s2: { name: "P&L Strategy & Unit Economics", val: "93%", width: "93%" },
+        s3: { name: "Cross-Functional Operations", val: "89%", width: "89%" },
+        insight:
+          "Strategic finance and operational leaders enjoy strong compensation growth. Verified SaaS metrics modeling drives top-tier offers.",
+        ats: "96/100 PASSED",
+      },
+      security: {
+        name: "Cloud & Cybersecurity Architect",
+        score: "98%",
+        dashoffset: 8,
+        salary: "$140,000 - $195,000",
+        demand: "🛡️ Critical Demand (410+ Openings)",
+        s1: {
+          name: "Cloud Infrastructure (AWS/GCP)",
+          val: "98%",
+          width: "98%",
+        },
+        s2: { name: "Zero Trust & Threat Modeling", val: "95%", width: "95%" },
+        s3: { name: "CI/CD DevSecOps Automation", val: "91%", width: "91%" },
+        insight:
+          "Cybersecurity architects with cloud compliance experience represent one of the highest compensated technical disciplines in 2026.",
+        ats: "99/100 PASSED",
+      },
+      hr: {
+        name: "People Operations & Talent Lead",
+        score: "94%",
+        dashoffset: 22,
+        salary: "$90,000 - $135,000",
+        demand: "👥 Steady Demand (270+ Openings)",
+        s1: {
+          name: "Full-Lifecycle Talent Sourcing",
+          val: "96%",
+          width: "96%",
+        },
+        s2: { name: "Employer Branding & Culture", val: "92%", width: "92%" },
+        s3: { name: "ATS Workflow & HR Compliance", val: "88%", width: "88%" },
+        insight:
+          "Strategic talent acquisition leaders who utilize modern sourcing pipelines achieve 2.8x faster placement velocity.",
+        ats: "95/100 PASSED",
+      },
+      product: {
+        name: "Product Manager",
+        score: "94%",
+        dashoffset: 22,
+        salary: "$130,000 - $175,000",
+        demand: "⭐ Active Hiring (310+ Openings)",
+        s1: { name: "Product Strategy & Specs", val: "95%", width: "95%" },
+        s2: { name: "User Research & Analytics", val: "91%", width: "91%" },
+        s3: { name: "Agile Leadership & Roadmap", val: "93%", width: "93%" },
+        insight:
+          "Tech product managers are fast-tracked by top remote startups. Completing your portfolio section boosts profile views by 240%.",
+        ats: "95/100 PASSED",
+      },
+      data: {
+        name: "Data Scientist",
+        score: "97%",
+        dashoffset: 12,
+        salary: "$125,000 - $170,000",
+        demand: "📈 Strong Demand (290+ Openings)",
+        s1: { name: "Data Modeling & SQL", val: "97%", width: "97%" },
+        s2: { name: "Predictive Analytics", val: "94%", width: "94%" },
+        s3: { name: "Data Visualization & ETL", val: "90%", width: "90%" },
+        insight:
+          "Data Scientists with verified LinkedIn links get prioritized screening. Upload your headshot & resume to rank highest in employer searches.",
+        ats: "97/100 PASSED",
+      },
+    };
+
+    function updateSimulatorUI(data) {
+      if (!data) return;
+      const roleNameEl = document.getElementById("displayRoleName");
+      const scoreNumEl = document.getElementById("heroScoreNum");
+      const circleEl = document.getElementById("heroScoreCircle");
+      const salaryEl = document.getElementById("heroSalaryVal");
+      const demandEl = document.getElementById("heroDemandTag");
+
+      if (roleNameEl) roleNameEl.textContent = data.name;
+      if (scoreNumEl) scoreNumEl.textContent = data.score;
+      if (circleEl) circleEl.style.strokeDashoffset = data.dashoffset;
+      if (salaryEl) salaryEl.innerHTML = `${data.salary}<small>/yr</small>`;
+      if (demandEl) demandEl.textContent = data.demand;
+
+      const s1Name = document.getElementById("skill1Name");
+      const s1Val = document.getElementById("skill1Val");
+      const s1Bar = document.getElementById("skill1Bar");
+      if (s1Name) s1Name.textContent = data.s1.name;
+      if (s1Val) s1Val.textContent = data.s1.val;
+      if (s1Bar) s1Bar.style.width = data.s1.width;
+
+      const s2Name = document.getElementById("skill2Name");
+      const s2Val = document.getElementById("skill2Val");
+      const s2Bar = document.getElementById("skill2Bar");
+      if (s2Name) s2Name.textContent = data.s2.name;
+      if (s2Val) s2Val.textContent = data.s2.val;
+      if (s2Bar) s2Bar.style.width = data.s2.width;
+
+      const s3Name = document.getElementById("skill3Name");
+      const s3Val = document.getElementById("skill3Val");
+      const s3Bar = document.getElementById("skill3Bar");
+      if (s3Name) s3Name.textContent = data.s3.name;
+      if (s3Val) s3Val.textContent = data.s3.val;
+      if (s3Bar) s3Bar.style.width = data.s3.width;
+
+      const insightEl = document.getElementById("heroAiInsightText");
+      const atsEl = document.getElementById("heroAtsScore");
+      if (insightEl) insightEl.textContent = `"${data.insight}"`;
+      if (atsEl) atsEl.textContent = data.ats;
+    }
+
+    // Role Buttons click
+    const buttons = document.querySelectorAll(".role-btn");
+    buttons.forEach((btn) => {
+      btn.addEventListener("click", () => {
+        buttons.forEach((b) => b.classList.remove("active"));
+        btn.classList.add("active");
+        const key = btn.getAttribute("data-role");
+        const data = roleData[key];
+        if (data) updateSimulatorUI(data);
+      });
+    });
+  });
+</script>

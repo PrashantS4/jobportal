@@ -1,0 +1,463 @@
+---
+import { getResumeViewerUrl } from '../lib/resume-helper';
+import DashboardLayout from '../layouts/DashboardLayout.astro';
+import { getDb } from '../lib/db';
+import { applications, jobPostings, users, interviews } from '../db/schema';
+import { eq, desc } from 'drizzle-orm';
+
+// @ts-ignore
+const payload = Astro.locals.user;
+if (!payload || payload.userType !== 'employee') {
+  return Astro.redirect('/login');
+}
+
+const db = getDb();
+
+let userApps: any[] = [];
+let interviewMap = new Map<string, any>();
+let stats = { total: 0, received: 0, under_review: 0, shortlisted: 0, accepted: 0, rejected: 0 };
+
+try {
+  userApps = await db
+    .select({
+      id: applications.id,
+      status: applications.status,
+      coverLetter: applications.coverLetter,
+      resumeUrl: applications.resumeUrl,
+      aiScore: applications.aiScore,
+      aiSummary: applications.aiSummary,
+      appliedAt: applications.appliedAt,
+      updatedAt: applications.updatedAt,
+      jobPostingId: jobPostings.id,
+      jobTitle: jobPostings.jobTitle,
+      locationCity: jobPostings.locationCity,
+      locationRemote: jobPostings.locationRemote,
+      employmentType: jobPostings.employmentType,
+      experienceLevel: jobPostings.experienceLevel,
+      salaryMin: jobPostings.salaryMin,
+      salaryMax: jobPostings.salaryMax,
+      salaryCurrency: jobPostings.salaryCurrency,
+      jobStatus: jobPostings.status,
+      companyName: users.companyName,
+      companyIndustry: users.companyIndustry,
+    })
+    .from(applications)
+    .leftJoin(jobPostings, eq(applications.jobPostingId, jobPostings.id))
+    .leftJoin(users, eq(applications.employerId, users.id))
+    .where(eq(applications.applicantId, payload.userId))
+    .orderBy(desc(applications.appliedAt))
+    .all();
+
+  const userInterviews = await db.select()
+    .from(interviews)
+    .where(eq(interviews.candidateId, payload.userId))
+    .all();
+
+  userInterviews.forEach(i => {
+    interviewMap.set(i.applicationId, i);
+  });
+
+  stats.total = userApps.length;
+  stats.received = userApps.filter(a => a.status === 'received').length;
+  stats.under_review = userApps.filter(a => a.status === 'under_review').length;
+  stats.shortlisted = userApps.filter(a => a.status === 'shortlisted').length;
+  stats.accepted = userApps.filter(a => a.status === 'accepted').length;
+  stats.rejected = userApps.filter(a => a.status === 'rejected').length;
+} catch (e) {
+  console.error('Error loading applications:', e);
+}
+
+function formatDate(ts: any) {
+  if (!ts) return '—';
+  const d = ts instanceof Date ? ts : new Date(ts * 1000);
+  return d.toLocaleDateString('en-GB', { month: 'short', day: 'numeric', year: 'numeric' });
+}
+
+function salaryDisplay(min: number | null, max: number | null, currency: string | null) {
+  if (!min && !max) return null;
+  const c = currency || 'USD';
+  if (min && max) return `${c} ${(min / 1000).toFixed(0)}k–${(max / 1000).toFixed(0)}k`;
+  if (min) return `${c} ${(min / 1000).toFixed(0)}k+`;
+  return null;
+}
+---
+
+<DashboardLayout title="My Applications" userType="employee" activePath="/applications">
+  <div class="page-header mb-4">
+    <div class="header-titles">
+      <span class="badge-tag">Candidate Tracker</span>
+      <h1>My Applications</h1>
+      <p class="subtitle">Monitor real-time employer reviews, AI match fit evaluations, and hiring stages.</p>
+    </div>
+    <a href="/jobs" class="btn btn-primary btn-glow">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+      Find More Jobs
+    </a>
+  </div>
+
+  <!-- Key Stats Row -->
+  <div class="stats-pills-grid mb-4">
+    <div class="stat-badge-card">
+      <span class="stat-pill-num">{stats.total}</span>
+      <span class="stat-pill-label">Total Applied</span>
+    </div>
+    <div class="stat-badge-card pill-blue">
+      <span class="stat-pill-num">{stats.received}</span>
+      <span class="stat-pill-label">Received</span>
+    </div>
+    <div class="stat-badge-card pill-orange">
+      <span class="stat-pill-num">{stats.under_review}</span>
+      <span class="stat-pill-label">In Review</span>
+    </div>
+    <div class="stat-badge-card pill-yellow">
+      <span class="stat-pill-num">{stats.shortlisted}</span>
+      <span class="stat-pill-label">Shortlisted</span>
+    </div>
+    <div class="stat-badge-card pill-green">
+      <span class="stat-pill-num">{stats.accepted}</span>
+      <span class="stat-pill-label">Accepted</span>
+    </div>
+  </div>
+
+  <!-- Applications List -->
+  <div class="apps-container">
+    {userApps.length === 0 ? (
+      <div class="empty-state">
+        <div class="empty-icon">📁</div>
+        <h3>No Submitted Applications</h3>
+        <p>You haven't submitted any job applications yet. Start exploring open positions!</p>
+        <a href="/jobs" class="btn btn-primary mt-3">+ Browse Job Openings</a>
+      </div>
+    ) : (
+      <div class="apps-list">
+        {userApps.map((app) => (
+          <div class="card app-card-modern">
+            <div class="app-card-top">
+              <div class="app-info-left">
+                <div class="company-avatar-box">
+                  {(app.companyName || 'C').charAt(0).toUpperCase()}
+                </div>
+                <div>
+                  <h3 class="app-title">{app.jobTitle || 'Role'}</h3>
+                  <p class="app-company-sub">
+                    <span class="company-bold">{app.companyName || 'Employer'}</span>
+                    <span>•</span>
+                    <span>📍 {app.locationCity || (app.locationRemote ? 'Remote' : 'Onsite')}</span>
+                    <span>•</span>
+                    <span>⏱ {app.employmentType || 'Full-time'}</span>
+                  </p>
+                </div>
+              </div>
+
+              <div class="app-status-badge-wrap">
+                <span class={`status-pill status-${app.status}`}>
+                  {app.status.replace('_', ' ').toUpperCase()}
+                </span>
+              </div>
+            </div>
+
+            <!-- Middle Row: AI Fit & Compensation -->
+            <div class="app-card-mid">
+              {app.aiScore !== null && (
+                <div class="ai-fit-pill">
+                  <span class="ai-spark">✨</span>
+                  <span class="ai-txt">Compatibility Score: <strong>{app.aiScore}%</strong></span>
+                </div>
+              )}
+              {salaryDisplay(app.salaryMin, app.salaryMax, app.salaryCurrency) && (
+                <span class="salary-tag">💰 {salaryDisplay(app.salaryMin, app.salaryMax, app.salaryCurrency)}</span>
+              )}
+              <span class="applied-date-meta">Applied on {formatDate(app.appliedAt)}</span>
+            </div>
+
+            <div class="app-card-bottom">
+              <div class="app-links">
+                {app.resumeUrl && (
+                  <a href={getResumeViewerUrl(app.resumeUrl, Astro.url.origin)} target="_blank" class="doc-link-btn" title="View submitted resume PDF">
+                    <span>📄</span>
+                    <span>Submitted Resume</span>
+                  </a>
+                )}
+                {interviewMap.has(app.id) && (
+                  <a href="/employee/interviews" class="doc-link-btn highlight-interview-pill" title="View scheduled interview round">
+                    <span>📅</span>
+                    <span>Interview Scheduled</span>
+                  </a>
+                )}
+              </div>
+              <a href={`/applications/${app.id}`} class="btn btn-outline btn-sm">
+                View Full Application &rarr;
+              </a>
+            </div>
+          </div>
+        ))}
+      </div>
+    )}
+  </div>
+</DashboardLayout>
+
+<style>
+  .mb-4 { margin-bottom: 1.75rem; }
+  .mt-3 { margin-top: 1rem; }
+
+  .page-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-end;
+    gap: 1.5rem;
+    flex-wrap: wrap;
+  }
+
+  .badge-tag {
+    display: inline-block;
+    padding: 0.25rem 0.75rem;
+    background: rgba(99, 102, 241, 0.15);
+    color: var(--color-primary);
+    border-radius: 9999px;
+    font-size: 0.75rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin-bottom: 0.4rem;
+  }
+
+  .header-titles h1 {
+    margin: 0 0 0.3rem 0;
+    font-size: 1.75rem;
+    font-weight: 800;
+    color: var(--color-text-main);
+  }
+
+  .subtitle {
+    margin: 0;
+    font-size: 0.95rem;
+    color: var(--color-text-muted);
+  }
+
+  .btn-glow {
+    box-shadow: 0 4px 14px rgba(99, 102, 241, 0.35);
+  }
+
+  /* Stats Pills Grid */
+  .stats-pills-grid {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 1rem;
+  }
+
+  .stat-badge-card {
+    background: var(--color-surface);
+    backdrop-filter: blur(16px);
+    border: 1px solid var(--color-border);
+    border-radius: var(--border-radius-md);
+    padding: 1rem 1.25rem;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    transition: transform 0.2s ease;
+  }
+  .stat-badge-card:hover { transform: translateY(-2px); }
+
+  .stat-pill-num {
+    font-size: 1.5rem;
+    font-weight: 800;
+    color: var(--color-text-main);
+    line-height: 1.1;
+  }
+  .stat-pill-label {
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: var(--color-text-muted);
+    margin-top: 0.2rem;
+    text-transform: uppercase;
+  }
+
+  .pill-blue .stat-pill-num { color: #3b82f6; }
+  .pill-orange .stat-pill-num { color: #f59e0b; }
+  .pill-yellow .stat-pill-num { color: #ca8a04; }
+  .pill-green .stat-pill-num { color: #10b981; }
+
+  /* Applications List */
+  .apps-list {
+    display: flex;
+    flex-direction: column;
+    gap: 1.25rem;
+  }
+
+  .app-card-modern {
+    background: var(--color-surface);
+    backdrop-filter: blur(16px);
+    border: 1px solid var(--color-border);
+    border-radius: var(--border-radius-lg);
+    padding: 1.5rem 1.75rem;
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.04);
+    transition: all 0.2s ease;
+  }
+  .app-card-modern:hover {
+    transform: translateY(-2px);
+    border-color: var(--color-primary);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
+  }
+
+  .app-card-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 1rem;
+  }
+
+  .app-info-left {
+    display: flex;
+    align-items: center;
+    gap: 1.25rem;
+  }
+
+  .company-avatar-box {
+    width: 48px;
+    height: 48px;
+    border-radius: 12px;
+    background: linear-gradient(135deg, #6366f1, #8b5cf6);
+    color: white;
+    font-weight: 800;
+    font-size: 1.25rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    box-shadow: 0 4px 12px rgba(99, 102, 241, 0.25);
+  }
+
+  .app-title {
+    margin: 0 0 0.25rem 0;
+    font-size: 1.15rem;
+    font-weight: 700;
+    color: var(--color-text-main);
+  }
+
+  .app-company-sub {
+    margin: 0;
+    font-size: 0.85rem;
+    color: var(--color-text-muted);
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+  }
+  .company-bold { font-weight: 600; color: var(--color-text-main); }
+
+  .status-pill {
+    padding: 0.25rem 0.75rem;
+    border-radius: 9999px;
+    font-size: 0.72rem;
+    font-weight: 700;
+  }
+  .status-received { background: rgba(59, 130, 246, 0.15); color: #3b82f6; border: 1px solid rgba(59, 130, 246, 0.3); }
+  .status-under_review { background: rgba(245, 158, 11, 0.15); color: #f59e0b; border: 1px solid rgba(245, 158, 11, 0.3); }
+  .status-shortlisted { background: rgba(250, 204, 21, 0.15); color: #ca8a04; border: 1px solid rgba(250, 204, 21, 0.3); }
+  .status-accepted { background: rgba(16, 185, 129, 0.15); color: #10b981; border: 1px solid rgba(16, 185, 129, 0.3); }
+  .status-rejected { background: rgba(239, 68, 68, 0.15); color: #ef4444; border: 1px solid rgba(239, 68, 68, 0.3); }
+
+  .app-card-mid {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    flex-wrap: wrap;
+  }
+
+  .ai-fit-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.25rem 0.65rem;
+    background: rgba(99, 102, 241, 0.1);
+    border: 1px solid rgba(99, 102, 241, 0.25);
+    border-radius: 9999px;
+    font-size: 0.78rem;
+    color: var(--color-primary);
+  }
+
+  .salary-tag {
+    font-size: 0.8rem;
+    font-weight: 600;
+    padding: 0.2rem 0.6rem;
+    background: var(--color-bg);
+    border: 1px solid var(--color-border);
+    border-radius: 6px;
+    color: var(--color-text-main);
+  }
+
+  .applied-date-meta {
+    font-size: 0.82rem;
+    color: var(--color-text-muted);
+  }
+
+  .app-card-bottom {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding-top: 0.85rem;
+    border-top: 1px solid var(--color-border);
+  }
+
+  .app-links {
+    display: flex;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+  }
+
+  .doc-link-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    font-size: 0.82rem;
+    font-weight: 600;
+    color: var(--color-text-muted);
+    text-decoration: none;
+    padding: 0.35rem 0.75rem;
+    border-radius: 6px;
+    background: var(--color-bg);
+    border: 1px solid var(--color-border);
+    transition: all 0.15s ease;
+  }
+  .doc-link-btn:hover {
+    color: var(--color-primary);
+    border-color: var(--color-primary);
+  }
+
+  .highlight-interview-pill {
+    background: rgba(124, 58, 237, 0.1);
+    border-color: rgba(124, 58, 237, 0.35);
+    color: var(--color-primary);
+  }
+  .highlight-interview-pill:hover {
+    background: rgba(124, 58, 237, 0.2);
+    border-color: var(--color-primary);
+  }
+
+  .empty-state {
+    padding: 5rem 2rem;
+    text-align: center;
+    background: var(--color-surface);
+    backdrop-filter: blur(16px);
+    border-radius: var(--border-radius-lg);
+    border: 1px solid var(--color-border);
+  }
+  .empty-icon { font-size: 3rem; margin-bottom: 0.75rem; }
+
+  @media (max-width: 900px) {
+    .stats-pills-grid { grid-template-columns: repeat(2, 1fr); }
+  }
+  @media (max-width: 600px) {
+    .stats-pills-grid { grid-template-columns: repeat(2, 1fr) !important; gap: 0.65rem !important; }
+    .stat-badge-card { padding: 0.75rem 0.6rem !important; }
+    .stat-pill-num { font-size: 1.15rem !important; }
+    .stat-pill-label { font-size: 0.72rem !important; }
+    .app-card-top { flex-direction: column; align-items: flex-start; gap: 0.5rem; }
+    .app-card-bottom { flex-direction: column; align-items: flex-start; gap: 0.75rem; }
+    .app-links { width: 100%; }
+    .doc-link-btn { width: 100%; justify-content: center; }
+  }
+</style>

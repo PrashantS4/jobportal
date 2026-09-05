@@ -1,0 +1,40 @@
+{
+  "name": "recruitnest",
+  "type": "module",
+  "version": "0.0.1",
+  "engines": {
+    "node": ">=22.12.0"
+  },
+  "scripts": {
+    "dev": "astro dev --background",
+    "build": "astro build",
+    "preview": "astro preview",
+    "astro": "astro",
+    "generate-types": "wrangler types",
+    "db:studio": "drizzle-kit studio"
+  },
+  "dependencies": {
+    "@astrojs/cloudflare": "^14.1.7",
+    "@astrojs/node": "^11.0.3",
+    "@capacitor/core": "^8.5.0",
+    "@types/nodemailer": "^8.0.1",
+    "astro": "^7.1.6",
+    "bcryptjs": "^3.0.3",
+    "drizzle-orm": "^0.45.2",
+    "jose": "^6.2.8",
+    "jsdom": "^29.1.1",
+    "node-fetch": "^3.3.2",
+    "nodemailer": "^9.0.5",
+    "playwright": "^1.62.1",
+    "uuid": "^14.0.1",
+    "wrangler": "^4.118.0"
+  },
+  "devDependencies": {
+    "@capacitor/android": "^8.5.0",
+    "@capacitor/cli": "^8.5.0",
+    "@types/bcryptjs": "^2.4.6",
+    "@types/uuid": "^10.0.0",
+    "better-sqlite3": "^13.0.3",
+    "drizzle-kit": "^0.31.10"
+  }
+}

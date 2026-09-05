@@ -1,0 +1,794 @@
+---
+import DashboardLayout from '../../layouts/DashboardLayout.astro';
+import { getDb } from '../../lib/db';
+import { jobPostings, applications, users } from '../../db/schema';
+import { eq, desc, and } from 'drizzle-orm';
+
+const payload = Astro.locals.user;
+if (!payload || payload.userType !== 'employer') {
+  return Astro.redirect('/login');
+}
+
+const db = getDb();
+const dbUser = await db.select().from(users).where(eq(users.id, payload.userId)).get();
+
+const jobs = await db.select()
+  .from(jobPostings)
+  .where(and(eq(jobPostings.employerId, payload.userId), eq(jobPostings.isDeleted, false)))
+  .orderBy(desc(jobPostings.createdAt))
+  .all();
+
+const apps = await db.select()
+  .from(applications)
+  .where(eq(applications.employerId, payload.userId))
+  .all();
+
+const totalViews = jobs.reduce((acc, job) => acc + (job.viewCount || 0), 0);
+const totalApplications = apps.length;
+const totalShortlisted = apps.filter(app => app.status === 'shortlisted').length;
+const totalHired = apps.filter(app => app.status === 'accepted').length;
+
+const recentJobs = jobs.slice(0, 3);
+---
+
+<DashboardLayout title="Employer Dashboard" userType="employer" activePath="/employer">
+  <!-- Welcome Banner -->
+  <div class="welcome-banner">
+    <div class="banner-content">
+      <div>
+        <span class="banner-tag">Recruiter Workspace</span>
+        <h1>Welcome back, {dbUser?.firstName || 'Employer'}! 👋</h1>
+        <p class="banner-subtitle">Manage your open positions, track applicants, and review AI matches in real time.</p>
+      </div>
+      <div class="banner-actions">
+        <a href="/employer/post-job" class="btn btn-primary btn-glow">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+          Post New Job
+        </a>
+        <a href="/employer/applications" class="btn btn-outline">View Applications ↗</a>
+      </div>
+    </div>
+  </div>
+
+  <!-- Key Metrics Row -->
+  <div class="metrics-grid">
+    <a href="/employer/analytics" class="metric-card metric-card-link" title="View Job Performance Analytics">
+      <div class="metric-icon-wrap icon-blue">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+      </div>
+      <div class="metric-info">
+        <span class="metric-val">{totalViews.toLocaleString()}</span>
+        <span class="metric-label">Total Job Views</span>
+      </div>
+      <span class="metric-card-arrow">↗</span>
+    </a>
+
+    <a href="/employer/applications" class="metric-card metric-card-link" title="View Received Applications">
+      <div class="metric-icon-wrap icon-purple">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
+      </div>
+      <div class="metric-info">
+        <span class="metric-val">{totalApplications.toLocaleString()}</span>
+        <span class="metric-label">Applications Received</span>
+      </div>
+      <span class="metric-card-arrow">↗</span>
+    </a>
+
+    <a href="/employer/applications?status=shortlisted" class="metric-card metric-card-link" title="View Shortlisted Candidates">
+      <div class="metric-icon-wrap icon-yellow">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon></svg>
+      </div>
+      <div class="metric-info">
+        <span class="metric-val">{totalShortlisted.toLocaleString()}</span>
+        <span class="metric-label">Shortlisted Candidates</span>
+      </div>
+      <span class="metric-card-arrow">↗</span>
+    </a>
+
+    <a href="/employer/applications?status=accepted" class="metric-card metric-card-link" title="View Hired Candidates">
+      <div class="metric-icon-wrap icon-green">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>
+      </div>
+      <div class="metric-info">
+        <span class="metric-val">{totalHired.toLocaleString()}</span>
+        <span class="metric-label">Hired Candidates</span>
+      </div>
+      <span class="metric-card-arrow">↗</span>
+    </a>
+  </div>
+
+  <div class="main-grid">
+    <div class="left-column">
+      <!-- Recent Job Postings -->
+      <div class="section-container">
+        <div class="section-header">
+          <div>
+            <h2>Recent Job Postings</h2>
+            <span class="section-sub">Quickly inspect your latest published jobs</span>
+          </div>
+          <a href="/employer/jobs" class="view-all">View all jobs ({jobs.length}) ↗</a>
+        </div>
+      
+        <div class="job-list">
+          {recentJobs.length === 0 ? (
+            <div class="empty-state-card">
+              <div class="empty-icon">💼</div>
+              <p>No job postings yet. Get started by creating your first job!</p>
+              <a href="/employer/post-job" class="btn btn-primary mt-3">+ Post Your First Job</a>
+            </div>
+          ) : (
+            recentJobs.map((job) => (
+              <div class="card job-card-modern">
+                <div class="job-card-top">
+                  <div class="job-title-group">
+                    <div class="job-badge-icon">💼</div>
+                    <div>
+                      <a href={`/employer/applications?jobId=${job.id}`} class="job-card-title-link" title="View applicants for this job">
+                        <h4 class="job-card-title">{job.jobTitle}</h4>
+                      </a>
+                      <p class="job-card-meta">
+                        <span>📍 {job.locationCity || (job.locationRemote ? 'Remote' : 'Onsite')}</span>
+                        <span>•</span>
+                        <span>⏱ {job.employmentType || 'Full-time'}</span>
+                        <span>•</span>
+                        <span>🎯 {job.experienceLevel || 'Mid Level'}</span>
+                      </p>
+                    </div>
+                  </div>
+                  <div class="status-and-preview">
+                    <a href={`/jobs/${job.id}`} class="btn-job-preview" title="View Public Job Details">
+                      <span>👁️ Public Page</span>
+                    </a>
+                    <span class={`status-badge status-${job.status}`}>
+                      {job.status.charAt(0).toUpperCase() + job.status.slice(1)}
+                    </span>
+                  </div>
+                </div>
+
+                <div class="job-card-bottom">
+                  <div class="job-stats-pills">
+                    <a href={`/employer/applications?jobId=${job.id}`} class="mini-stat mini-stat-link" title="Click to view applicants for this job">
+                      <span class="stat-icon">📄</span>
+                      <span class="stat-count"><strong class="highlight-count">{job.applicationsCount || 0}</strong> Applications</span>
+                      <span class="view-chip">View ↗</span>
+                    </a>
+                    <div class="mini-stat">
+                      <span class="stat-icon">👁️</span>
+                      <span class="stat-count">{job.viewCount || 0} Views</span>
+                    </div>
+                  </div>
+                  <a href={`/employer/applications?jobId=${job.id}`} class="view-job-link">
+                    View Details & Applications &rarr;
+                  </a>
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+      </div>
+    </div>
+
+    <!-- Analytics Pipeline Summary -->
+    <div class="section-container">
+      <div class="section-header">
+        <div>
+          <h2>Hiring Funnel</h2>
+          <span class="section-sub">Application pipeline breakdown</span>
+        </div>
+      </div>
+      <div class="card funnel-card">
+        <div class="funnel-chart-wrap">
+          <div class="donut-chart" style={`
+            background: conic-gradient(
+              ${totalApplications === 0 
+                ? 'var(--color-border) 0% 100%' 
+                : `#10b981 0% ${(totalHired / totalApplications) * 100}%, 
+                   #f59e0b ${(totalHired / totalApplications) * 100}% ${((totalHired + totalShortlisted) / totalApplications) * 100}%, 
+                   #3b82f6 ${((totalHired + totalShortlisted) / totalApplications) * 100}% 100%`}
+            );
+          `}>
+            <div class="donut-center">
+              <span class="donut-val">{totalApplications}</span>
+              <span class="donut-lbl">Total</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="funnel-breakdown mt-4">
+          <div class="funnel-row">
+            <div class="legend-dot green"></div>
+            <span class="funnel-name">Hired / Accepted</span>
+            <span class="funnel-count">{totalHired}</span>
+          </div>
+          <div class="funnel-row">
+            <div class="legend-dot yellow"></div>
+            <span class="funnel-name">Shortlisted</span>
+            <span class="funnel-count">{totalShortlisted}</span>
+          </div>
+          <div class="funnel-row">
+            <div class="legend-dot blue"></div>
+            <span class="funnel-name">In Review / Received</span>
+            <span class="funnel-count">{Math.max(0, totalApplications - totalShortlisted - totalHired)}</span>
+          </div>
+        </div>
+
+        <div class="funnel-footer mt-4">
+          <a href="/employer/applications" class="btn btn-outline btn-sm w-full text-center">Manage All Applicants</a>
+        </div>
+      </div>
+    </div>
+  </div>
+</DashboardLayout>
+
+<style>
+  .mt-3 { margin-top: 1rem; }
+  .mt-4 { margin-top: 1.5rem; }
+  .mb-4 { margin-bottom: 1.5rem; }
+  .w-full { width: 100%; box-sizing: border-box; }
+  .text-center { text-align: center; }
+
+  /* Welcome Banner */
+  .welcome-banner {
+    background: linear-gradient(135deg, rgba(99, 102, 241, 0.08) 0%, rgba(168, 85, 247, 0.08) 100%);
+    border: 1px solid rgba(99, 102, 241, 0.2);
+    border-radius: var(--border-radius-lg);
+    padding: 2rem 2.5rem;
+    margin-bottom: 1.5rem;
+  }
+
+  .banner-content {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 2rem;
+    flex-wrap: wrap;
+  }
+
+  .banner-tag {
+    display: inline-block;
+    padding: 0.25rem 0.75rem;
+    background: rgba(99, 102, 241, 0.15);
+    color: var(--color-primary);
+    border-radius: 9999px;
+    font-size: 0.75rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin-bottom: 0.5rem;
+  }
+
+  .welcome-banner h1 {
+    margin: 0 0 0.4rem 0;
+    font-size: 1.75rem;
+    font-weight: 800;
+    color: var(--color-text-main);
+  }
+
+  .banner-subtitle {
+    margin: 0;
+    font-size: 0.95rem;
+    color: var(--color-text-muted);
+  }
+
+  .banner-actions {
+    display: flex;
+    gap: 0.75rem;
+    align-items: center;
+  }
+
+  .btn-glow {
+    box-shadow: 0 4px 14px rgba(99, 102, 241, 0.35);
+  }
+
+  /* Metrics Grid */
+  .metrics-grid {
+    display: grid !important;
+    grid-template-columns: repeat(4, 1fr) !important;
+    gap: 1.25rem;
+    margin-bottom: 1.75rem;
+  }
+
+  .metric-card {
+    background: var(--color-surface);
+    backdrop-filter: blur(16px);
+    border: 1px solid var(--color-border);
+    border-radius: var(--border-radius-md);
+    padding: 1.25rem 1.5rem;
+    display: flex !important;
+    flex-direction: row !important;
+    align-items: center !important;
+    gap: 1.25rem !important;
+    transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+    text-decoration: none;
+    color: inherit;
+    position: relative;
+  }
+  .metric-card-link {
+    cursor: pointer;
+  }
+  .metric-card:hover {
+    transform: translateY(-3px);
+    border-color: var(--color-primary);
+    box-shadow: 0 10px 28px rgba(124, 58, 237, 0.12);
+  }
+  .metric-card:hover .metric-card-arrow {
+    opacity: 1;
+    transform: translate(2px, -2px);
+    color: var(--color-primary);
+  }
+  .metric-card-arrow {
+    margin-left: auto;
+    font-size: 0.95rem;
+    font-weight: 700;
+    color: var(--color-text-muted);
+    opacity: 0.4;
+    transition: all 0.2s ease;
+  }
+
+  .metric-icon-wrap {
+    width: 48px;
+    height: 48px;
+    border-radius: 12px;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    flex-shrink: 0;
+  }
+  .icon-blue { background: rgba(59, 130, 246, 0.12); color: #3b82f6; }
+  .icon-purple { background: rgba(168, 85, 247, 0.12); color: #a855f7; }
+  .icon-yellow { background: rgba(245, 158, 11, 0.12); color: #f59e0b; }
+  .icon-green { background: rgba(16, 185, 129, 0.12); color: #10b981; }
+
+  .metric-info {
+    display: flex;
+    flex-direction: column;
+  }
+  .metric-val {
+    font-size: 1.6rem;
+    font-weight: 800;
+    color: var(--color-text-main);
+    line-height: 1.1;
+  }
+  .metric-label {
+    font-size: 0.8rem;
+    font-weight: 500;
+    color: var(--color-text-muted);
+    margin-top: 0.2rem;
+  }
+
+  /* Main Grid */
+  .main-grid {
+    display: grid !important;
+    grid-template-columns: 2fr 1fr !important;
+    gap: 1.75rem;
+  }
+
+  .section-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-end;
+    margin-bottom: 1rem;
+  }
+  .section-header h2 {
+    font-size: 1.2rem;
+    font-weight: 800;
+    margin: 0;
+    color: var(--color-text-main);
+  }
+  .section-sub {
+    font-size: 0.8rem;
+    color: var(--color-text-muted);
+    display: block;
+    margin-top: 0.15rem;
+  }
+  .view-all {
+    font-size: 0.85rem;
+    color: var(--color-primary);
+    font-weight: 600;
+    text-decoration: none;
+  }
+  .view-all:hover { text-decoration: underline; }
+
+  .job-list {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+  }
+
+  /* Job Card Modern */
+  .job-card-modern {
+    padding: 1.35rem 1.5rem;
+    background: var(--color-surface);
+    backdrop-filter: blur(12px);
+    border: 1px solid var(--color-border);
+    border-radius: var(--border-radius-md);
+    text-decoration: none;
+    color: inherit;
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+    transition: all 0.2s ease;
+  }
+  .job-card-modern:hover {
+    transform: translateY(-2px);
+    border-color: var(--color-primary);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
+  }
+
+  .job-card-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+  }
+
+  .job-title-group {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+  }
+
+  .job-badge-icon {
+    width: 44px;
+    height: 44px;
+    border-radius: 10px;
+    background: var(--color-bg);
+    border: 1px solid var(--color-border);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.25rem;
+  }
+
+  .job-card-title {
+    margin: 0 0 0.3rem 0;
+    font-size: 1.05rem;
+    font-weight: 700;
+    color: var(--color-text-main);
+  }
+
+  .job-card-meta {
+    margin: 0;
+    font-size: 0.82rem;
+    color: var(--color-text-muted);
+    display: flex;
+    gap: 0.4rem;
+    align-items: center;
+  }
+
+  .status-badge {
+    font-size: 0.72rem;
+    font-weight: 700;
+    padding: 0.2rem 0.65rem;
+    border-radius: 9999px;
+    text-transform: uppercase;
+  }
+  .status-published { background: rgba(16, 185, 129, 0.15); color: #10b981; border: 1px solid rgba(16, 185, 129, 0.3); }
+  .status-draft { background: rgba(245, 158, 11, 0.15); color: #f59e0b; border: 1px solid rgba(245, 158, 11, 0.3); }
+  .status-closed { background: rgba(239, 68, 68, 0.15); color: #ef4444; border: 1px solid rgba(239, 68, 68, 0.3); }
+
+  .job-card-bottom {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding-top: 0.75rem;
+    border-top: 1px solid var(--color-border);
+  }
+
+  .job-stats-pills {
+    display: flex;
+    gap: 1rem;
+  }
+
+  .mini-stat {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--color-text-main);
+  }
+
+  .job-card-title-link {
+    text-decoration: none;
+    color: inherit;
+  }
+  .job-card-title-link:hover .job-card-title {
+    color: var(--color-primary);
+  }
+
+  .status-and-preview {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+
+  .btn-job-preview {
+    font-size: 0.72rem;
+    font-weight: 600;
+    color: var(--color-text-muted);
+    text-decoration: none;
+    padding: 0.2rem 0.5rem;
+    border-radius: 0.375rem;
+    background: var(--color-bg);
+    border: 1px solid var(--color-border);
+    transition: all 0.2s ease;
+  }
+  .btn-job-preview:hover {
+    color: var(--color-primary);
+    border-color: var(--color-primary);
+  }
+
+  .mini-stat-link {
+    text-decoration: none;
+    color: var(--color-text-main);
+    padding: 0.2rem 0.4rem;
+    border-radius: 0.375rem;
+    transition: background-color 0.2s;
+  }
+  .mini-stat-link:hover {
+    background: var(--color-bg);
+    color: var(--color-primary);
+  }
+
+  .highlight-count {
+    color: var(--color-primary);
+  }
+
+  .view-chip {
+    font-size: 0.65rem;
+    padding: 0.1rem 0.35rem;
+    border-radius: 0.25rem;
+    background: rgba(124, 58, 237, 0.1);
+    color: var(--color-primary);
+    font-weight: 700;
+  }
+
+  .view-job-link {
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--color-primary);
+    text-decoration: none;
+    transition: transform 0.2s;
+  }
+  .view-job-link:hover {
+    text-decoration: underline;
+    transform: translateX(2px);
+  }
+
+  /* Funnel Card */
+  .funnel-card {
+    padding: 1.75rem;
+    background: var(--color-surface);
+    backdrop-filter: blur(16px);
+    border: 1px solid var(--color-border);
+    border-radius: var(--border-radius-md);
+  }
+
+  .funnel-chart-wrap {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    padding: 1rem 0;
+  }
+
+  .donut-chart {
+    width: 140px;
+    height: 140px;
+    border-radius: 50%;
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    -webkit-mask-image: radial-gradient(circle, transparent 56%, black 57%);
+    mask-image: radial-gradient(circle, transparent 56%, black 57%);
+  }
+
+  .donut-center {
+    position: absolute;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+  .donut-val { font-size: 1.4rem; font-weight: 800; color: var(--color-text-main); }
+  .donut-lbl { font-size: 0.7rem; color: var(--color-text-muted); text-transform: uppercase; font-weight: 600; }
+
+  .funnel-breakdown {
+    display: flex;
+    flex-direction: column;
+    gap: 0.6rem;
+  }
+
+  .funnel-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-size: 0.85rem;
+  }
+
+  .legend-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    display: inline-block;
+    margin-right: 0.5rem;
+  }
+  .legend-dot.green { background: #10b981; }
+  .legend-dot.yellow { background: #f59e0b; }
+  .legend-dot.blue { background: #3b82f6; }
+
+  .funnel-name { flex: 1; color: var(--color-text-muted); }
+  .funnel-count { font-weight: 700; color: var(--color-text-main); }
+
+  .empty-state-card {
+    text-align: center;
+    padding: 3.5rem 2rem;
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--border-radius-md);
+  }
+  .empty-icon { font-size: 2.5rem; margin-bottom: 0.5rem; }
+
+  @media (max-width: 1024px) {
+    .metrics-grid { grid-template-columns: repeat(2, 1fr) !important; }
+    .main-grid { grid-template-columns: 1fr !important; }
+  }
+
+  @media (max-width: 640px) {
+    .welcome-banner {
+      padding: 1.25rem 1rem !important;
+    }
+    .banner-content {
+      flex-direction: column !important;
+      align-items: flex-start !important;
+      gap: 1rem !important;
+    }
+    .welcome-banner h1 {
+      font-size: 1.35rem !important;
+      line-height: 1.3 !important;
+    }
+    .banner-subtitle {
+      font-size: 0.85rem !important;
+    }
+    .banner-actions {
+      width: 100% !important;
+      flex-direction: column !important;
+      align-items: stretch !important;
+      gap: 0.5rem !important;
+      margin-top: 0.5rem !important;
+    }
+    .banner-actions .btn {
+      width: 100% !important;
+      justify-content: center !important;
+      text-align: center !important;
+      padding: 0.55rem 1rem !important;
+      font-size: 0.85rem !important;
+      white-space: nowrap !important;
+    }
+
+    .metrics-grid {
+      grid-template-columns: repeat(2, 1fr) !important;
+      gap: 0.75rem !important;
+    }
+    .metric-card {
+      padding: 0.85rem 0.65rem !important;
+      gap: 0.5rem !important;
+      min-width: 0 !important;
+      max-width: 100% !important;
+      box-sizing: border-box !important;
+      overflow: hidden !important;
+    }
+    .metric-card-arrow {
+      display: none !important;
+    }
+    .metric-icon-wrap {
+      width: 36px !important;
+      height: 36px !important;
+      border-radius: 10px !important;
+      flex-shrink: 0 !important;
+    }
+    .metric-icon-wrap svg {
+      width: 18px !important;
+      height: 18px !important;
+    }
+    .metric-info {
+      min-width: 0 !important;
+      flex: 1 !important;
+    }
+    .metric-val {
+      font-size: 1.25rem !important;
+      line-height: 1.1 !important;
+    }
+    .metric-label {
+      font-size: 0.7rem !important;
+      line-height: 1.2 !important;
+      word-break: normal !important;
+      overflow-wrap: normal !important;
+      white-space: normal !important;
+    }
+
+    .job-card-modern {
+      padding: 1rem 0.85rem !important;
+      gap: 0.75rem !important;
+      min-width: 0 !important;
+      max-width: 100% !important;
+      box-sizing: border-box !important;
+      overflow: hidden !important;
+    }
+    .job-card-top {
+      flex-direction: column !important;
+      align-items: stretch !important;
+      gap: 0.75rem !important;
+    }
+    .job-title-group {
+      align-items: flex-start !important;
+      gap: 0.65rem !important;
+      width: 100% !important;
+      min-width: 0 !important;
+    }
+    .job-badge-icon {
+      width: 38px !important;
+      height: 38px !important;
+      font-size: 1.1rem !important;
+      flex-shrink: 0 !important;
+    }
+    .job-card-title {
+      font-size: 0.98rem !important;
+      margin-bottom: 0.25rem !important;
+      word-break: break-word !important;
+    }
+    .job-card-meta {
+      flex-wrap: wrap !important;
+      gap: 0.3rem 0.4rem !important;
+      font-size: 0.78rem !important;
+      line-height: 1.3 !important;
+    }
+    .job-card-meta span {
+      white-space: nowrap !important;
+    }
+    .status-and-preview {
+      width: 100% !important;
+      justify-content: space-between !important;
+      align-items: center !important;
+      padding-top: 0.5rem !important;
+      border-top: 1px solid var(--color-border) !important;
+    }
+    .btn-job-preview {
+      white-space: nowrap !important;
+      font-size: 0.72rem !important;
+      padding: 0.25rem 0.6rem !important;
+    }
+    .status-badge {
+      white-space: nowrap !important;
+      font-size: 0.7rem !important;
+      padding: 0.2rem 0.6rem !important;
+    }
+    .job-card-bottom {
+      flex-direction: column !important;
+      align-items: stretch !important;
+      gap: 0.75rem !important;
+      padding-top: 0.65rem !important;
+    }
+    .job-stats-pills {
+      width: 100% !important;
+      justify-content: space-between !important;
+      gap: 0.5rem !important;
+      flex-wrap: wrap !important;
+    }
+    .mini-stat {
+      font-size: 0.78rem !important;
+      white-space: nowrap !important;
+    }
+    .stat-count {
+      white-space: nowrap !important;
+    }
+    .view-job-link {
+      width: 100% !important;
+      text-align: center !important;
+      padding: 0.45rem 0.75rem !important;
+      background: rgba(124, 58, 237, 0.08) !important;
+      border-radius: 0.5rem !important;
+      font-size: 0.82rem !important;
+      font-weight: 700 !important;
+    }
+  }
+</style>

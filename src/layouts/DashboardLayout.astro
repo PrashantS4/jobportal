@@ -1,0 +1,825 @@
+---
+import "../styles/global.css";
+import Sidebar from "../components/Sidebar.astro";
+import MobileBottomNav from "../components/MobileBottomNav.astro";
+import SEO from "../components/SEO.astro";
+import { getDb } from "../lib/db";
+import { applications, users, notifications } from "../db/schema";
+import { eq, and } from "drizzle-orm";
+const { title, userType, activePath } = Astro.props;
+// @ts-ignore
+const payload = Astro.locals.user;
+
+let notificationCount = 0;
+let userRecord = null;
+if (payload) {
+  try {
+    const db = getDb();
+    if (payload.userType === "employer") {
+      const newApps = await db
+        .select()
+        .from(applications)
+        .where(
+          and(
+            eq(applications.employerId, payload.userId),
+            eq(applications.status, "received"),
+          ),
+        )
+        .all();
+      notificationCount = newApps.length;
+    } else {
+      const unreadNotifs = await db
+        .select()
+        .from(notifications)
+        .where(
+          and(
+            eq(notifications.userId, payload.userId),
+            eq(notifications.isRead, false),
+          ),
+        )
+        .all();
+      if (payload.userType === "superadmin" || payload.userType === "admin") {
+        const filtered = unreadNotifs.filter(n =>
+          !n.title?.includes("External Application") &&
+          !n.message?.includes("external application") &&
+          !n.message?.includes("Submitted via Alightway")
+        );
+        notificationCount = filtered.length;
+      } else {
+        notificationCount = unreadNotifs.length;
+      }
+    }
+
+    userRecord = await db
+      .select()
+      .from(users)
+      .where(eq(users.id, payload.userId))
+      .get();
+  } catch (e) {
+    console.error("Error fetching layout data:", e);
+  }
+}
+
+const isImpersonating = Astro.cookies.has("original_masteradmin_token");
+
+const logoHomePath =
+  payload?.userType === "employer"
+    ? "/employer"
+    : payload?.userType === "admin"
+      ? "/admin"
+      : payload?.userType === "superadmin"
+        ? "/superadmin"
+        : payload?.userType === "masteradmin"
+          ? "/masteradmin"
+          : payload?.userType === "employee"
+            ? "/dashboard"
+            : "/";
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="apple-touch-icon" href="/icon-192.png" />
+    <link rel="manifest" href="/site.webmanifest" />
+    <meta name="generator" content={Astro.generator} />
+    <SEO title={title} noindex={true} />
+    <link
+      rel="stylesheet"
+      type="text/css"
+      href="https://cdn.jsdelivr.net/npm/toastify-js/src/toastify.min.css"
+    />
+    <script
+      type="text/javascript"
+      src="https://cdn.jsdelivr.net/npm/toastify-js"></script>
+    <script is:inline>
+      window.showToast = function (message, type = "success") {
+        const errorIcon = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="15" y1="9" x2="9" y2="15"></line><line x1="9" y1="9" x2="15" y2="15"></line></svg>`;
+        const warningIcon = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>`;
+        const successIcon = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>`;
+
+        const icon =
+          type === "error"
+            ? errorIcon
+            : type === "warning"
+              ? warningIcon
+              : successIcon;
+
+        Toastify({
+          text: `<div style="display:flex;align-items:center;gap:8px;font-weight:500;">${icon} <span>${message}</span></div>`,
+          escapeMarkup: false,
+          duration: 4000,
+          close: true,
+          gravity: "top",
+          position: "right",
+          stopOnFocus: true,
+          className:
+            type === "error"
+              ? "toast-theme-error"
+              : type === "warning"
+                ? "toast-theme-warning"
+                : "toast-theme-success",
+          style: {
+            background: "unset",
+          },
+        }).showToast();
+      };
+
+      window.decrementNotificationBadge = function (count = 1) {
+        const badge = document.getElementById("topbarNotificationBadge");
+        if (!badge) return;
+
+        let current;
+        if (badge.hasAttribute("data-count")) {
+          current = parseInt(badge.getAttribute("data-count"), 10) || 0;
+        } else {
+          current = parseInt(badge.textContent.trim(), 10) || 0;
+        }
+
+        current = Math.max(0, current - count);
+        badge.setAttribute("data-count", current);
+
+        if (current === 0) {
+          badge.remove();
+        } else {
+          badge.textContent = current > 99 ? "99+" : current;
+        }
+      };
+
+      window.clearNotificationBadge = function () {
+        const badge = document.getElementById("topbarNotificationBadge");
+        if (badge) badge.remove();
+      };
+    </script>
+    <script is:inline>
+      (function () {
+        const savedTheme = localStorage.getItem("theme");
+        if (savedTheme === "dark") {
+          document.documentElement.setAttribute("data-theme", "dark");
+        } else {
+          document.documentElement.setAttribute("data-theme", "light");
+        }
+      })();
+    </script>
+  </head>
+  <body>
+    <div id="sidebarBackdrop" class="sidebar-backdrop"></div>
+    <div class="dashboard-layout">
+      <Sidebar userType={userType} activePath={activePath} />
+
+      <div class="dashboard-main">
+        <header class="topbar">
+          <div class="topbar-left">
+            <button
+              type="button"
+              id="mobileMenuToggle"
+              class="icon-btn mobile-menu-btn"
+              aria-label="Toggle Navigation"
+            >
+              <svg
+                width="24"
+                height="24"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                ><line x1="3" y1="12" x2="21" y2="12"></line><line
+                  x1="3"
+                  y1="6"
+                  x2="21"
+                  y2="6"></line><line x1="3" y1="18" x2="21" y2="18"
+                ></line></svg
+              >
+            </button>
+            <a href={logoHomePath} class="mobile-logo">RecruitNest</a>
+          </div>
+          <div class="topbar-actions">
+            <!-- Light/Dark Mode Theme Toggle Button -->
+            <button
+              type="button"
+              id="themeToggle"
+              class="icon-btn theme-toggle-btn"
+              aria-label="Toggle theme"
+            >
+              <svg
+                class="sun-icon"
+                width="20"
+                height="20"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                ><circle cx="12" cy="12" r="5"></circle><line
+                  x1="12"
+                  y1="1"
+                  x2="12"
+                  y2="3"></line><line x1="12" y1="21" x2="12" y2="23"
+                ></line><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"
+                ></line><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"
+                ></line><line x1="1" y1="12" x2="3" y2="12"></line><line
+                  x1="21"
+                  y1="12"
+                  x2="23"
+                  y2="12"></line><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"
+                ></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"
+                ></line></svg
+              >
+              <svg
+                class="moon-icon"
+                width="20"
+                height="20"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                ><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"
+                ></path></svg
+              >
+            </button>
+
+            <a
+              href={userType === "employer"
+                ? "/employer/notifications"
+                : userType === "admin"
+                  ? "/admin/notifications"
+                  : userType === "superadmin"
+                    ? "/superadmin/notifications"
+                    : userType === "masteradmin"
+                      ? "/masteradmin/notifications"
+                      : "/notifications"}
+              class="icon-btn notification-btn"
+              id="topbarNotificationBtn"
+              aria-label="Notifications"
+            >
+              {
+                notificationCount > 0 && (
+                  <span
+                    class="badge"
+                    id="topbarNotificationBadge"
+                    data-count={notificationCount}
+                  >
+                    {notificationCount > 99 ? "99+" : notificationCount}
+                  </span>
+                )
+              }
+              <!-- Bell Icon SVG -->
+              <svg
+                width="20"
+                height="20"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                ><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"
+                ></path><path d="M13.73 21a2 2 0 0 1-3.46 0"></path></svg
+              >
+            </a>
+            <a
+              href={userType === "employer"
+                ? "/employer/settings"
+                : userType === "admin"
+                  ? "/admin/profile"
+                  : userType === "superadmin"
+                    ? "/superadmin/profile"
+                    : userType === "masteradmin"
+                      ? "/masteradmin/profile"
+                      : "/settings"}
+              class="user-profile"
+              style="text-decoration: none;"
+            >
+              <img
+                src={userRecord?.avatarUrl ||
+                  (userRecord
+                    ? `/images/default-avatar.png`
+                    : "/images/default-avatar.png")}
+                alt="Profile"
+                class="avatar"
+              />
+              <div class="user-info">
+                <span class="name"
+                  >{
+                    userRecord
+                      ? `${userRecord.firstName} ${userRecord.lastName}`
+                      : "Guest"
+                  }</span
+                >
+                <span class="role" style="text-transform: capitalize;"
+                  >{
+                    payload
+                      ? payload.userType === "employee"
+                        ? "Job Seeker"
+                        : payload.userType === "employer"
+                          ? "Employer"
+                          : payload.userType === "admin"
+                            ? "Admin"
+                            : payload.userType === "superadmin"
+                              ? "Super Admin"
+                              : payload.userType === "masteradmin"
+                                ? "Master Admin"
+                                : payload.userType
+                      : "User"
+                  }</span
+                >
+              </div>
+            </a>
+          </div>
+        </header>
+
+        <main class="dashboard-content">
+          <slot />
+        </main>
+      </div>
+    </div>
+    <MobileBottomNav userType={userType} activePath={activePath} />
+  </body>
+</html>
+
+<style>
+  html,
+  body {
+    margin: 0;
+    padding: 0;
+    height: 100%;
+    background-color: var(--color-bg);
+  }
+
+  .dashboard-layout {
+    display: flex;
+    min-height: 100vh;
+  }
+
+  .dashboard-main {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-width: 0; /* Important for flex children to not overflow */
+    max-width: 100%;
+    box-sizing: border-box;
+  }
+
+  .topbar {
+    height: 70px;
+    box-sizing: border-box;
+    background-color: var(--topbar-bg);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border-bottom: 1px solid var(--color-border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 1.5rem;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.05);
+  }
+
+  .topbar-actions {
+    display: flex;
+    align-items: center;
+    gap: 1.25rem;
+  }
+
+  .icon-btn {
+    background: none;
+    border: none;
+    cursor: pointer;
+    color: var(--color-text-muted);
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0.5rem;
+    border-radius: 50%;
+    transition: background-color 0.2s;
+  }
+
+  .icon-btn:hover {
+    background-color: var(--color-bg);
+    color: var(--color-text-main);
+  }
+
+  .badge {
+    position: absolute;
+    top: -1px;
+    right: -1px;
+    background-color: #7c3aed;
+    color: white;
+    font-size: 0.65rem;
+    font-weight: 700;
+    min-width: 18px;
+    height: 18px;
+    padding: 0 4px;
+    border-radius: 9999px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border: 2px solid var(--topbar-bg);
+    box-sizing: border-box;
+    line-height: 1;
+    white-space: nowrap;
+    pointer-events: none;
+    z-index: 2;
+  }
+
+  .user-profile {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    cursor: pointer;
+    min-width: 0;
+  }
+
+  .avatar {
+    width: 38px;
+    height: 38px;
+    border-radius: 50%;
+    object-fit: cover;
+    flex-shrink: 0;
+  }
+
+  .user-info {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    overflow: hidden;
+  }
+
+  .user-info .name {
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: var(--color-text-main);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    line-height: 1.2;
+  }
+
+  .user-info .role {
+    font-size: 0.75rem;
+    color: var(--color-text-muted);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .topbar-left {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+  }
+
+  .mobile-menu-btn {
+    display: none;
+  }
+
+  .mobile-logo {
+    display: none;
+    font-size: 1.15rem;
+    font-weight: 700;
+    color: var(--color-text-main);
+  }
+
+  .sidebar-backdrop {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.65);
+    backdrop-filter: blur(4px);
+    z-index: 190;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.3s ease;
+  }
+
+  .sidebar-backdrop.active {
+    opacity: 1;
+    pointer-events: auto;
+  }
+
+  .dashboard-content {
+    animation: fadeIn 0.4s ease-out;
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
+    box-sizing: border-box;
+    padding: 1.75rem 2rem;
+  }
+  @media (max-width: 768px) {
+    .dashboard-layout {
+      display: block;
+      width: 100%;
+      overflow-x: hidden;
+    }
+    .dashboard-main {
+      width: 100%;
+      min-width: 0;
+      max-width: 100%;
+      overflow-x: hidden;
+    }
+    .topbar {
+      padding: 0 0.875rem;
+      height: 60px;
+    }
+    .mobile-menu-btn {
+      display: flex;
+    }
+    .mobile-logo {
+      display: block;
+    }
+    .dashboard-content {
+      padding: 0.875rem 0.625rem 6rem 0.625rem;
+      overflow-x: hidden;
+    }
+    .user-info {
+      display: none; /* Hide name/role text on small mobile screens to save space */
+    }
+    .topbar-actions {
+      gap: 0.5rem;
+    }
+  }
+
+  @media (max-width: 420px) {
+    .topbar {
+      padding: 0 0.5rem !important;
+    }
+    .topbar-left {
+      gap: 0.35rem !important;
+    }
+    .mobile-logo {
+      font-size: 0.95rem !important;
+    }
+    .topbar-actions {
+      gap: 0.35rem !important;
+    }
+    .icon-btn {
+      width: 34px !important;
+      height: 34px !important;
+    }
+    .avatar {
+      width: 32px !important;
+      height: 32px !important;
+    }
+    .dashboard-content {
+      padding: 0.75rem 0.5rem 6.5rem 0.5rem !important;
+    }
+  }
+</style>
+
+<script is:inline>
+  document.addEventListener("DOMContentLoaded", () => {
+    const toggleBtn = document.getElementById("mobileMenuToggle");
+    const closeBtn = document.getElementById("sidebarCloseBtn");
+    const sidebar = document.getElementById("appSidebar");
+    const backdrop = document.getElementById("sidebarBackdrop");
+
+    function openSidebar() {
+      sidebar?.classList.add("sidebar-open");
+      backdrop?.classList.add("active");
+      document.body.style.overflow = "hidden";
+    }
+
+    function closeSidebar() {
+      sidebar?.classList.remove("sidebar-open");
+      backdrop?.classList.remove("active");
+      document.body.style.overflow = "";
+    }
+
+    toggleBtn?.addEventListener("click", openSidebar);
+    closeBtn?.addEventListener("click", closeSidebar);
+    backdrop?.addEventListener("click", closeSidebar);
+
+    // Close on navigation click on mobile
+    sidebar?.querySelectorAll("a").forEach((link) => {
+      link.addEventListener("click", closeSidebar);
+    });
+
+    // Theme Toggle Handler
+    const themeToggleBtns = document.querySelectorAll(".theme-toggle-btn");
+    themeToggleBtns.forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const currentTheme =
+          document.documentElement.getAttribute("data-theme") || "dark";
+        const newTheme = currentTheme === "light" ? "dark" : "light";
+        document.documentElement.setAttribute("data-theme", newTheme);
+        localStorage.setItem("theme", newTheme);
+      });
+    });
+
+    // Custom Select Component Enhancer (Mint Green Pill Closed + 14px Rounded Box + Shortlisted Green Highlight)
+    function initCustomSelects() {
+      const selects = document.querySelectorAll(
+        "select:not([data-custom-enhanced])",
+      );
+      selects.forEach((select) => {
+        const sel = select;
+        if (sel.classList.contains("no-custom-dropdown")) return;
+        sel.setAttribute("data-custom-enhanced", "true");
+
+        // Hide native select
+        sel.style.display = "none";
+
+        // Create container wrapper
+        const container = document.createElement("div");
+        container.className = "custom-select-container";
+
+        // Create trigger button (Image 2 - Mint Green Pill Border)
+        const trigger = document.createElement("div");
+        trigger.className = "custom-select-trigger";
+
+        const triggerText = document.createElement("span");
+        const selectedOpt = sel.options[sel.selectedIndex] || sel.options[0];
+        triggerText.textContent = selectedOpt
+          ? selectedOpt.textContent
+          : "Select...";
+
+        const arrow = document.createElement("span");
+        arrow.className = "arrow-icon";
+        arrow.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>`;
+
+        trigger.appendChild(triggerText);
+        trigger.appendChild(arrow);
+        container.appendChild(trigger);
+
+        // Create menu (Image 1 - Rounded box with Shortlisted Green Option Selection)
+        const menu = document.createElement("div");
+        menu.className = "custom-select-menu";
+
+        function populateMenu() {
+          menu.innerHTML = "";
+          Array.from(sel.options).forEach((opt) => {
+            const optionEl = document.createElement("div");
+            optionEl.className = `custom-select-option ${opt.selected ? "selected" : ""}`;
+            optionEl.textContent = opt.textContent;
+
+            optionEl.addEventListener("click", (e) => {
+              e.stopPropagation();
+              sel.value = opt.value;
+              triggerText.textContent = opt.textContent;
+              menu
+                .querySelectorAll(".custom-select-option")
+                .forEach((o) => o.classList.remove("selected"));
+              optionEl.classList.add("selected");
+              container.classList.remove("open");
+              sel.dispatchEvent(new Event("change", { bubbles: true }));
+            });
+
+            menu.appendChild(optionEl);
+          });
+        }
+
+        populateMenu();
+        container.appendChild(menu);
+
+        sel.parentNode?.insertBefore(container, sel);
+
+        trigger.addEventListener("click", (e) => {
+          e.stopPropagation();
+          populateMenu();
+          document
+            .querySelectorAll(".custom-select-container.open")
+            .forEach((other) => {
+              if (other !== container) other.classList.remove("open");
+            });
+          container.classList.toggle("open");
+
+          if (container.classList.contains("open")) {
+            const rect = trigger.getBoundingClientRect();
+            const viewportWidth = window.innerWidth;
+            const menuWidth = menu.offsetWidth || 220;
+
+            if (rect.left + menuWidth > viewportWidth - 16) {
+              menu.style.left = "auto";
+              menu.style.right = "0";
+            } else {
+              menu.style.left = "0";
+              menu.style.right = "auto";
+            }
+          }
+        });
+      });
+    }
+
+    initCustomSelects();
+    setTimeout(initCustomSelects, 400);
+  });
+
+  document.addEventListener("click", () => {
+    document
+      .querySelectorAll(".custom-select-container.open")
+      .forEach((c) => c.classList.remove("open"));
+  });
+</script>
+
+<style is:global>
+  .impersonation-top-banner {
+    background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
+    color: #ffffff;
+    padding: 0.65rem 1.5rem;
+    font-size: 0.88rem;
+    position: relative;
+    z-index: 10000;
+    box-shadow: 0 4px 15px rgba(124, 58, 237, 0.35);
+  }
+  .impersonation-banner-inner {
+    max-width: 1400px;
+    margin: 0 auto;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    flex-wrap: wrap;
+  }
+  .impersonation-info {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+  }
+  .impersonation-crown {
+    font-size: 1.1rem;
+  }
+  .exit-impersonation-link {
+    background: rgba(255, 255, 255, 0.2);
+    color: #ffffff !important;
+    padding: 0.35rem 0.85rem;
+    border-radius: 9999px;
+    font-weight: 700;
+    font-size: 0.82rem;
+    text-decoration: none;
+    border: 1px solid rgba(255, 255, 255, 0.4);
+    transition: all 0.2s ease;
+    white-space: nowrap;
+  }
+  .exit-impersonation-link:hover {
+    background: #ffffff;
+    color: #4f46e5 !important;
+  }
+
+  /* Beautiful Mark All Read Button */
+  #markAllReadBtn {
+    background: linear-gradient(135deg, var(--color-primary) 0%, #7c3aed 100%);
+    color: #ffffff !important;
+    border: none !important;
+    padding: 0.6rem 1.5rem !important;
+    font-weight: 700 !important;
+    font-size: 0.9rem !important;
+    border-radius: 9999px !important;
+    box-shadow: 0 4px 15px rgba(99, 102, 241, 0.35) !important;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    position: relative;
+    overflow: hidden;
+    cursor: pointer;
+    text-transform: none;
+    letter-spacing: 0.02em;
+  }
+
+  #markAllReadBtn::before {
+    content: "✓✓";
+    font-weight: 900;
+    font-size: 1.1em;
+    letter-spacing: -2px;
+    margin-right: 2px;
+  }
+
+  #markAllReadBtn::after {
+    content: "";
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(
+      90deg,
+      transparent,
+      rgba(255, 255, 255, 0.25),
+      transparent
+    );
+    transition: left 0.5s ease;
+  }
+
+  #markAllReadBtn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(99, 102, 241, 0.45) !important;
+    background: linear-gradient(135deg, #7c3aed 0%, var(--color-primary) 100%);
+  }
+
+  #markAllReadBtn:hover::after {
+    left: 100%;
+  }
+
+  #markAllReadBtn:active {
+    transform: translateY(1px);
+    box-shadow: 0 2px 10px rgba(99, 102, 241, 0.2) !important;
+  }
+</style>

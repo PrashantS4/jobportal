@@ -1,0 +1,658 @@
+---
+import DashboardLayout from '../../layouts/DashboardLayout.astro';
+import { getDb } from '../../lib/db';
+import { users, plans, jobPostings, applications } from '../../db/schema';
+import { eq } from 'drizzle-orm';
+
+const payload = Astro.locals.user;
+if (!payload || payload.userType !== 'employer') {
+  return Astro.redirect('/login');
+}
+
+const db = getDb();
+const userRecord = await db.select().from(users).where(eq(users.id, payload.userId)).get();
+const allPlans = await db.select().from(plans).where(eq(plans.isActive, true)).all();
+
+const activePlanId = userRecord?.planId || 'P001';
+
+// Standard plan catalog mapping (matching pricing.astro & upgrade.astro)
+const planCatalog: Record<string, any> = {
+  P001: {
+    planId: 'P001',
+    planName: 'Starter Basic',
+    tag: 'Free Starter Tier',
+    price: 0,
+    currency: 'USD',
+    billingCycle: 'monthly',
+    jobPostingLimit: 30,
+    resumeLimit: 500,
+    candidateApplyLimit: 200,
+    description: 'Essential tools for early-stage recruiting and basic job postings.',
+    features: [
+      '30 Active Job Postings',
+      '500 Resumes Screening Quota',
+      '200 Monthly Job Applications',
+      'Basic AI Resume Match Scoring',
+      'Application Status Tracking & Saved Jobs'
+    ]
+  },
+  P002: {
+    planId: 'P002',
+    planName: 'Growth Plan',
+    tag: 'Scaling Tech Teams',
+    price: 0,
+    currency: 'USD',
+    billingCycle: 'monthly',
+    jobPostingLimit: 60,
+    resumeLimit: 3000,
+    candidateApplyLimit: 450,
+    description: 'Advanced limits for active tech companies requiring higher capacity & AI tools.',
+    features: [
+      '60 Active Job Postings',
+      '3,000 Resumes Screening Quota',
+      '450 Monthly Job Applications',
+      'AI Vector Resume Search & Match Scoring',
+      'Custom Candidate Screening Questionnaires',
+      'CKEditor Rich Text Job Description Editor',
+      'Priority Candidate Ranking & Analytics'
+    ]
+  },
+  P003: {
+    planId: 'P003',
+    planName: 'Premium Enterprise VIP',
+    tag: 'Enterprise VIP Tier',
+    price: 0,
+    currency: 'USD',
+    billingCycle: 'monthly',
+    jobPostingLimit: 999999,
+    resumeLimit: 999999,
+    candidateApplyLimit: 999999,
+    description: 'High-scale recruitment team power with maximum volume & full platform access.',
+    features: [
+      'Unlimited Active Job Postings',
+      'Unlimited Resume Screening Quota',
+      'Unlimited Monthly Applications',
+      'Full AI Candidate Match & Vector Search Engine',
+      'Verified Employer Recruiter Badge',
+      'Instant AI Recalculation Engine',
+      '24/7 Dedicated Account Manager'
+    ]
+  }
+};
+
+const dbPlan = allPlans.find(p => p.planId === activePlanId);
+const catalogFallback = planCatalog[activePlanId] || planCatalog['P001'];
+
+// Respect database plan price directly (0 for free plans as configured in pricing catalog)
+const activePlan = {
+  planId: activePlanId,
+  planName: dbPlan?.planName || catalogFallback.planName,
+  tag: catalogFallback.tag,
+  price: dbPlan?.price !== undefined && dbPlan?.price !== null ? dbPlan.price : catalogFallback.price,
+  currency: dbPlan?.currency || catalogFallback.currency,
+  billingCycle: dbPlan?.billingCycle || catalogFallback.billingCycle,
+  jobPostingLimit: dbPlan?.jobPostingLimit || catalogFallback.jobPostingLimit,
+  resumeLimit: dbPlan?.resumeLimit || catalogFallback.resumeLimit,
+  candidateApplyLimit: dbPlan?.candidateApplyLimit || catalogFallback.candidateApplyLimit,
+  description: dbPlan?.description || catalogFallback.description,
+  features: catalogFallback.features,
+};
+
+// Calculate Usage Stats
+const activeJobs = await db.select().from(jobPostings).where(eq(jobPostings.employerId, payload.userId)).all();
+const activeJobCount = activeJobs.length;
+const maxJobs = activePlan.jobPostingLimit;
+const jobUsagePercent = Math.min(100, Math.round((activeJobCount / (maxJobs || 1)) * 100));
+
+const allEmployerApps = await db.select().from(applications).where(eq(applications.employerId, payload.userId)).all();
+const totalAppsCount = allEmployerApps.length;
+const maxResumes = activePlan.resumeLimit;
+const resumeUsagePercent = maxResumes >= 999999 ? 15 : Math.min(100, Math.round((totalAppsCount / maxResumes) * 100));
+
+const formatPrice = (price: number | null | undefined, currency: string | null | undefined) => {
+  if (price === null || price === undefined || price <= 0) return '$0';
+  const symbol = currency === 'INR' ? '₹' : '$';
+  return `${symbol}${price}`;
+};
+
+const formatLimit = (limit: number) => {
+  return limit >= 999999 ? 'Unlimited' : limit.toLocaleString();
+};
+
+const formatDate = (dateVal: any) => {
+  if (!dateVal) return 'Auto-renews monthly';
+  const d = new Date(dateVal);
+  if (isNaN(d.getTime())) return 'Auto-renews monthly';
+  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+};
+---
+
+<DashboardLayout title="Billing & Subscription" userType="employer" activePath="/employer/billing">
+  <!-- Page Header -->
+  <div class="billing-header mb-4">
+    <div class="header-titles">
+      <span class="badge-tag">Subscription & Quota Overview</span>
+      <h1>Billing & Usage Plans</h1>
+      <p class="subtitle">Manage your company subscription tier, candidate screening limits, and view active plan details.</p>
+    </div>
+
+    <div class="header-actions-group">
+      <a href="/pricing" class="btn btn-outline">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path></svg>
+        Compare All Pricing Tiers 📊
+      </a>
+      <a href="/employer/upgrade" class="btn btn-primary btn-glow">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon></svg>
+        Upgrade Subscription Plan 🚀
+      </a>
+    </div>
+  </div>
+
+  <div class="billing-grid">
+    <!-- Active Purchased Plan Card -->
+    <div class="plan-card card">
+      <div class="plan-top">
+        <div>
+          <div class="badge-row">
+            <span class="plan-badge">Active Plan</span>
+            <span class="plan-tag-pill">{activePlan.tag}</span>
+          </div>
+          <h2 class="plan-name">{activePlan.planName}</h2>
+          <p class="plan-desc">{activePlan.description}</p>
+        </div>
+
+        <div class="plan-price-wrap">
+          <span class="plan-amount">{formatPrice(activePlan.price, activePlan.currency)}</span>
+          <span class="plan-cycle">{activePlan.price > 0 ? '/month' : '/forever'}</span>
+        </div>
+      </div>
+
+      <div class="plan-divider"></div>
+
+      <!-- Features Included in Active Plan -->
+      <div class="plan-features-section mb-4">
+        <h3 class="section-subheading">Features Included in Your Plan</h3>
+        <ul class="features-checklist">
+          {activePlan.features.map((feat: string) => (
+            <li class="feature-item">
+              <span class="check-icon">✓</span>
+              <span>{feat}</span>
+            </li>
+          ))}
+        </ul>
+      </div>
+
+      <div class="plan-divider"></div>
+
+      <!-- Quota Usage Progress -->
+      <div class="usage-section">
+        <h3 class="section-subheading">Usage & Monthly Quotas</h3>
+        
+        <div class="quota-item mt-3">
+          <div class="quota-meta">
+            <span class="quota-label">Job Postings Limit</span>
+            <span class="quota-count"><strong>{activeJobCount}</strong> / {formatLimit(maxJobs)} Jobs</span>
+          </div>
+          <div class="progress-bar-bg">
+            <div class="progress-bar-fill" style={`width: ${jobUsagePercent}%;`}></div>
+          </div>
+        </div>
+
+        <div class="quota-item mt-3">
+          <div class="quota-meta">
+            <span class="quota-label">Resumes Screening Quota</span>
+            <span class="quota-count"><strong>{totalAppsCount}</strong> / {formatLimit(maxResumes)} Resumes</span>
+          </div>
+          <div class="progress-bar-bg">
+            <div class="progress-bar-fill green" style={`width: ${resumeUsagePercent}%;`}></div>
+          </div>
+        </div>
+
+        <div class="quota-item mt-3">
+          <div class="quota-meta">
+            <span class="quota-label">Monthly Candidate Applications Capacity</span>
+            <span class="quota-count"><strong>Active</strong> / {formatLimit(activePlan.candidateApplyLimit)} per cycle</span>
+          </div>
+          <div class="progress-bar-bg">
+            <div class="progress-bar-fill purple" style="width: 35%;"></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="plan-footer mt-4">
+        <div class="footer-buttons-wrap">
+          <a href="/employer/upgrade" class="btn btn-primary btn-glow">
+            🚀 Upgrade / Switch Plan &rarr;
+          </a>
+          <a href="/pricing" class="btn btn-outline">
+            📊 View Full Pricing & Features Comparison &rarr;
+          </a>
+        </div>
+      </div>
+    </div>
+
+    <!-- Billing & Subscription Sidebar -->
+    <div class="info-sidebar">
+      <div class="billing-info-card card">
+        <h3>Billing Summary</h3>
+        
+        <div class="info-row">
+          <span class="info-lbl">Subscription Status</span>
+          <span class="status-pill status-active">{userRecord?.subscriptionStatus || 'Active'}</span>
+        </div>
+
+        <div class="info-row">
+          <span class="info-lbl">Active Plan ID</span>
+          <span class="info-val">{activePlan.planId} ({activePlan.planName})</span>
+        </div>
+
+        <div class="info-row">
+          <span class="info-lbl">Monthly Price</span>
+          <span class="info-val text-primary">{formatPrice(activePlan.price, activePlan.currency)} / {activePlan.billingCycle}</span>
+        </div>
+
+        <div class="info-row">
+          <span class="info-lbl">Payment Gateway</span>
+          <span class="info-val">Direct & Verified</span>
+        </div>
+
+        <div class="info-row">
+          <span class="info-lbl">Renewal / Expiry Date</span>
+          <span class="info-val">{formatDate(userRecord?.planExpiresAt)}</span>
+        </div>
+
+        <!-- Quick Interlink Box to Pricing -->
+        <div class="pricing-link-box mt-4">
+          <div class="link-box-header">
+            <span class="link-box-icon">💡</span>
+            <div>
+              <strong class="link-box-title">Explore Pricing Tiers</strong>
+              <p class="link-box-desc">Need more job posts or AI screening limits? View our public pricing page for full feature breakdowns.</p>
+            </div>
+          </div>
+          <a href="/pricing" class="btn btn-outline btn-sm w-full text-center mt-2">
+            View Public Pricing Page &rarr;
+          </a>
+        </div>
+
+        <!-- Enterprise Help Box -->
+        <div class="help-box mt-4">
+          <h4>Need Custom Enterprise Seats?</h4>
+          <p>Looking for unlimited recruiter accounts, dedicated ATS integrations, and priority account support?</p>
+          <a href="/about" class="contact-link">Contact Enterprise Sales &rarr;</a>
+        </div>
+      </div>
+    </div>
+  </div>
+</DashboardLayout>
+
+<style>
+  .mb-4 { margin-bottom: 1.75rem; }
+  .mt-2 { margin-top: 0.5rem; }
+  .mt-3 { margin-top: 1rem; }
+  .mt-4 { margin-top: 1.5rem; }
+  .w-full { width: 100%; box-sizing: border-box; }
+  .text-center { text-align: center; }
+
+  .billing-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-end;
+    flex-wrap: wrap;
+    gap: 1rem;
+  }
+
+  .badge-tag {
+    display: inline-block;
+    padding: 0.25rem 0.75rem;
+    background: rgba(99, 102, 241, 0.15);
+    color: var(--color-primary);
+    border-radius: 9999px;
+    font-size: 0.75rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin-bottom: 0.4rem;
+  }
+
+  .header-titles h1 {
+    margin: 0 0 0.3rem 0;
+    font-size: 1.75rem;
+    font-weight: 800;
+    color: var(--color-text-main);
+  }
+
+  .subtitle {
+    margin: 0;
+    font-size: 0.95rem;
+    color: var(--color-text-muted);
+  }
+
+  .header-actions-group {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+  }
+
+  .btn-glow {
+    box-shadow: 0 4px 14px rgba(99, 102, 241, 0.35);
+  }
+
+  .billing-grid {
+    display: grid;
+    grid-template-columns: 2fr 1fr;
+    gap: 1.75rem;
+    align-items: start;
+  }
+
+  .plan-card {
+    padding: 2rem;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .plan-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 1.5rem;
+    flex-wrap: wrap;
+  }
+
+  .badge-row {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-bottom: 0.6rem;
+  }
+
+  .plan-badge {
+    display: inline-block;
+    padding: 0.25rem 0.65rem;
+    background: rgba(16, 185, 129, 0.15);
+    color: #10b981;
+    border: 1px solid rgba(16, 185, 129, 0.3);
+    border-radius: 6px;
+    font-size: 0.75rem;
+    font-weight: 700;
+  }
+
+  .plan-tag-pill {
+    display: inline-block;
+    padding: 0.25rem 0.65rem;
+    background: rgba(167, 139, 250, 0.12);
+    color: var(--color-primary);
+    border: 1px solid rgba(167, 139, 250, 0.25);
+    border-radius: 6px;
+    font-size: 0.75rem;
+    font-weight: 700;
+  }
+
+  .plan-name {
+    margin: 0 0 0.4rem 0;
+    font-size: 1.65rem;
+    font-weight: 800;
+    color: var(--color-text-main);
+  }
+
+  .plan-desc {
+    margin: 0;
+    font-size: 0.9rem;
+    color: var(--color-text-muted);
+    line-height: 1.45;
+  }
+
+  .plan-price-wrap {
+    display: flex;
+    align-items: baseline;
+    gap: 0.2rem;
+  }
+
+  .plan-amount {
+    font-size: 2.25rem;
+    font-weight: 800;
+    color: var(--color-text-main);
+    line-height: 1;
+  }
+
+  .plan-cycle {
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--color-text-muted);
+  }
+
+  .plan-divider {
+    height: 1px;
+    background: var(--color-border);
+    margin: 1.5rem 0;
+  }
+
+  .section-subheading {
+    margin: 0 0 1rem 0;
+    font-size: 1.05rem;
+    font-weight: 700;
+    color: var(--color-text-main);
+  }
+
+  .features-checklist {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+    gap: 0.75rem 1.25rem;
+  }
+
+  .feature-item {
+    display: flex;
+    align-items: center;
+    gap: 0.65rem;
+    font-size: 0.88rem;
+    color: var(--color-text-main);
+  }
+
+  .check-icon {
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    background: rgba(16, 185, 129, 0.15);
+    color: #10b981;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.75rem;
+    font-weight: 800;
+    flex-shrink: 0;
+  }
+
+  .quota-item {
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+  }
+
+  .quota-meta {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.85rem;
+  }
+
+  .quota-label {
+    color: var(--color-text-muted);
+    font-weight: 500;
+  }
+
+  .quota-count {
+    color: var(--color-text-main);
+  }
+
+  .progress-bar-bg {
+    height: 8px;
+    background: var(--color-bg);
+    border-radius: 9999px;
+    overflow: hidden;
+    border: 1px solid var(--color-border);
+  }
+
+  .progress-bar-fill {
+    height: 100%;
+    background: var(--color-primary);
+    border-radius: 9999px;
+    transition: width 0.3s ease;
+  }
+  .progress-bar-fill.green {
+    background: #10b981;
+  }
+  .progress-bar-fill.purple {
+    background: #8b5cf6;
+  }
+
+  .footer-buttons-wrap {
+    display: flex;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+  }
+
+  .info-sidebar {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+  }
+
+  .billing-info-card {
+    padding: 1.5rem 1.75rem;
+  }
+
+  .billing-info-card h3 {
+    margin: 0 0 1.25rem 0;
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: var(--color-text-main);
+  }
+
+  .info-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.75rem 0;
+    border-bottom: 1px solid var(--color-border);
+    font-size: 0.88rem;
+  }
+  .info-row:last-of-type {
+    border-bottom: none;
+  }
+
+  .info-lbl {
+    color: var(--color-text-muted);
+  }
+
+  .info-val {
+    font-weight: 600;
+    color: var(--color-text-main);
+  }
+
+  .status-pill {
+    padding: 0.2rem 0.6rem;
+    border-radius: 9999px;
+    font-size: 0.75rem;
+    font-weight: 700;
+  }
+  .status-active {
+    background: rgba(16, 185, 129, 0.15);
+    color: #10b981;
+    border: 1px solid rgba(16, 185, 129, 0.3);
+  }
+
+  .pricing-link-box {
+    background: rgba(167, 139, 250, 0.06);
+    border: 1px solid rgba(167, 139, 250, 0.2);
+    border-radius: var(--border-radius-md);
+    padding: 1rem;
+  }
+
+  .link-box-header {
+    display: flex;
+    gap: 0.65rem;
+    align-items: flex-start;
+  }
+
+  .link-box-icon {
+    font-size: 1.25rem;
+  }
+
+  .link-box-title {
+    display: block;
+    font-size: 0.88rem;
+    font-weight: 700;
+    color: var(--color-text-main);
+    margin-bottom: 0.2rem;
+  }
+
+  .link-box-desc {
+    margin: 0;
+    font-size: 0.78rem;
+    color: var(--color-text-muted);
+    line-height: 1.4;
+  }
+
+  .help-box {
+    background: var(--color-bg);
+    border: 1px dashed var(--color-border);
+    border-radius: var(--border-radius-md);
+    padding: 1.25rem;
+  }
+
+  .help-box h4 {
+    margin: 0 0 0.4rem 0;
+    font-size: 0.95rem;
+    font-weight: 700;
+    color: var(--color-text-main);
+  }
+
+  .help-box p {
+    margin: 0 0 0.75rem 0;
+    font-size: 0.82rem;
+    color: var(--color-text-muted);
+    line-height: 1.4;
+  }
+
+  .contact-link {
+    font-size: 0.82rem;
+    font-weight: 700;
+    color: var(--color-primary);
+    text-decoration: none;
+  }
+  .contact-link:hover {
+    text-decoration: underline;
+  }
+
+  @media (max-width: 992px) {
+    .billing-grid {
+      grid-template-columns: 1fr;
+    }
+  }
+
+  @media (max-width: 640px) {
+    .billing-header {
+      flex-direction: column !important;
+      align-items: flex-start !important;
+    }
+    .header-actions-group {
+      width: 100% !important;
+    }
+    .header-actions-group .btn {
+      width: 100% !important;
+      text-align: center !important;
+      justify-content: center !important;
+    }
+    .footer-buttons-wrap {
+      flex-direction: column !important;
+    }
+    .footer-buttons-wrap .btn {
+      width: 100% !important;
+      text-align: center !important;
+      justify-content: center !important;
+    }
+  }
+</style>

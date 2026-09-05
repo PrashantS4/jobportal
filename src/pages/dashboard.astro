@@ -1,0 +1,942 @@
+---
+import DashboardLayout from '../layouts/DashboardLayout.astro';
+import { getDb } from '../lib/db';
+import { applications, jobPostings, users, interviews } from '../db/schema';
+import { eq, desc, and, or, isNull, notLike } from 'drizzle-orm';
+
+// @ts-ignore
+const payload = Astro.locals.user;
+if (!payload || payload.userType !== 'employee') {
+  return Astro.redirect('/login');
+}
+
+Astro.response.headers.set('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0');
+
+let stats = {
+  total: 0,
+  under_review: 0,
+  shortlisted: 0,
+  received: 0,
+  accepted: 0,
+  rejected: 0
+};
+
+let recentApps: any[] = [];
+let recentJobs: any[] = [];
+let appliedJobIds: Set<string> = new Set();
+let upcomingInterview: any = null;
+let dbUser: any = null;
+
+try {
+  const db = getDb();
+
+  const userApps = await db
+    .select({
+      id: applications.id,
+      status: applications.status,
+      jobPostingId: applications.jobPostingId
+    })
+    .from(applications)
+    .where(eq(applications.applicantId, payload.userId))
+    .all();
+
+  stats.total = userApps.length;
+  stats.under_review = userApps.filter(a => a.status === 'under_review').length;
+  stats.shortlisted = userApps.filter(a => a.status === 'shortlisted').length;
+  stats.received = userApps.filter(a => a.status === 'received').length;
+  stats.accepted = userApps.filter(a => a.status === 'accepted').length;
+  stats.rejected = userApps.filter(a => a.status === 'rejected').length;
+
+  appliedJobIds = new Set(userApps.map(a => a.jobPostingId));
+
+  dbUser = await db.select().from(users).where(eq(users.id, payload.userId)).get();
+
+  const now = new Date();
+  upcomingInterview = await db
+    .select({
+      id: interviews.id,
+      title: interviews.title,
+      scheduledAt: interviews.scheduledAt,
+      durationMinutes: interviews.durationMinutes,
+      meetingLink: interviews.meetingLink,
+      jobTitle: jobPostings.jobTitle,
+      companyName: users.companyName,
+      employerFirstName: users.firstName,
+      employerLastName: users.lastName
+    })
+    .from(interviews)
+    .innerJoin(jobPostings, eq(interviews.jobPostingId, jobPostings.id))
+    .innerJoin(users, eq(interviews.employerId, users.id))
+    .where(and(
+      eq(interviews.candidateId, payload.userId),
+      or(
+        eq(interviews.status, 'scheduled'),
+        eq(interviews.status, 'rescheduled')
+      )
+    ))
+    .orderBy(interviews.scheduledAt)
+    .limit(1)
+    .get();
+
+  recentJobs = await db
+    .select({
+      id: jobPostings.id,
+      jobTitle: jobPostings.jobTitle,
+      locationCity: jobPostings.locationCity,
+      locationRemote: jobPostings.locationRemote,
+      employmentType: jobPostings.employmentType,
+      experienceLevel: jobPostings.experienceLevel,
+      salaryMin: jobPostings.salaryMin,
+      salaryMax: jobPostings.salaryMax,
+      salaryCurrency: jobPostings.salaryCurrency,
+      companyName: users.companyName,
+    })
+    .from(jobPostings)
+    .leftJoin(users, eq(jobPostings.employerId, users.id))
+    .where(
+      and(
+        eq(jobPostings.status, 'published'),
+        notLike(jobPostings.id, 'external_%'),
+        or(eq(jobPostings.isDeleted, false), isNull(jobPostings.isDeleted))
+      )
+    )
+    .orderBy(desc(jobPostings.publishedAt))
+    .limit(4)
+    .all();
+
+  recentApps = await db
+    .select({
+      id: applications.id,
+      status: applications.status,
+      appliedAt: applications.appliedAt,
+      jobTitle: jobPostings.jobTitle,
+      companyName: users.companyName,
+    })
+    .from(applications)
+    .leftJoin(jobPostings, eq(applications.jobPostingId, jobPostings.id))
+    .leftJoin(users, eq(applications.employerId, users.id))
+    .where(eq(applications.applicantId, payload.userId))
+    .orderBy(desc(applications.appliedAt))
+    .limit(4)
+    .all();
+} catch (e) {
+  console.error('Dashboard data error:', e);
+}
+
+function salaryDisplay(min: any, max: any, currency: string | null) {
+  if (!min && !max) return null;
+  const c = (currency || 'USD').trim();
+  const numMin = Number(min);
+  const numMax = Number(max);
+  const validMin = !isNaN(numMin) && isFinite(numMin) && numMin > 0;
+  const validMax = !isNaN(numMax) && isFinite(numMax) && numMax > 0;
+  if (!validMin && !validMax) return null;
+
+  const fmtNum = (n: number) => {
+    if (n >= 1_000_000_000_000) {
+      const val = n / 1_000_000_000_000;
+      return val > 999 ? '999T+' : `${val.toFixed(1).replace(/\.0$/, '')}T`;
+    }
+    if (n >= 1_000_000_000) return `${(n / 1_000_000_000).toFixed(1).replace(/\.0$/, '')}B`;
+    if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1).replace(/\.0$/, '')}M`;
+    if (n >= 1_000) return `${(n / 1_000).toFixed(0)}k`;
+    return String(Math.round(n));
+  };
+
+  const fMin = validMin ? fmtNum(numMin) : null;
+  const fMax = validMax ? fmtNum(numMax) : null;
+
+  if (fMin && fMax) {
+    if (fMin === fMax) return `${c} ${fMin}`;
+    return `${c} ${fMin}–${fMax}`;
+  }
+  if (fMin) return `${c} ${fMin}+`;
+  if (fMax) return `Up to ${c} ${fMax}`;
+  return null;
+}
+---
+
+<DashboardLayout title="Candidate Dashboard" userType="employee" activePath="/dashboard">
+  {upcomingInterview && (
+    <div class="upcoming-interview-alert-card mb-4">
+      <div class="alert-left-col">
+        <div class="alert-icon-box">📅</div>
+        <div>
+          <div class="alert-badge-line">
+            <span class="live-pulse-dot"></span>
+            <strong>Upcoming Interview Scheduled!</strong>
+          </div>
+          <p class="alert-desc">
+            You have <strong>{upcomingInterview.title}</strong> for <em>{upcomingInterview.jobTitle}</em> with <strong>{upcomingInterview.companyName || `${upcomingInterview.employerFirstName} ${upcomingInterview.employerLastName}`}</strong> on {new Date(upcomingInterview.scheduledAt).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}.
+          </p>
+        </div>
+      </div>
+      <div class="alert-right-actions">
+        {upcomingInterview.meetingLink && (
+          <a href={upcomingInterview.meetingLink} target="_blank" rel="noopener noreferrer" class="btn btn-primary btn-sm">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="23 7 16 12 23 17 23 7"></polygon><rect x="1" y="5" width="15" height="14" rx="2" ry="2"></rect></svg>
+            Join Meeting
+          </a>
+        )}
+        <a href="/employee/interviews" class="btn btn-outline btn-sm">
+          View & Sync Calendar &rarr;
+        </a>
+      </div>
+    </div>
+  )}
+
+  <!-- Candidate Welcome Banner -->
+  <div class="welcome-banner">
+    <div class="banner-content">
+      <div>
+        <span class="banner-tag">Candidate Hub</span>
+        <h1>Welcome back, {dbUser?.firstName || 'Candidate'}! 👋</h1>
+        <p class="banner-subtitle">Track your application pipeline, explore top open positions, and review AI matches.</p>
+      </div>
+      <div class="banner-actions">
+        <a href="/jobs" class="btn btn-primary btn-glow">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+          Explore Jobs
+        </a>
+        <a href="/applications" class="btn btn-outline">My Applications ↗</a>
+      </div>
+    </div>
+  </div>
+
+  <!-- Key Metrics Row -->
+  <div class="metrics-grid">
+    <a href="/applications" class="metric-card metric-card-link" title="View All Submitted Applications">
+      <div class="metric-icon-wrap icon-blue">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline></svg>
+      </div>
+      <div class="metric-info">
+        <span class="metric-val">{stats.total}</span>
+        <span class="metric-label">Applications Submitted</span>
+      </div>
+      <span class="metric-card-arrow">↗</span>
+    </a>
+
+    <a href="/applications?status=under_review" class="metric-card metric-card-link" title="View Applications Under Review">
+      <div class="metric-icon-wrap icon-yellow">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+      </div>
+      <div class="metric-info">
+        <span class="metric-val">{stats.under_review}</span>
+        <span class="metric-label">Under Review</span>
+      </div>
+      <span class="metric-card-arrow">↗</span>
+    </a>
+
+    <a href="/applications?status=shortlisted" class="metric-card metric-card-link" title="View Shortlisted Applications">
+      <div class="metric-icon-wrap icon-purple">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon></svg>
+      </div>
+      <div class="metric-info">
+        <span class="metric-val">{stats.shortlisted}</span>
+        <span class="metric-label">Shortlisted</span>
+      </div>
+      <span class="metric-card-arrow">↗</span>
+    </a>
+
+    <a href="/applications?status=accepted" class="metric-card metric-card-link" title="View Accepted Offers">
+      <div class="metric-icon-wrap icon-green">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>
+      </div>
+      <div class="metric-info">
+        <span class="metric-val">{stats.accepted}</span>
+        <span class="metric-label">Offers & Accepted</span>
+      </div>
+      <span class="metric-card-arrow">↗</span>
+    </a>
+  </div>
+
+  <div class="main-grid">
+    <!-- Left Column: Featured & Latest Jobs -->
+    <div class="left-column">
+      <div class="section-container">
+        <div class="section-header">
+          <div>
+            <h2>Latest Open Positions</h2>
+            <span class="section-sub">Recently posted roles matched with your profile</span>
+          </div>
+          <a href="/jobs" class="view-all">View all positions ({recentJobs.length}+) ↗</a>
+        </div>
+
+        <div class="job-list">
+          {recentJobs.length === 0 ? (
+            <div class="empty-state-card">
+              <div class="empty-icon">💼</div>
+              <p>No job postings right now. Check back soon!</p>
+              <a href="/jobs" class="btn btn-primary mt-3">Browse Jobs</a>
+            </div>
+          ) : (
+            recentJobs.map((job) => {
+              const isApplied = appliedJobIds.has(job.id);
+              return (
+                <a href={isApplied ? `/applications` : `/jobs?apply=${job.id}`} class="job-card-modern">
+                  <div class="job-card-top">
+                    <div class="job-title-group">
+                      <div class="job-avatar-pill">
+                        {(job.companyName || 'C').charAt(0).toUpperCase()}
+                      </div>
+                      <div>
+                        <h4 class="job-card-title">{job.jobTitle}</h4>
+                        <p class="job-card-company">{job.companyName || 'Featured Company'}</p>
+                      </div>
+                    </div>
+                    {isApplied ? (
+                      <span class="applied-pill">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                        Applied
+                      </span>
+                    ) : (
+                      <span class="apply-cta-pill">Apply Now &rarr;</span>
+                    )}
+                  </div>
+
+                  <div class="job-card-bottom">
+                    <div class="job-tags-row">
+                      {job.locationRemote ? (
+                        <span class="tag tag-remote">🌐 Remote</span>
+                      ) : (
+                        <span class="tag">📍 {job.locationCity || 'Onsite'}</span>
+                      )}
+                      <span class="tag">⏱ {job.employmentType || 'Full-time'}</span>
+                      {salaryDisplay(job.salaryMin, job.salaryMax, job.salaryCurrency) && (
+                        <span class="tag tag-salary">💰 {salaryDisplay(job.salaryMin, job.salaryMax, job.salaryCurrency)}</span>
+                      )}
+                    </div>
+                  </div>
+                </a>
+              );
+            })
+          )}
+        </div>
+      </div>
+    </div>
+
+    <!-- Right Column: Status Breakdown & Recent Applications -->
+    <div class="right-column">
+      <div class="section-container">
+        <div class="section-header">
+          <div>
+            <h2>Application Funnel</h2>
+            <span class="section-sub">Status of your submitted roles</span>
+          </div>
+        </div>
+
+        <div class="card status-funnel-card">
+          <div class="status-bars">
+            {stats.total === 0 ? (
+              <div class="empty-status-text">
+                <p>You haven't submitted any job applications yet.</p>
+                <a href="/jobs" class="btn btn-outline btn-sm mt-2 w-full text-center">Explore Jobs &rarr;</a>
+              </div>
+            ) : (
+              <>
+                <div class="status-row">
+                  <span class="status-dot dot-blue"></span>
+                  <span class="status-label">Received</span>
+                  <div class="status-bar-track">
+                    <div class="status-bar-fill bar-blue" style={`width:${stats.total ? (stats.received/stats.total*100) : 0}%`}></div>
+                  </div>
+                  <span class="status-count">{stats.received}</span>
+                </div>
+
+                <div class="status-row">
+                  <span class="status-dot dot-orange"></span>
+                  <span class="status-label">Under Review</span>
+                  <div class="status-bar-track">
+                    <div class="status-bar-fill bar-orange" style={`width:${stats.total ? (stats.under_review/stats.total*100) : 0}%`}></div>
+                  </div>
+                  <span class="status-count">{stats.under_review}</span>
+                </div>
+
+                <div class="status-row">
+                  <span class="status-dot dot-yellow"></span>
+                  <span class="status-label">Shortlisted</span>
+                  <div class="status-bar-track">
+                    <div class="status-bar-fill bar-yellow" style={`width:${stats.total ? (stats.shortlisted/stats.total*100) : 0}%`}></div>
+                  </div>
+                  <span class="status-count">{stats.shortlisted}</span>
+                </div>
+
+                <div class="status-row">
+                  <span class="status-dot dot-green"></span>
+                  <span class="status-label">Accepted</span>
+                  <div class="status-bar-track">
+                    <div class="status-bar-fill bar-green" style={`width:${stats.total ? (stats.accepted/stats.total*100) : 0}%`}></div>
+                  </div>
+                  <span class="status-count">{stats.accepted}</span>
+                </div>
+
+                <div class="status-row">
+                  <span class="status-dot dot-red"></span>
+                  <span class="status-label">Rejected</span>
+                  <div class="status-bar-track">
+                    <div class="status-bar-fill bar-red" style={`width:${stats.total ? (stats.rejected/stats.total*100) : 0}%`}></div>
+                  </div>
+                  <span class="status-count">{stats.rejected}</span>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      </div>
+
+      <!-- Recent Applications List -->
+      {recentApps.length > 0 && (
+        <div class="section-container mt-4">
+          <div class="section-header">
+            <div>
+              <h2>Recent Applications</h2>
+              <span class="section-sub">Latest updates on your active roles</span>
+            </div>
+            <a href="/applications" class="view-all">View all ↗</a>
+          </div>
+
+          <div class="card recent-apps-card">
+            {recentApps.map((app) => (
+              <a href={`/applications/${app.id}`} class="recent-app-item">
+                <div>
+                  <h5 class="app-item-title">{app.jobTitle || 'Role'}</h5>
+                  <span class="app-item-company">{app.companyName || 'Company'}</span>
+                </div>
+                <span class={`status-pill status-${app.status}`}>
+                  {app.status.replace('_', ' ').toUpperCase()}
+                </span>
+              </a>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  </div>
+</DashboardLayout>
+
+<style>
+  .mt-2 { margin-top: 0.5rem; }
+  .mt-3 { margin-top: 1rem; }
+  .mt-4 { margin-top: 1.5rem; }
+  .w-full { width: 100%; box-sizing: border-box; }
+  .text-center { text-align: center; }
+
+  /* Upcoming Interview Banner */
+  .upcoming-interview-alert-card {
+    background: linear-gradient(135deg, rgba(124, 58, 237, 0.12) 0%, rgba(59, 130, 246, 0.12) 100%);
+    border: 1.5px solid rgba(124, 58, 237, 0.4);
+    border-radius: var(--border-radius-lg);
+    padding: 1.25rem 1.5rem;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 1.25rem;
+    flex-wrap: wrap;
+    box-shadow: 0 4px 20px rgba(124, 58, 237, 0.1);
+  }
+  .alert-left-col {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    flex: 1;
+    min-width: 280px;
+  }
+  .alert-icon-box {
+    font-size: 2rem;
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    width: 48px;
+    height: 48px;
+    border-radius: var(--border-radius-md);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+  }
+  .alert-badge-line {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.95rem;
+    color: var(--color-text-main);
+    margin-bottom: 0.2rem;
+  }
+  .live-pulse-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background-color: #10b981;
+    box-shadow: 0 0 8px #10b981;
+    display: inline-block;
+  }
+  .alert-desc {
+    margin: 0;
+    font-size: 0.85rem;
+    color: var(--color-text-muted);
+    line-height: 1.4;
+  }
+  .alert-right-actions {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+  }
+
+  /* Welcome Banner */
+  .welcome-banner {
+    background: linear-gradient(135deg, rgba(99, 102, 241, 0.08) 0%, rgba(168, 85, 247, 0.08) 100%);
+    border: 1px solid rgba(99, 102, 241, 0.2);
+    border-radius: var(--border-radius-lg);
+    padding: 2rem 2.5rem;
+    margin-bottom: 1.5rem;
+  }
+
+  .banner-content {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 2rem;
+    flex-wrap: wrap;
+  }
+
+  .banner-tag {
+    display: inline-block;
+    padding: 0.25rem 0.75rem;
+    background: rgba(99, 102, 241, 0.15);
+    color: var(--color-primary);
+    border-radius: 9999px;
+    font-size: 0.75rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin-bottom: 0.5rem;
+  }
+
+  .welcome-banner h1 {
+    margin: 0 0 0.4rem 0;
+    font-size: 1.75rem;
+    font-weight: 800;
+    color: var(--color-text-main);
+  }
+
+  .banner-subtitle {
+    margin: 0;
+    font-size: 0.95rem;
+    color: var(--color-text-muted);
+  }
+
+  .banner-actions {
+    display: flex;
+    gap: 0.75rem;
+    align-items: center;
+  }
+
+  .btn-glow {
+    box-shadow: 0 4px 14px rgba(99, 102, 241, 0.35);
+  }
+
+  /* Metrics Grid */
+  .metrics-grid {
+    display: grid !important;
+    grid-template-columns: repeat(4, 1fr) !important;
+    gap: 1.25rem;
+    margin-bottom: 1.75rem;
+  }
+
+  .metric-card {
+    background: var(--color-surface);
+    backdrop-filter: blur(16px);
+    border: 1px solid var(--color-border);
+    border-radius: var(--border-radius-md);
+    padding: 1.25rem 1.5rem;
+    display: flex !important;
+    flex-direction: row !important;
+    align-items: center !important;
+    gap: 1.25rem !important;
+    transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+    text-decoration: none;
+    color: inherit;
+    position: relative;
+  }
+  .metric-card-link {
+    cursor: pointer;
+  }
+  .metric-card:hover {
+    transform: translateY(-3px);
+    border-color: var(--color-primary);
+    box-shadow: 0 10px 28px rgba(124, 58, 237, 0.12);
+  }
+  .metric-card:hover .metric-card-arrow {
+    opacity: 1;
+    transform: translate(2px, -2px);
+    color: var(--color-primary);
+  }
+  .metric-card-arrow {
+    margin-left: auto;
+    font-size: 0.95rem;
+    font-weight: 700;
+    color: var(--color-text-muted);
+    opacity: 0.4;
+    transition: all 0.2s ease;
+  }
+
+  .metric-icon-wrap {
+    width: 48px;
+    height: 48px;
+    border-radius: 12px;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    flex-shrink: 0;
+  }
+  .icon-blue { background: rgba(59, 130, 246, 0.12); color: #3b82f6; }
+  .icon-purple { background: rgba(168, 85, 247, 0.12); color: #a855f7; }
+  .icon-yellow { background: rgba(245, 158, 11, 0.12); color: #f59e0b; }
+  .icon-green { background: rgba(16, 185, 129, 0.12); color: #10b981; }
+
+  .metric-info {
+    display: flex;
+    flex-direction: column;
+  }
+  .metric-val {
+    font-size: 1.6rem;
+    font-weight: 800;
+    color: var(--color-text-main);
+    line-height: 1.1;
+  }
+  .metric-label {
+    font-size: 0.8rem;
+    font-weight: 500;
+    color: var(--color-text-muted);
+    margin-top: 0.2rem;
+  }
+
+  /* Main Grid */
+  .main-grid {
+    display: grid !important;
+    grid-template-columns: 2fr 1fr !important;
+    gap: 1.75rem;
+  }
+
+  .section-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-end;
+    margin-bottom: 1rem;
+  }
+  .section-header h2 {
+    font-size: 1.2rem;
+    font-weight: 800;
+    margin: 0;
+    color: var(--color-text-main);
+  }
+  .section-sub {
+    font-size: 0.8rem;
+    color: var(--color-text-muted);
+    display: block;
+    margin-top: 0.15rem;
+  }
+  .view-all {
+    font-size: 0.85rem;
+    color: var(--color-primary);
+    font-weight: 600;
+    text-decoration: none;
+  }
+  .view-all:hover { text-decoration: underline; }
+
+  .job-list {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+  }
+
+  /* Modern Job Card */
+  .job-card-modern {
+    padding: 1.35rem 1.5rem;
+    background: var(--color-surface);
+    backdrop-filter: blur(12px);
+    border: 1px solid var(--color-border);
+    border-radius: var(--border-radius-md);
+    text-decoration: none;
+    color: inherit;
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+    transition: all 0.2s ease;
+  }
+  .job-card-modern:hover {
+    transform: translateY(-2px);
+    border-color: var(--color-primary);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
+  }
+
+  .job-card-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+
+  .job-title-group {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+  }
+
+  .job-avatar-pill {
+    width: 44px;
+    height: 44px;
+    border-radius: 12px;
+    background: linear-gradient(135deg, #6366f1, #8b5cf6);
+    color: white;
+    font-weight: 800;
+    font-size: 1.2rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 4px 12px rgba(99, 102, 241, 0.25);
+  }
+
+  .job-card-title {
+    margin: 0 0 0.2rem 0;
+    font-size: 1.05rem;
+    font-weight: 700;
+    color: var(--color-text-main);
+  }
+
+  .job-card-company {
+    margin: 0;
+    font-size: 0.85rem;
+    color: var(--color-text-muted);
+  }
+
+  .apply-cta-pill {
+    font-size: 0.82rem;
+    font-weight: 700;
+    color: var(--color-primary);
+  }
+
+  .applied-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    font-size: 0.78rem;
+    font-weight: 700;
+    color: #10b981;
+    background: rgba(16, 185, 129, 0.12);
+    border: 1px solid rgba(16, 185, 129, 0.25);
+    padding: 0.25rem 0.65rem;
+    border-radius: 9999px;
+  }
+
+  .job-card-bottom {
+    padding-top: 0.75rem;
+    border-top: 1px solid var(--color-border);
+  }
+
+  .job-tags-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+
+  .tag {
+    font-size: 0.78rem;
+    font-weight: 600;
+    padding: 0.25rem 0.65rem;
+    background: var(--color-bg);
+    border: 1px solid var(--color-border);
+    border-radius: 6px;
+    color: var(--color-text-main);
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    display: inline-flex;
+    align-items: center;
+  }
+  .tag-remote { background: rgba(16, 185, 129, 0.1); color: #10b981; border-color: rgba(16, 185, 129, 0.2); }
+  .tag-salary {
+    background: rgba(99, 102, 241, 0.1);
+    color: var(--color-primary);
+    border-color: rgba(99, 102, 241, 0.2);
+    max-width: 220px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  /* Funnel Card */
+  .status-funnel-card {
+    padding: 1.5rem;
+    background: var(--color-surface);
+    backdrop-filter: blur(16px);
+    border: 1px solid var(--color-border);
+    border-radius: var(--border-radius-md);
+  }
+
+  .status-bars {
+    display: flex;
+    flex-direction: column;
+    gap: 0.8rem;
+  }
+
+  .status-row {
+    display: grid;
+    grid-template-columns: 10px 90px 1fr 24px;
+    align-items: center;
+    gap: 0.6rem;
+  }
+
+  .status-dot { width: 8px; height: 8px; border-radius: 50%; }
+  .dot-blue { background: #3b82f6; }
+  .dot-orange { background: #f59e0b; }
+  .dot-yellow { background: #facc15; }
+  .dot-green { background: #10b981; }
+  .dot-red { background: #ef4444; }
+
+  .status-label { font-size: 0.82rem; color: var(--color-text-muted); font-weight: 500; }
+
+  .status-bar-track {
+    height: 6px;
+    background: var(--color-bg);
+    border: 1px solid var(--color-border);
+    border-radius: 9999px;
+    overflow: hidden;
+  }
+
+  .status-bar-fill {
+    height: 100%;
+    border-radius: 9999px;
+    transition: width 0.4s ease;
+  }
+  .bar-blue { background: #3b82f6; }
+  .bar-orange { background: #f59e0b; }
+  .bar-yellow { background: #facc15; }
+  .bar-green { background: #10b981; }
+  .bar-red { background: #ef4444; }
+
+  .status-count { font-size: 0.82rem; font-weight: 700; color: var(--color-text-main); text-align: right; }
+
+  /* Recent Apps Card */
+  .recent-apps-card {
+    background: var(--color-surface);
+    backdrop-filter: blur(16px);
+    border: 1px solid var(--color-border);
+    border-radius: var(--border-radius-md);
+    overflow: hidden;
+  }
+
+  .recent-app-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 1rem 1.25rem;
+    border-bottom: 1px solid var(--color-border);
+    text-decoration: none;
+    color: inherit;
+    transition: background 0.15s ease;
+  }
+  .recent-app-item:last-child { border-bottom: none; }
+  .recent-app-item:hover { background: rgba(99, 102, 241, 0.04); }
+
+  .app-item-title { margin: 0 0 0.2rem 0; font-size: 0.9rem; font-weight: 700; color: var(--color-text-main); }
+  .app-item-company { font-size: 0.78rem; color: var(--color-text-muted); }
+
+  .status-pill {
+    font-size: 0.7rem;
+    font-weight: 700;
+    padding: 0.2rem 0.55rem;
+    border-radius: 9999px;
+  }
+  .status-received { background: rgba(59, 130, 246, 0.15); color: #3b82f6; }
+  .status-under_review { background: rgba(245, 158, 11, 0.15); color: #f59e0b; }
+  .status-shortlisted { background: rgba(250, 204, 21, 0.15); color: #ca8a04; }
+  .status-accepted { background: rgba(16, 185, 129, 0.15); color: #10b981; }
+  .status-rejected { background: rgba(239, 68, 68, 0.15); color: #ef4444; }
+
+  .empty-state-card {
+    text-align: center;
+    padding: 3.5rem 2rem;
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--border-radius-md);
+  }
+  .empty-icon { font-size: 2.5rem; margin-bottom: 0.5rem; }
+
+  @media (max-width: 1024px) {
+    .metrics-grid { grid-template-columns: repeat(2, 1fr) !important; }
+    .main-grid { grid-template-columns: 1fr !important; }
+  }
+
+  @media (max-width: 640px) {
+    .welcome-banner {
+      padding: 1.25rem 1rem !important;
+    }
+    .welcome-banner h1 {
+      font-size: 1.35rem !important;
+    }
+    .banner-subtitle {
+      font-size: 0.85rem !important;
+    }
+    .banner-actions {
+      flex-direction: row !important;
+      flex-wrap: wrap !important;
+      width: 100% !important;
+      gap: 0.5rem !important;
+      margin-top: 0.75rem !important;
+    }
+    .banner-actions .btn {
+      flex: 1 1 auto !important;
+      text-align: center !important;
+      justify-content: center !important;
+      padding: 0.6rem 0.85rem !important;
+      font-size: 0.85rem !important;
+    }
+    .section-header {
+      flex-direction: row !important;
+      flex-wrap: wrap !important;
+      justify-content: space-between !important;
+      align-items: flex-start !important;
+      gap: 0.5rem !important;
+    }
+    .section-header h2 {
+      font-size: 1.1rem !important;
+    }
+    .view-all {
+      font-size: 0.8rem !important;
+      white-space: nowrap !important;
+    }
+    .job-card-modern {
+      padding: 1rem !important;
+    }
+    .job-card-top {
+      flex-wrap: wrap !important;
+      gap: 0.5rem !important;
+    }
+    .metrics-grid {
+      grid-template-columns: repeat(2, 1fr) !important;
+      gap: 0.75rem !important;
+    }
+    .metric-card {
+      padding: 0.9rem 0.75rem !important;
+      gap: 0.65rem !important;
+    }
+    .metric-icon-wrap {
+      width: 38px !important;
+      height: 38px !important;
+      border-radius: 10px !important;
+    }
+    .metric-icon-wrap svg {
+      width: 18px !important;
+      height: 18px !important;
+    }
+    .metric-val {
+      font-size: 1.3rem !important;
+    }
+    .metric-label {
+      font-size: 0.72rem !important;
+      line-height: 1.25 !important;
+    }
+    .banner-content { flex-direction: column; align-items: flex-start; }
+  }
+</style>

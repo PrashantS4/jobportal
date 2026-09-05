@@ -1,0 +1,99 @@
+================================================================================
+SOFTWARE REQUIREMENTS SPECIFICATION (SRS)
+Project Name: RecruitNest
+Date: August 2026
+================================================================================
+
+1. INTRODUCTION
+--------------------------------------------------------------------------------
+1.1 Purpose
+The purpose of this document is to specify the software requirements for "RecruitNest", a modern, AI-powered Job Portal Platform. This document outlines the functional and non-functional requirements, technology stack, and architecture of the system.
+
+1.2 Scope
+RecruitNest is a comprehensive job portal designed to connect Candidates (Employees) with Employers using advanced AI-driven features such as candidate ranking, semantic job search, and automated screening. The platform also supports complex subscription plans for employers and administrative oversight modules for site operators.
+
+2. TECHNOLOGY STACK & ARCHITECTURE
+--------------------------------------------------------------------------------
+2.1 Core Frameworks & Libraries
+- Frontend & Backend: Astro framework (Server-Side Rendering)
+- UI Components: React / Preact / Vanilla JS, CSS/TailwindCSS
+- Deployment & Hosting: Cloudflare Pages / Cloudflare Workers
+
+2.2 Data Layer & Cloudflare Ecosystem
+- Relational Database: Cloudflare D1 (SQLite) using Drizzle ORM
+- File & Media Storage: Cloudflare R2 (Resumes, Avatar Images, Media)
+- AI & Vector Search: Cloudflare Vectorize (Embeddings) & Cloudflare AI
+- Caching & Sessions: Cloudflare KV (Session Storage)
+
+2.3 AI Integrations
+- Large Language Models: Google Gemini API / Cloudflare Workers AI for smart screening, summary generation, resume parsing, and candidate ranking.
+
+3. USER ROLES & PRIVILEGES
+--------------------------------------------------------------------------------
+3.1 Candidate (Employee)
+- Seekers looking for jobs. They can create profiles, upload resumes, search for jobs, apply, track application status, and view interview invitations.
+
+3.2 Employer
+- Companies or recruiters looking to hire. They can post jobs, purchase subscription plans, track applicants, run AI candidate screening, schedule interviews, and invite candidates from a broader talent pool.
+
+3.3 Admin
+- Platform operators responsible for verifying employer accounts, moderating content, and managing platform activity.
+
+3.4 Superadmin
+- Highest level of access. Manages system settings, admin accounts, global notifications, and global platform configuration.
+
+4. FUNCTIONAL REQUIREMENTS (MODULES)
+--------------------------------------------------------------------------------
+4.1 Authentication & Authorization Module
+- Secure registration and login for all roles.
+- Password hashing and session management.
+- Account verification status (Pending, Verified, Rejected).
+
+4.2 Candidate Module
+- Profile Builder: Headline, Bio, Skills (JSON), Location, LinkedIn URL, Portfolio URL, Experience Years, Education history (JSON).
+- Document Management: Default Resume uploading (stored in R2).
+- Job Application: Apply to jobs with custom answers and cover letters.
+- Candidate Dashboard: View metrics, active applications, saved jobs.
+- Notifications: Receive alerts for application status changes and employer invitations.
+
+4.3 Employer Module
+- Job Posting Management: Create, edit, publish, and close job postings.
+  * Fields: Title, description, salary range, location, employment type, experience level.
+- Application Tracking System (ATS): Review candidate applications, update status (Received, Under Review, Shortlisted, Rejected, Accepted).
+- AI Screening & Ranking: 
+  * 5-Pillar Ranking Algorithm: Skill Alignment (40%), Experience Fit (25%), Keyword Relevance (15%), Location Compatibility (10%), Profile Completeness (10%).
+  * Discover candidates from the global Talent Pool and send direct apply invitations.
+- Interview Management: Schedule and track Video/Phone/In-Person interviews.
+- Billing & Plans: Manage active subscription plans and usage limits (Job Postings limit, Resumes limit).
+
+4.4 Admin & Superadmin Module
+- System Dashboard: Track total users, active jobs, and revenue metrics.
+- User Verification Workflows: Approve or reject pending employer/candidate accounts.
+- Platform Notifications: Send global system alerts or targeted messages.
+
+4.5 Search & AI Engine
+- Semantic Job Search: Allow candidates to find jobs beyond exact keyword matches.
+- Recommendations Engine: Suggest top jobs to candidates based on profile vectors.
+- Automated Recruiter Notes: Generate AI summaries of a candidate's strengths and weaknesses relative to a job posting.
+
+5. DATABASE SCHEMA SUMMARY (Drizzle ORM / SQLite)
+--------------------------------------------------------------------------------
+- Users Table: Stores multi-role credentials, profile details, and employer company metadata.
+- Plans Table: Stores billing plans (e.g., P001, P002), prices, features, and limits.
+- Job Postings Table: Stores job listings, requirements, and metadata.
+- Applications Table: Links candidates to jobs, stores resumes, AI match scores, and status history.
+- Recommendations Table: Caches match scores (skill, experience, preference) between candidates and jobs.
+- Interviews Table: Schedules and stores details for interviews.
+- Notifications Table: System, application, and invitation alerts for users.
+- User Behavior / Job Searches: Logs telemetry for analytics and future AI fine-tuning.
+
+6. NON-FUNCTIONAL REQUIREMENTS
+--------------------------------------------------------------------------------
+- Performance: High availability and edge deployment globally via Cloudflare infrastructure.
+- Scalability: Architecture handles high traffic dynamically through Cloudflare Workers.
+- Security: Secure session management via Cloudflare KV, parameterized SQL via Drizzle to prevent injection, and securely handled file uploads.
+- UX/UI: Fast, responsive design using Astro's island architecture.
+
+================================================================================
+END OF SRS DOCUMENT
+================================================================================

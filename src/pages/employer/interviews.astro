@@ -1,0 +1,1665 @@
+---
+import DashboardLayout from '../../layouts/DashboardLayout.astro';
+import { getDb } from '../../lib/db';
+import { interviews, applications, jobPostings, users } from '../../db/schema';
+import { eq, desc, and } from 'drizzle-orm';
+import { generateGoogleCalendarUrl, generateOutlookCalendarUrl } from '../../lib/calendar';
+
+const payload = Astro.locals.user;
+if (!payload || payload.userType !== 'employer') {
+  return Astro.redirect('/login');
+}
+
+const statusFilter = Astro.url.searchParams.get('status') || '';
+const preselectedAppId = Astro.url.searchParams.get('appId') || '';
+
+const db = getDb();
+
+// 1. Fetch all interviews for this employer
+const allInterviews = await db.select({
+  id: interviews.id,
+  applicationId: interviews.applicationId,
+  jobPostingId: interviews.jobPostingId,
+  title: interviews.title,
+  interviewType: interviews.interviewType,
+  meetingLink: interviews.meetingLink,
+  scheduledAt: interviews.scheduledAt,
+  durationMinutes: interviews.durationMinutes,
+  status: interviews.status,
+  notes: interviews.notes,
+  interviewerNames: interviews.interviewerNames,
+  timezone: interviews.timezone,
+  jobTitle: jobPostings.jobTitle,
+  candidateFirstName: users.firstName,
+  candidateLastName: users.lastName,
+  candidateEmail: users.email,
+  candidateAvatar: users.avatarUrl,
+  candidateHeadline: users.headline,
+})
+.from(interviews)
+.innerJoin(jobPostings, eq(interviews.jobPostingId, jobPostings.id))
+.innerJoin(users, eq(interviews.candidateId, users.id))
+.where(eq(interviews.employerId, payload.userId))
+.orderBy(desc(interviews.scheduledAt))
+.all();
+
+// 2. Fetch active candidates/applications to populate the searchable combobox with rich disambiguation metadata
+const employerApps = await db.select({
+  id: applications.id,
+  jobPostingId: applications.jobPostingId,
+  jobTitle: jobPostings.jobTitle,
+  candidateId: users.id,
+  candidateName: users.firstName,
+  candidateLastName: users.lastName,
+  candidateEmail: users.email,
+  candidateAvatar: users.avatarUrl,
+  candidateHeadline: users.headline,
+  status: applications.status,
+  aiScore: applications.aiScore,
+  appliedAt: applications.appliedAt,
+})
+.from(applications)
+.innerJoin(jobPostings, eq(applications.jobPostingId, jobPostings.id))
+.innerJoin(users, eq(applications.applicantId, users.id))
+.where(and(
+  eq(applications.employerId, payload.userId),
+  eq(jobPostings.status, 'published')
+))
+.orderBy(desc(applications.appliedAt))
+.all();
+
+// Filter interviews based on tab
+const now = new Date();
+let filteredInterviews = allInterviews;
+if (statusFilter === 'upcoming') {
+  filteredInterviews = allInterviews.filter(i => (i.status === 'scheduled' || i.status === 'rescheduled') && new Date(i.scheduledAt) >= now);
+} else if (statusFilter === 'completed') {
+  filteredInterviews = allInterviews.filter(i => i.status === 'completed' || (new Date(i.scheduledAt) < now && i.status !== 'cancelled'));
+} else if (statusFilter === 'cancelled') {
+  filteredInterviews = allInterviews.filter(i => i.status === 'cancelled');
+}
+
+const stats = {
+  total: allInterviews.length,
+  upcoming: allInterviews.filter(i => (i.status === 'scheduled' || i.status === 'rescheduled') && new Date(i.scheduledAt) >= now).length,
+  completed: allInterviews.filter(i => i.status === 'completed').length,
+  cancelled: allInterviews.filter(i => i.status === 'cancelled').length,
+};
+
+function formatInterviewTime(d: any) {
+  if (!d) return '—';
+  const date = d instanceof Date ? d : new Date(d);
+  return date.toLocaleDateString('en-US', {
+    weekday: 'short',
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit'
+  });
+}
+---
+
+<DashboardLayout title="Interview Management" userType="employer" activePath="/employer/interviews">
+  <div class="interviews-page-container">
+    <!-- Header Section -->
+    <div class="page-header mb-4">
+      <div class="header-titles">
+        <span class="badge-tag">Recruiter Workspace</span>
+        <h1>Interview Scheduling & Calendar</h1>
+        <p class="subtitle">Schedule, manage candidate interview rounds, and sync with Google Calendar & Outlook.</p>
+      </div>
+
+      <button type="button" class="btn btn-primary btn-glow" onclick="openScheduleModal()">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+        Schedule New Interview
+      </button>
+    </div>
+
+    <!-- Stats Summary Row -->
+    <div class="stats-pills-grid mb-4">
+      <a href="/employer/interviews" class={`stat-badge-card ${!statusFilter ? 'active-card' : ''}`}>
+        <span class="stat-pill-num">{stats.total}</span>
+        <span class="stat-pill-label">Total Rounds</span>
+      </a>
+      <a href="/employer/interviews?status=upcoming" class={`stat-badge-card pill-purple ${statusFilter === 'upcoming' ? 'active-card' : ''}`}>
+        <span class="stat-pill-num">{stats.upcoming}</span>
+        <span class="stat-pill-label">Upcoming</span>
+      </a>
+      <a href="/employer/interviews?status=completed" class={`stat-badge-card pill-green ${statusFilter === 'completed' ? 'active-card' : ''}`}>
+        <span class="stat-pill-num">{stats.completed}</span>
+        <span class="stat-pill-label">Completed</span>
+      </a>
+      <a href="/employer/interviews?status=cancelled" class={`stat-badge-card pill-red ${statusFilter === 'cancelled' ? 'active-card' : ''}`}>
+        <span class="stat-pill-num">{stats.cancelled}</span>
+        <span class="stat-pill-label">Cancelled</span>
+      </a>
+    </div>
+
+    <!-- Interviews List -->
+    <div class="interviews-list-container">
+      {filteredInterviews.length === 0 ? (
+        <div class="card empty-state-box">
+          <div class="empty-icon">📅</div>
+          <h3>No interviews found</h3>
+          <p>You have no interviews matching this filter. Schedule an interview with any candidate to get started.</p>
+          <button type="button" class="btn btn-primary mt-3" onclick="openScheduleModal()">
+            Schedule Interview
+          </button>
+        </div>
+      ) : (
+        <div class="interviews-grid">
+          {filteredInterviews.map((item) => {
+            const isUpcoming = (item.status === 'scheduled' || item.status === 'rescheduled') && new Date(item.scheduledAt) >= now;
+            const googleCalUrl = generateGoogleCalendarUrl({
+              title: `${item.title} - ${item.candidateFirstName} ${item.candidateLastName}`,
+              description: `Interview for ${item.jobTitle}.\nCandidate: ${item.candidateFirstName} ${item.candidateLastName} (${item.candidateEmail})\n\nNotes:\n${item.notes || 'None'}`,
+              location: item.meetingLink || 'Online Video Meeting',
+              startTime: item.scheduledAt,
+              durationMinutes: item.durationMinutes || 45
+            });
+            const outlookCalUrl = generateOutlookCalendarUrl({
+              title: `${item.title} - ${item.candidateFirstName} ${item.candidateLastName}`,
+              description: `Interview for ${item.jobTitle}.\nCandidate: ${item.candidateFirstName} ${item.candidateLastName}`,
+              location: item.meetingLink || 'Online Video Meeting',
+              startTime: item.scheduledAt,
+              durationMinutes: item.durationMinutes || 45
+            });
+
+            return (
+              <div class={`interview-card card ${item.status}`}>
+                <div class="interview-card-header">
+                  <div class="candidate-meta-col">
+                    <div class="candidate-avatar">
+                      {item.candidateAvatar ? (
+                        <img src={item.candidateAvatar} alt={item.candidateFirstName} />
+                      ) : (
+                        <span>{(item.candidateFirstName?.[0] || 'C').toUpperCase()}</span>
+                      )}
+                    </div>
+                    <div>
+                      <h3 class="candidate-name">{item.candidateFirstName} {item.candidateLastName}</h3>
+                      <span class="job-applied-pill">💼 {item.jobTitle}</span>
+                    </div>
+                  </div>
+
+                  <div class="status-tags-group">
+                    <span class={`status-badge status-${item.status}`}>
+                      {item.status === 'scheduled' ? 'Scheduled' : item.status === 'rescheduled' ? 'Rescheduled' : item.status === 'completed' ? 'Completed' : 'Cancelled'}
+                    </span>
+                    <span class="type-pill">
+                      {item.interviewType === 'video' ? '🎥 Video Call' : item.interviewType === 'phone' ? '📞 Phone' : '📍 In-Person'}
+                    </span>
+                  </div>
+                </div>
+
+                <div class="interview-details-body">
+                  <h4 class="interview-title">{item.title}</h4>
+                  
+                  <div class="info-row">
+                    <div class="info-item">
+                      <span class="info-label">Date & Time:</span>
+                      <strong class="info-val highlight-time">🕒 {formatInterviewTime(item.scheduledAt)}</strong>
+                    </div>
+                    <div class="info-item">
+                      <span class="info-label">Duration:</span>
+                      <span class="info-val">⏱ {item.durationMinutes || 45} mins</span>
+                    </div>
+                  </div>
+
+                  {item.interviewerNames && (
+                    <div class="info-item mt-2">
+                      <span class="info-label">Interviewers:</span>
+                      <span class="info-val">👥 {item.interviewerNames}</span>
+                    </div>
+                  )}
+
+                  {item.notes && (
+                    <div class="interview-notes-box">
+                      <strong>Agenda / Candidate Instructions:</strong>
+                      <p>{item.notes}</p>
+                    </div>
+                  )}
+                </div>
+
+                <div class="interview-card-footer">
+                  <div class="left-actions">
+                    {item.meetingLink && (
+                      <a href={item.meetingLink} target="_blank" rel="noopener noreferrer" class="btn btn-sm btn-primary">
+                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="23 7 16 12 23 17 23 7"></polygon><rect x="1" y="5" width="15" height="14" rx="2" ry="2"></rect></svg>
+                        Join Meeting
+                      </a>
+                    )}
+
+                    <!-- 1-Click Calendar Sync Dropdown -->
+                    <div class="calendar-sync-dropdown">
+                      <button type="button" class="btn btn-sm btn-outline cal-btn">
+                        <span>📅 Add to Calendar</span>
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"></polyline></svg>
+                      </button>
+                      <div class="cal-dropdown-menu">
+                        <a href={googleCalUrl} target="_blank" rel="noopener noreferrer" class="cal-menu-item">
+                          <span>Google Calendar</span>
+                        </a>
+                        <a href={outlookCalUrl} target="_blank" rel="noopener noreferrer" class="cal-menu-item">
+                          <span>Outlook Web</span>
+                        </a>
+                        <a href={`/api/interviews/ics?id=${item.id}`} class="cal-menu-item">
+                          <span>Apple / Outlook (.ics)</span>
+                        </a>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div class="right-actions">
+                    {isUpcoming && (
+                      <>
+                        <button
+                          type="button"
+                          class="btn-action-link text-success"
+                          onclick={`updateInterviewStatus('${item.id}', 'completed')`}
+                          title="Mark this interview as completed"
+                        >
+                          ✓ Mark Done
+                        </button>
+                        <button
+                          type="button"
+                          class="btn-action-link"
+                          onclick={`editInterview('${item.id}', '${escape(JSON.stringify(item))}')`}
+                        >
+                          Reschedule
+                        </button>
+                        <button
+                          type="button"
+                          class="btn-action-link text-danger"
+                          onclick={`updateInterviewStatus('${item.id}', 'cancelled')`}
+                        >
+                          Cancel
+                        </button>
+                      </>
+                    )}
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+
+    <!-- Schedule Interview Modal with Modern Inputs & Searchable Disambiguation Combobox -->
+    <div id="scheduleModal" class="modal-backdrop" style="display: none;" onclick="closeModalOnBackdrop(event)">
+      <div class="modal card modern-modal">
+        <div class="modal-header">
+          <div>
+            <div class="modal-badge">
+              <span class="dot-pulse"></span>
+              <span>Interview Setup</span>
+            </div>
+            <h2 class="modal-title" id="modalHeading">Schedule Candidate Interview</h2>
+            <p class="modal-subtitle">Set up video call, phone screen, or onsite rounds with live calendar sync.</p>
+          </div>
+          <button type="button" class="modal-close" onclick="closeScheduleModal()" aria-label="Close modal">✕</button>
+        </div>
+
+        <form id="scheduleForm" onsubmit="submitInterviewSchedule(event)" class="modal-body">
+          <input type="hidden" id="formInterviewId" name="interviewId" value="" />
+          <input type="hidden" id="formAppSelect" name="applicationId" value="" required />
+
+          <!-- Candidate & Role with Searchable Disambiguation Selector -->
+          <div class="form-group mb-4">
+            <label class="form-label">
+              <span>Candidate & Role <span class="required">*</span></span>
+              <span class="label-hint">Search by Name, Email, or Job Title</span>
+            </label>
+
+            <!-- 1. Selected Candidate Preview Card (Shown when an applicant is selected) -->
+            <div id="selectedCandidateCard" class="selected-candidate-card" style="display: none;">
+              <div class="candidate-summary-left">
+                <div class="candidate-avatar-badge" id="selectedAvatar">JD</div>
+                <div class="candidate-details">
+                  <div class="name-email-line">
+                    <strong class="selected-name" id="selectedName">John Doe</strong>
+                    <span class="selected-email-badge" id="selectedEmail">john@example.com</span>
+                  </div>
+                  <div class="selected-job-line">
+                    <span class="selected-job" id="selectedJob">💼 Senior React Developer</span>
+                    <span class="selected-score-badge" id="selectedScore">✨ 95% Match</span>
+                  </div>
+                </div>
+              </div>
+              <button type="button" class="btn btn-sm btn-outline-change" onclick="clearCandidateSelection()">
+                Change Applicant ↻
+              </button>
+            </div>
+
+            <!-- 2. Searchable Candidate Combobox (Shown when picking an applicant) -->
+            <div id="candidateSearchCombobox" class="candidate-combobox-wrap">
+              <div class="search-input-box">
+                <svg class="search-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+                <input
+                  type="text"
+                  id="candidateSearchInput"
+                  class="form-input search-combobox-input"
+                  placeholder="Type candidate name, email (e.g. alex@gmail.com), or role..."
+                  autocomplete="off"
+                  onfocus="showCandidateDropdown()"
+                  oninput="filterCandidateOptions(this.value)"
+                />
+                <button type="button" class="clear-search-btn" id="clearSearchBtn" style="display: none;" onclick="resetCandidateSearch()">✕</button>
+              </div>
+
+              <!-- Filterable Applicant Options List -->
+              <div id="candidateOptionsList" class="candidate-options-dropdown" style="display: none;">
+                {employerApps.length === 0 ? (
+                  <div class="no-options-message">
+                    <span>No active job applicants found to schedule.</span>
+                  </div>
+                ) : (
+                  employerApps.map(app => {
+                    const initials = `${(app.candidateName?.[0] || 'C').toUpperCase()}${(app.candidateLastName?.[0] || '').toUpperCase()}`;
+                    const appliedFormatted = app.appliedAt ? new Date(app.appliedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '';
+                    return (
+                      <div
+                        class="candidate-option-item"
+                        data-app-id={app.id}
+                        data-name={`${app.candidateName} ${app.candidateLastName}`}
+                        data-email={app.candidateEmail}
+                        data-job={app.jobTitle}
+                        data-initials={initials}
+                        data-score={app.aiScore !== null ? `${app.aiScore}% Match` : ''}
+                        data-status={app.status.replace('_', ' ')}
+                        data-search-text={`${app.candidateName} ${app.candidateLastName} ${app.candidateEmail} ${app.jobTitle} ${app.status}`.toLowerCase()}
+                        onclick={`selectCandidate('${app.id}', '${escape(app.candidateName)} ${escape(app.candidateLastName)}', '${escape(app.candidateEmail)}', '${escape(app.jobTitle)}', '${initials}', '${app.aiScore !== null ? `${app.aiScore}% Match` : ''}')`}
+                      >
+                        <div class="opt-avatar-box">
+                          {app.candidateAvatar ? (
+                            <img src={app.candidateAvatar} alt={app.candidateName} />
+                          ) : (
+                            <span>{initials}</span>
+                          )}
+                        </div>
+
+                        <div class="opt-info-col">
+                          <div class="opt-header-line">
+                            <span class="opt-candidate-name">{app.candidateName} {app.candidateLastName}</span>
+                            <!-- Unique Identifier Email Tag to Disambiguate Identical Names -->
+                            <span class="opt-email-tag" title="Applicant Email Address">
+                              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path><polyline points="22,6 12,13 2,6"></polyline></svg>
+                              {app.candidateEmail}
+                            </span>
+                          </div>
+
+                          <div class="opt-meta-line">
+                            <span class="opt-job-tag">💼 {app.jobTitle}</span>
+                            {appliedFormatted && <span class="opt-date-tag">• Applied {appliedFormatted}</span>}
+                            {app.aiScore !== null && (
+                              <span class="opt-score-tag">✨ {app.aiScore}% Match</span>
+                            )}
+                            <span class="opt-status-tag">{app.status.replace('_', ' ')}</span>
+                          </div>
+                        </div>
+
+                        <div class="opt-action-arrow">
+                          <span>Select →</span>
+                        </div>
+                      </div>
+                    );
+                  })
+                )}
+                <div id="noResultsFound" class="no-options-message" style="display: none;">
+                  <span>No applicant matches your search query. Try another name or email.</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Interview Title with Icon -->
+          <div class="form-group mb-3">
+            <label for="formTitle" class="form-label">
+              <span>Interview Title <span class="required">*</span></span>
+              <span class="label-hint">e.g. Technical Screening, Culture Fit, Final Round</span>
+            </label>
+            <div class="input-with-icon">
+              <span class="input-icon">🏷️</span>
+              <input
+                type="text"
+                id="formTitle"
+                name="title"
+                class="form-input"
+                placeholder="e.g. Round 1 Technical Screening with Lead Architect"
+                required
+              />
+            </div>
+          </div>
+
+          <!-- Format & Duration Row -->
+          <div class="form-grid-2 mb-3">
+            <div class="form-group">
+              <label for="formInterviewType" class="form-label">Interview Format <span class="required">*</span></label>
+              <div class="input-with-icon">
+                <span class="input-icon">🎙️</span>
+                <select id="formInterviewType" name="interviewType" class="form-select" required>
+                  <option value="video">Online Video Call (Google Meet / Zoom)</option>
+                  <option value="phone">Phone Screening</option>
+                  <option value="in_person">In-Person Onsite Round</option>
+                </select>
+              </div>
+            </div>
+
+            <div class="form-group">
+              <label for="formDuration" class="form-label">Duration <span class="required">*</span></label>
+              <div class="input-with-icon">
+                <span class="input-icon">⏱️</span>
+                <select id="formDuration" name="durationMinutes" class="form-select" required>
+                  <option value="15">15 minutes (Quick Sync)</option>
+                  <option value="30">30 minutes</option>
+                  <option value="45" selected>45 minutes (Standard)</option>
+                  <option value="60">60 minutes (1 Hour)</option>
+                  <option value="90">90 minutes (In-Depth Technical)</option>
+                </select>
+              </div>
+            </div>
+          </div>
+
+          <!-- Date/Time & Meeting URL Row -->
+          <div class="form-grid-2 mb-3">
+            <div class="form-group">
+              <label for="formScheduledAt" class="form-label">Date & Time <span class="required">*</span></label>
+              <div class="input-with-icon">
+                <span class="input-icon">📅</span>
+                <input
+                  type="datetime-local"
+                  id="formScheduledAt"
+                  name="scheduledAt"
+                  class="form-input"
+                  required
+                />
+              </div>
+            </div>
+
+            <div class="form-group">
+              <label for="formMeetingLink" class="form-label">Meeting URL or Location</label>
+              <div class="input-with-icon">
+                <span class="input-icon">🔗</span>
+                <input
+                  type="text"
+                  id="formMeetingLink"
+                  name="meetingLink"
+                  class="form-input"
+                  placeholder="https://meet.google.com/xyz-abc or Office Room 402"
+                />
+              </div>
+            </div>
+          </div>
+
+          <!-- Interviewers Panel -->
+          <div class="form-group mb-3">
+            <label for="formInterviewers" class="form-label">Interviewer(s) Panel / Hosts</label>
+            <div class="input-with-icon">
+              <span class="input-icon">👥</span>
+              <input
+                type="text"
+                id="formInterviewers"
+                name="interviewerNames"
+                class="form-input"
+                placeholder="e.g. Alex Rivera (Staff Engineer), Priya Patel (Product Lead)"
+              />
+            </div>
+          </div>
+
+          <!-- Notes / Agenda -->
+          <div class="form-group mb-4">
+            <label for="formNotes" class="form-label">
+              <span>Candidate Preparation & Agenda</span>
+              <span class="label-hint">Visible to Candidate</span>
+            </label>
+            <textarea
+              id="formNotes"
+              name="notes"
+              class="form-textarea"
+              rows="3"
+              placeholder="Provide agenda, topics to prepare, coding environments required, or documents to bring..."
+            ></textarea>
+          </div>
+
+          <div class="modal-actions">
+            <button type="button" class="btn btn-outline" onclick="closeScheduleModal()">Cancel</button>
+            <button type="submit" id="submitScheduleBtn" class="btn btn-primary btn-glow">
+              <span id="btnSubmitText">Confirm & Schedule Interview</span>
+              <span id="btnSpinner" class="spinner" style="display:none;"></span>
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+</DashboardLayout>
+
+<style>
+  .interviews-page-container {
+    max-width: 1100px;
+    margin: 0 auto;
+    width: 100%;
+    box-sizing: border-box;
+  }
+
+  .page-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 1.5rem;
+    flex-wrap: wrap;
+    margin-bottom: 1.75rem;
+  }
+
+  .badge-tag {
+    font-size: 0.75rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--color-primary);
+    background: rgba(167, 139, 250, 0.1);
+    padding: 0.2rem 0.6rem;
+    border-radius: 9999px;
+    display: inline-block;
+    margin-bottom: 0.35rem;
+  }
+
+  .page-header h1 {
+    font-size: 1.85rem;
+    font-weight: 700;
+    margin: 0 0 0.25rem 0;
+    color: var(--color-text-main);
+  }
+
+  .subtitle {
+    color: var(--color-text-muted);
+    font-size: 0.95rem;
+    margin: 0;
+  }
+
+  .btn-glow {
+    box-shadow: 0 4px 14px rgba(124, 58, 237, 0.35);
+  }
+
+  /* Stats row */
+  .stats-pills-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 1.25rem;
+    margin-bottom: 2rem !important;
+  }
+
+  .stat-badge-card {
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--border-radius-md);
+    padding: 1.15rem 1.25rem;
+    display: flex;
+    flex-direction: column;
+    text-decoration: none;
+    transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+    position: relative;
+    z-index: 1;
+  }
+  .stat-badge-card:hover {
+    transform: translateY(-3px);
+    border-color: var(--color-primary);
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.08);
+    z-index: 5;
+  }
+  .stat-badge-card.active-card {
+    border-color: var(--color-primary);
+    background: rgba(167, 139, 250, 0.08);
+  }
+
+  .stat-pill-num {
+    font-size: 1.65rem;
+    font-weight: 800;
+    color: var(--color-text-main);
+    line-height: 1.1;
+  }
+  .stat-pill-label {
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--color-text-muted);
+    margin-top: 0.25rem;
+  }
+
+  .pill-purple .stat-pill-num { color: var(--color-primary); }
+  .pill-green .stat-pill-num { color: #10b981; }
+  .pill-red .stat-pill-num { color: #ef4444; }
+
+  .interviews-list-container {
+    width: 100%;
+    position: relative;
+    z-index: 1;
+  }
+
+  /* Interviews Grid */
+  .interviews-grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 1.25rem;
+  }
+
+  .interview-card {
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--border-radius-lg);
+    padding: 1.5rem;
+    display: flex;
+    flex-direction: column;
+    gap: 1.25rem;
+    transition: all 0.2s ease;
+  }
+  .interview-card:hover {
+    border-color: rgba(167, 139, 250, 0.4);
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+  }
+
+  .interview-card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 1rem;
+    flex-wrap: wrap;
+  }
+
+  .candidate-meta-col {
+    display: flex;
+    align-items: center;
+    gap: 0.875rem;
+  }
+
+  .candidate-avatar {
+    width: 46px;
+    height: 46px;
+    border-radius: 50%;
+    background: var(--color-surface-hover);
+    border: 1px solid var(--color-border);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 700;
+    font-size: 1rem;
+    color: var(--color-primary);
+    overflow: hidden;
+    flex-shrink: 0;
+  }
+  .candidate-avatar img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+
+  .candidate-name {
+    margin: 0 0 0.2rem 0;
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: var(--color-text-main);
+  }
+
+  .job-applied-pill {
+    font-size: 0.8rem;
+    color: var(--color-text-muted);
+    font-weight: 500;
+  }
+
+  .status-tags-group {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+  }
+
+  .status-badge {
+    font-size: 0.75rem;
+    font-weight: 700;
+    padding: 0.2rem 0.6rem;
+    border-radius: 9999px;
+  }
+  .status-scheduled { background: rgba(59, 130, 246, 0.15); color: #3b82f6; border: 1px solid rgba(59, 130, 246, 0.3); }
+  .status-rescheduled { background: rgba(245, 158, 11, 0.15); color: #f59e0b; border: 1px solid rgba(245, 158, 11, 0.3); }
+  .status-completed { background: rgba(16, 185, 129, 0.15); color: #10b981; border: 1px solid rgba(16, 185, 129, 0.3); }
+  .status-cancelled { background: rgba(239, 68, 68, 0.15); color: #ef4444; border: 1px solid rgba(239, 68, 68, 0.3); }
+
+  .type-pill {
+    font-size: 0.75rem;
+    font-weight: 600;
+    padding: 0.2rem 0.55rem;
+    background: var(--color-surface-hover);
+    border: 1px solid var(--color-border);
+    border-radius: var(--border-radius-sm);
+    color: var(--color-text-muted);
+  }
+
+  .interview-title {
+    font-size: 1.15rem;
+    font-weight: 700;
+    margin: 0 0 0.75rem 0;
+    color: var(--color-text-main);
+  }
+
+  .info-row {
+    display: flex;
+    align-items: center;
+    gap: 2rem;
+    flex-wrap: wrap;
+  }
+
+  .info-item {
+    font-size: 0.875rem;
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+  }
+  .info-label {
+    color: var(--color-text-muted);
+  }
+  .highlight-time {
+    color: var(--color-primary);
+    font-weight: 700;
+  }
+
+  .interview-notes-box {
+    margin-top: 0.875rem;
+    padding: 0.875rem 1rem;
+    background: var(--color-bg);
+    border: 1px solid var(--color-border);
+    border-radius: var(--border-radius-md);
+    font-size: 0.85rem;
+  }
+  .interview-notes-box strong {
+    display: block;
+    color: var(--color-text-main);
+    margin-bottom: 0.25rem;
+  }
+  .interview-notes-box p {
+    margin: 0;
+    color: var(--color-text-muted);
+    line-height: 1.45;
+  }
+
+  .interview-card-footer {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding-top: 1rem;
+    border-top: 1px solid var(--color-border);
+    gap: 1rem;
+    flex-wrap: wrap;
+  }
+
+  .left-actions, .right-actions {
+    display: flex;
+    align-items: center;
+    gap: 0.65rem;
+    flex-wrap: wrap;
+  }
+
+  .calendar-sync-dropdown {
+    position: relative;
+    display: inline-block;
+  }
+  .calendar-sync-dropdown:hover .cal-dropdown-menu {
+    display: block;
+  }
+
+  .cal-dropdown-menu {
+    display: none;
+    position: absolute;
+    bottom: 100%;
+    left: 0;
+    margin-bottom: 0.4rem;
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--border-radius-md);
+    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
+    min-width: 180px;
+    z-index: 50;
+    overflow: hidden;
+  }
+  .cal-menu-item {
+    display: block;
+    padding: 0.55rem 0.875rem;
+    font-size: 0.8rem;
+    font-weight: 500;
+    color: var(--color-text-main);
+    text-decoration: none;
+    transition: background 0.15s ease;
+  }
+  .cal-menu-item:hover {
+    background: var(--color-surface-hover);
+    color: var(--color-primary);
+  }
+
+  .btn-action-link {
+    background: transparent;
+    border: none;
+    color: var(--color-text-muted);
+    font-size: 0.825rem;
+    font-weight: 600;
+    cursor: pointer;
+    padding: 0.3rem 0.5rem;
+    transition: color 0.2s;
+  }
+  .btn-action-link:hover {
+    color: var(--color-primary);
+  }
+  .text-success:hover { color: #10b981; }
+  .text-danger:hover { color: #ef4444; }
+
+  /* Modern Beautiful Modal System */
+  .modal-backdrop {
+    position: fixed;
+    inset: 0;
+    background: rgba(10, 11, 16, 0.75);
+    z-index: 200;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 1.25rem;
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+  }
+  .modern-modal {
+    width: min(640px, 95vw);
+    max-height: 92vh;
+    overflow-y: auto;
+    background: var(--color-bg);
+    border: 1px solid var(--color-border);
+    border-radius: var(--border-radius-xl);
+    box-shadow: 0 25px 60px -15px rgba(0, 0, 0, 0.7), 0 0 0 1px rgba(255, 255, 255, 0.05);
+    display: flex;
+    flex-direction: column;
+  }
+  html[data-theme="light"] .modern-modal {
+    background: #ffffff;
+    box-shadow: 0 25px 60px -15px rgba(0, 0, 0, 0.15), 0 0 0 1px rgba(0, 0, 0, 0.05);
+  }
+
+  .modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    padding: 1.5rem 1.75rem 1.25rem;
+    border-bottom: 1px solid var(--color-border);
+    background: var(--color-surface);
+  }
+  .modal-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    font-size: 0.72rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--color-primary);
+    background: rgba(167, 139, 250, 0.12);
+    padding: 0.15rem 0.55rem;
+    border-radius: 9999px;
+    margin-bottom: 0.35rem;
+  }
+  .dot-pulse {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--color-primary);
+    box-shadow: 0 0 6px var(--color-primary);
+  }
+  .modal-title {
+    font-size: 1.35rem;
+    font-weight: 800;
+    margin: 0 0 0.25rem 0;
+    color: var(--color-text-main);
+  }
+  .modal-subtitle {
+    font-size: 0.85rem;
+    color: var(--color-text-muted);
+    margin: 0;
+  }
+  .modal-close {
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    font-size: 1rem;
+    cursor: pointer;
+    color: var(--color-text-muted);
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s;
+  }
+  .modal-close:hover {
+    color: var(--color-text-main);
+    background: var(--color-surface-hover);
+    transform: scale(1.05);
+  }
+
+  .modal-body {
+    padding: 1.75rem;
+  }
+
+  /* Form Elements Design */
+  .form-group {
+    margin-bottom: 1.25rem;
+    position: relative;
+  }
+  .form-label {
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--color-text-main);
+    margin-bottom: 0.45rem;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .form-label .required {
+    color: #f43f5e;
+    margin-left: 0.15rem;
+  }
+  .label-hint {
+    font-size: 0.75rem;
+    font-weight: 500;
+    color: var(--color-text-muted);
+  }
+
+  .input-with-icon {
+    position: relative;
+    display: flex;
+    align-items: center;
+    width: 100%;
+  }
+  .input-with-icon .input-icon {
+    position: absolute;
+    left: 0.85rem;
+    font-size: 1rem;
+    pointer-events: none;
+    z-index: 2;
+    opacity: 0.85;
+  }
+  .input-with-icon .form-input,
+  .input-with-icon .form-select {
+    padding-left: 2.5rem;
+  }
+
+  .form-input,
+  .form-select,
+  .form-textarea {
+    width: 100%;
+    box-sizing: border-box;
+    font-family: inherit;
+    font-size: 0.9rem;
+    font-weight: 500;
+    color: var(--color-text-main);
+    background-color: var(--color-surface);
+    border: 1.5px solid var(--color-border);
+    border-radius: var(--border-radius-md);
+    padding: 0.65rem 0.9rem;
+    transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+    outline: none;
+  }
+  html[data-theme="light"] .form-input,
+  html[data-theme="light"] .form-select,
+  html[data-theme="light"] .form-textarea {
+    background-color: #f8fafc;
+    border-color: #e2e8f0;
+  }
+
+  .form-input:hover,
+  .form-select:hover,
+  .form-textarea:hover {
+    border-color: rgba(167, 139, 250, 0.5);
+  }
+
+  .form-input:focus,
+  .form-select:focus,
+  .form-textarea:focus {
+    border-color: var(--color-primary);
+    background-color: var(--color-bg);
+    box-shadow: 0 0 0 3.5px rgba(167, 139, 250, 0.22);
+  }
+  html[data-theme="light"] .form-input:focus,
+  html[data-theme="light"] .form-select:focus,
+  html[data-theme="light"] .form-textarea:focus {
+    background-color: #ffffff;
+  }
+
+  .form-textarea {
+    resize: vertical;
+    min-height: 80px;
+    line-height: 1.5;
+  }
+
+  .form-grid-2 {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1rem;
+  }
+
+  /* Candidate Search & Disambiguation Combobox */
+  .candidate-combobox-wrap {
+    position: relative;
+    width: 100%;
+  }
+
+  .search-input-box {
+    position: relative;
+    display: flex;
+    align-items: center;
+  }
+  .search-icon {
+    position: absolute;
+    left: 0.85rem;
+    color: var(--color-primary);
+    pointer-events: none;
+  }
+  .search-combobox-input {
+    padding-left: 2.4rem;
+    padding-right: 2.2rem;
+  }
+  .clear-search-btn {
+    position: absolute;
+    right: 0.75rem;
+    background: transparent;
+    border: none;
+    color: var(--color-text-muted);
+    font-size: 0.85rem;
+    cursor: pointer;
+    padding: 0.2rem;
+  }
+  .clear-search-btn:hover {
+    color: var(--color-text-main);
+  }
+
+  .candidate-options-dropdown {
+    position: absolute;
+    top: calc(100% + 0.35rem);
+    left: 0;
+    right: 0;
+    max-height: 280px;
+    overflow-y: auto;
+    background: var(--color-bg);
+    border: 1.5px solid var(--color-border);
+    border-radius: var(--border-radius-md);
+    box-shadow: 0 15px 35px rgba(0, 0, 0, 0.4);
+    z-index: 100;
+    padding: 0.4rem;
+  }
+  html[data-theme="light"] .candidate-options-dropdown {
+    background: #ffffff;
+    border-color: #cbd5e1;
+    box-shadow: 0 15px 35px rgba(0, 0, 0, 0.12);
+  }
+
+  .candidate-option-item {
+    display: flex;
+    align-items: center;
+    gap: 0.85rem;
+    padding: 0.65rem 0.85rem;
+    border-radius: var(--border-radius-sm);
+    cursor: pointer;
+    transition: all 0.15s ease;
+    border: 1px solid transparent;
+  }
+  .candidate-option-item:hover {
+    background: var(--color-surface-hover);
+    border-color: rgba(167, 139, 250, 0.3);
+  }
+  html[data-theme="light"] .candidate-option-item:hover {
+    background: rgba(167, 139, 250, 0.08);
+  }
+
+  .opt-avatar-box {
+    width: 38px;
+    height: 38px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, rgba(167, 139, 250, 0.2), rgba(96, 165, 250, 0.2));
+    border: 1px solid var(--color-border);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 700;
+    font-size: 0.85rem;
+    color: var(--color-primary);
+    overflow: hidden;
+    flex-shrink: 0;
+  }
+  .opt-avatar-box img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+
+  .opt-info-col {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .opt-header-line {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-bottom: 0.2rem;
+    flex-wrap: wrap;
+  }
+  .opt-candidate-name {
+    font-weight: 700;
+    font-size: 0.9rem;
+    color: var(--color-text-main);
+  }
+
+  /* Unique Disambiguation Email Pill */
+  .opt-email-tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    font-size: 0.75rem;
+    font-weight: 500;
+    color: var(--color-primary);
+    background: rgba(167, 139, 250, 0.1);
+    border: 1px solid rgba(167, 139, 250, 0.25);
+    padding: 0.1rem 0.45rem;
+    border-radius: 9999px;
+  }
+
+  .opt-meta-line {
+    display: flex;
+    align-items: center;
+    gap: 0.45rem;
+    font-size: 0.75rem;
+    color: var(--color-text-muted);
+    flex-wrap: wrap;
+  }
+  .opt-job-tag {
+    font-weight: 600;
+    color: var(--color-text-muted);
+  }
+  .opt-score-tag {
+    color: #10b981;
+    font-weight: 700;
+    background: rgba(16, 185, 129, 0.1);
+    padding: 0.05rem 0.35rem;
+    border-radius: 4px;
+  }
+  .opt-status-tag {
+    text-transform: capitalize;
+    background: var(--color-surface);
+    padding: 0.05rem 0.35rem;
+    border-radius: 4px;
+    border: 1px solid var(--color-border);
+  }
+
+  .opt-action-arrow {
+    font-size: 0.75rem;
+    font-weight: 700;
+    color: var(--color-primary);
+    opacity: 0;
+    transition: opacity 0.15s ease;
+  }
+  .candidate-option-item:hover .opt-action-arrow {
+    opacity: 1;
+  }
+
+  .no-options-message {
+    padding: 1.5rem 1rem;
+    text-align: center;
+    font-size: 0.85rem;
+    color: var(--color-text-muted);
+  }
+
+  /* Selected Candidate Card */
+  .selected-candidate-card {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.85rem 1rem;
+    background: linear-gradient(135deg, rgba(167, 139, 250, 0.08) 0%, rgba(96, 165, 250, 0.08) 100%);
+    border: 1.5px solid var(--color-primary);
+    border-radius: var(--border-radius-md);
+    gap: 1rem;
+    flex-wrap: wrap;
+    box-shadow: 0 4px 14px rgba(167, 139, 250, 0.12);
+  }
+  .candidate-summary-left {
+    display: flex;
+    align-items: center;
+    gap: 0.85rem;
+  }
+  .candidate-avatar-badge {
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    background: var(--color-primary);
+    color: #ffffff;
+    font-weight: 800;
+    font-size: 1rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 2px 8px rgba(124, 58, 237, 0.3);
+    flex-shrink: 0;
+  }
+  .name-email-line {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-bottom: 0.15rem;
+    flex-wrap: wrap;
+  }
+  .selected-name {
+    font-size: 0.98rem;
+    color: var(--color-text-main);
+  }
+  .selected-email-badge {
+    font-size: 0.75rem;
+    color: var(--color-primary);
+    background: rgba(167, 139, 250, 0.15);
+    padding: 0.1rem 0.5rem;
+    border-radius: 9999px;
+    font-weight: 600;
+  }
+  .selected-job-line {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.8rem;
+    color: var(--color-text-muted);
+  }
+  .selected-score-badge {
+    color: #10b981;
+    font-weight: 700;
+  }
+
+  .btn-outline-change {
+    font-size: 0.775rem;
+    font-weight: 600;
+    padding: 0.35rem 0.65rem;
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    color: var(--color-text-muted);
+    border-radius: var(--border-radius-sm);
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+  .btn-outline-change:hover {
+    color: var(--color-primary);
+    border-color: var(--color-primary);
+    background: var(--color-surface-hover);
+  }
+
+  .modal-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 0.85rem;
+    margin-top: 1.5rem;
+    padding-top: 1.25rem;
+    border-top: 1px solid var(--color-border);
+  }
+
+  @media (max-width: 768px) {
+    .page-header {
+      flex-direction: column !important;
+      align-items: flex-start !important;
+      gap: 1rem !important;
+    }
+    .page-header .btn {
+      width: 100% !important;
+      justify-content: center !important;
+      text-align: center !important;
+    }
+    .header-titles h1 {
+      font-size: 1.35rem !important;
+    }
+
+    .form-grid-2 {
+      grid-template-columns: 1fr !important;
+    }
+
+    .interview-card-header {
+      flex-direction: column !important;
+      align-items: flex-start !important;
+      gap: 0.75rem !important;
+    }
+
+    .info-row {
+      gap: 0.75rem 1.25rem !important;
+      font-size: 0.85rem !important;
+    }
+
+    .modal-box {
+      width: 94vw !important;
+      padding: 1.25rem 1rem !important;
+      max-height: 90vh !important;
+      overflow-y: auto !important;
+    }
+
+    .modal-actions {
+      flex-direction: column-reverse !important;
+      gap: 0.5rem !important;
+    }
+    .modal-actions .btn {
+      width: 100% !important;
+      justify-content: center !important;
+    }
+  }
+
+  @media (max-width: 640px) {
+    .stats-pills-grid {
+      grid-template-columns: repeat(2, 1fr) !important;
+      gap: 0.75rem !important;
+    }
+    .stat-badge-card {
+      padding: 0.85rem 0.65rem !important;
+      text-align: center !important;
+      align-items: center !important;
+    }
+    .stat-pill-num {
+      font-size: 1.35rem !important;
+    }
+    .stat-pill-label {
+      font-size: 0.72rem !important;
+      word-break: normal !important;
+    }
+  }
+</style>
+
+<script is:inline>
+  // Rich client-side applicant catalogue
+  let selectedAppId = '';
+
+  function showCandidateDropdown() {
+    const dropdown = document.getElementById('candidateOptionsList');
+    if (dropdown) dropdown.style.display = 'block';
+  }
+
+  function hideCandidateDropdown() {
+    setTimeout(() => {
+      const dropdown = document.getElementById('candidateOptionsList');
+      if (dropdown) dropdown.style.display = 'none';
+    }, 200);
+  }
+
+  function filterCandidateOptions(query) {
+    const q = (query || '').toLowerCase().trim();
+    const clearBtn = document.getElementById('clearSearchBtn');
+    const dropdown = document.getElementById('candidateOptionsList');
+    const noResults = document.getElementById('noResultsFound');
+    const items = document.querySelectorAll('.candidate-option-item');
+
+    if (clearBtn) clearBtn.style.display = q ? 'inline-block' : 'none';
+    if (dropdown) dropdown.style.display = 'block';
+
+    let matchCount = 0;
+    items.forEach(el => {
+      const searchText = el.getAttribute('data-search-text') || '';
+      if (!q || searchText.includes(q)) {
+        el.style.display = 'flex';
+        matchCount++;
+      } else {
+        el.style.display = 'none';
+      }
+    });
+
+    if (noResults) {
+      noResults.style.display = matchCount === 0 ? 'block' : 'none';
+    }
+  }
+
+  function resetCandidateSearch() {
+    const input = document.getElementById('candidateSearchInput');
+    if (input) {
+      input.value = '';
+      filterCandidateOptions('');
+      input.focus();
+    }
+  }
+
+  function selectCandidate(appId, name, email, jobTitle, initials, score) {
+    selectedAppId = appId;
+    document.getElementById('formAppSelect').value = appId;
+
+    // Populate selected preview card
+    document.getElementById('selectedName').textContent = unescape(name);
+    document.getElementById('selectedEmail').textContent = unescape(email);
+    document.getElementById('selectedJob').textContent = `💼 ${unescape(jobTitle)}`;
+    document.getElementById('selectedAvatar').textContent = unescape(initials);
+    
+    const scoreEl = document.getElementById('selectedScore');
+    if (score && score !== 'null') {
+      scoreEl.textContent = unescape(score);
+      scoreEl.style.display = 'inline';
+    } else {
+      scoreEl.style.display = 'none';
+    }
+
+    // Toggle view: show card, hide search box
+    document.getElementById('selectedCandidateCard').style.display = 'flex';
+    document.getElementById('candidateSearchCombobox').style.display = 'none';
+    document.getElementById('candidateOptionsList').style.display = 'none';
+
+    // Auto-suggest interview title if empty
+    const titleInput = document.getElementById('formTitle');
+    if (titleInput && !titleInput.value) {
+      titleInput.value = `Technical Interview - ${unescape(jobTitle)}`;
+    }
+  }
+
+  function clearCandidateSelection() {
+    selectedAppId = '';
+    document.getElementById('formAppSelect').value = '';
+    document.getElementById('selectedCandidateCard').style.display = 'none';
+    document.getElementById('candidateSearchCombobox').style.display = 'block';
+    
+    const searchInput = document.getElementById('candidateSearchInput');
+    if (searchInput) {
+      searchInput.value = '';
+      filterCandidateOptions('');
+      searchInput.focus();
+    }
+  }
+
+  function openScheduleModal(targetAppId) {
+    const modal = document.getElementById('scheduleModal');
+    if (modal) {
+      document.getElementById('formInterviewId').value = '';
+      document.getElementById('modalHeading').textContent = 'Schedule Candidate Interview';
+      document.getElementById('btnSubmitText').textContent = 'Confirm & Schedule Interview';
+      
+      // Default scheduledAt to tomorrow at 10:00 AM local
+      const tomorrow = new Date();
+      tomorrow.setDate(tomorrow.getDate() + 1);
+      tomorrow.setHours(10, 0, 0, 0);
+      const isoLocal = new Date(tomorrow.getTime() - tomorrow.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+      document.getElementById('formScheduledAt').value = isoLocal;
+
+      // Check if target candidate passed or preselected
+      const appIdToUse = targetAppId || new URLSearchParams(window.location.search).get('appId');
+      if (appIdToUse) {
+        const item = document.querySelector(`.candidate-option-item[data-app-id="${appIdToUse}"]`);
+        if (item) {
+          selectCandidate(
+            appIdToUse,
+            escape(item.getAttribute('data-name')),
+            escape(item.getAttribute('data-email')),
+            escape(item.getAttribute('data-job')),
+            item.getAttribute('data-initials'),
+            item.getAttribute('data-score')
+          );
+        }
+      } else {
+        clearCandidateSelection();
+      }
+
+      modal.style.display = 'flex';
+    }
+  }
+
+  function closeScheduleModal() {
+    const modal = document.getElementById('scheduleModal');
+    if (modal) modal.style.display = 'none';
+  }
+
+  function closeModalOnBackdrop(e) {
+    if (e.target.id === 'scheduleModal') {
+      closeScheduleModal();
+    }
+  }
+
+  function editInterview(id, itemJsonEscaped) {
+    try {
+      const item = JSON.parse(unescape(itemJsonEscaped));
+      const modal = document.getElementById('scheduleModal');
+      if (!modal) return;
+
+      document.getElementById('formInterviewId').value = item.id;
+      
+      // Select candidate
+      const targetItem = document.querySelector(`.candidate-option-item[data-app-id="${item.applicationId}"]`);
+      if (targetItem) {
+        selectCandidate(
+          item.applicationId,
+          escape(targetItem.getAttribute('data-name')),
+          escape(targetItem.getAttribute('data-email')),
+          escape(targetItem.getAttribute('data-job')),
+          targetItem.getAttribute('data-initials'),
+          targetItem.getAttribute('data-score')
+        );
+      } else {
+        selectCandidate(
+          item.applicationId,
+          escape(`${item.candidateFirstName} ${item.candidateLastName}`),
+          escape(item.candidateEmail || ''),
+          escape(item.jobTitle),
+          (item.candidateFirstName?.[0] || 'C').toUpperCase(),
+          ''
+        );
+      }
+
+      document.getElementById('formTitle').value = item.title;
+      document.getElementById('formInterviewType').value = item.interviewType || 'video';
+      document.getElementById('formDuration').value = item.durationMinutes || 45;
+      document.getElementById('formMeetingLink').value = item.meetingLink || '';
+      document.getElementById('formInterviewers').value = item.interviewerNames || '';
+      document.getElementById('formNotes').value = item.notes || '';
+
+      const d = new Date(item.scheduledAt);
+      const isoLocal = new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+      document.getElementById('formScheduledAt').value = isoLocal;
+
+      document.getElementById('modalHeading').textContent = 'Reschedule Interview';
+      document.getElementById('btnSubmitText').textContent = 'Save Changes & Reschedule';
+
+      modal.style.display = 'flex';
+    } catch (err) {
+      console.error('Failed to parse interview details:', err);
+    }
+  }
+
+  async function submitInterviewSchedule(e) {
+    e.preventDefault();
+    const submitBtn = document.getElementById('submitScheduleBtn');
+    const btnText = document.getElementById('btnSubmitText');
+    const spinner = document.getElementById('btnSpinner');
+
+    const appId = document.getElementById('formAppSelect').value;
+    if (!appId) {
+      alert('Please search and select a candidate for this interview round.');
+      return;
+    }
+
+    if (submitBtn) submitBtn.disabled = true;
+    if (spinner) spinner.style.display = 'inline-block';
+
+    const formData = new FormData(e.target);
+    const payload = {
+      interviewId: formData.get('interviewId') || undefined,
+      applicationId: appId,
+      title: formData.get('title'),
+      interviewType: formData.get('interviewType'),
+      durationMinutes: parseInt(formData.get('durationMinutes'), 10),
+      scheduledAt: formData.get('scheduledAt'),
+      meetingLink: formData.get('meetingLink'),
+      interviewerNames: formData.get('interviewerNames'),
+      notes: formData.get('notes'),
+    };
+
+    try {
+      const res = await fetch('/api/interviews/schedule', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+
+      const data = await res.json();
+      if (res.ok && data.success) {
+        if (typeof window.showToast === 'function') {
+          window.showToast(data.message || 'Interview scheduled successfully! ✓');
+        }
+        setTimeout(() => {
+          window.location.reload();
+        }, 600);
+      } else {
+        alert(data.error || 'Failed to schedule interview.');
+      }
+    } catch (err) {
+      console.error('Error submitting interview:', err);
+      alert('A network error occurred.');
+    } finally {
+      if (submitBtn) submitBtn.disabled = false;
+      if (spinner) spinner.style.display = 'none';
+    }
+  }
+
+  async function updateInterviewStatus(interviewId, newStatus) {
+    const confirmMsg = newStatus === 'completed'
+      ? 'Are you sure you want to mark this interview as completed?'
+      : 'Are you sure you want to cancel this interview?';
+
+    if (!confirm(confirmMsg)) return;
+
+    try {
+      const res = await fetch('/api/interviews/update-status', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ interviewId, status: newStatus })
+      });
+
+      const data = await res.json();
+      if (res.ok && data.success) {
+        if (typeof window.showToast === 'function') {
+          window.showToast(`Interview marked as ${newStatus} ✓`);
+        }
+        setTimeout(() => {
+          window.location.reload();
+        }, 500);
+      } else {
+        alert(data.error || 'Failed to update interview status.');
+      }
+    } catch (err) {
+      console.error('Error updating status:', err);
+      alert('A network error occurred.');
+    }
+  }
+
+  // Close combobox dropdown when clicking outside
+  document.addEventListener('click', (e) => {
+    const combobox = document.getElementById('candidateSearchCombobox');
+    const dropdown = document.getElementById('candidateOptionsList');
+    if (combobox && dropdown && !combobox.contains(e.target)) {
+      dropdown.style.display = 'none';
+    }
+  });
+
+  // Check URL param to open schedule modal automatically
+  document.addEventListener('DOMContentLoaded', () => {
+    const urlParams = new URLSearchParams(window.location.search);
+    if (urlParams.get('action') === 'schedule' || urlParams.get('appId')) {
+      openScheduleModal(urlParams.get('appId'));
+    }
+  });
+</script>

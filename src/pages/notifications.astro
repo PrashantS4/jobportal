@@ -1,0 +1,636 @@
+---
+import DashboardLayout from '../layouts/DashboardLayout.astro';
+import { getDb } from '../lib/db';
+import { notifications, jobPostings } from '../db/schema';
+import { eq, desc } from 'drizzle-orm';
+
+// @ts-ignore
+const payload = Astro.locals.user;
+if (!payload) {
+  return Astro.redirect('/login');
+}
+
+const db = getDb();
+
+let userNotifications: any[] = [];
+let allJobs: any[] = [];
+
+try {
+  userNotifications = await db
+    .select()
+    .from(notifications)
+    .where(eq(notifications.userId, payload.userId))
+    .orderBy(desc(notifications.createdAt))
+    .all();
+
+  allJobs = await db
+    .select({
+      id: jobPostings.id,
+      jobTitle: jobPostings.jobTitle,
+    })
+    .from(jobPostings)
+    .all();
+} catch (e) {
+  console.error('Failed to load notifications:', e);
+}
+
+const unreadCount = userNotifications.filter(n => !n.isRead).length;
+
+const getNotifMeta = (notif: any) => {
+  const type = notif.type;
+  const title = notif.title || '';
+  const message = notif.message || '';
+
+  // 1. Extract direct job URL if present in notification text
+  let jobLink = null;
+  const linkMatch = message.match(/\/jobs\/([a-zA-Z0-9_-]+)/);
+  if (linkMatch) {
+    jobLink = linkMatch[0];
+  } else {
+    // 2. Extract job title from quotes e.g. invited you to apply for "Web Developer"
+    const titleMatch = message.match(/invited you to apply for ["']([^"']+)["']/i);
+    if (titleMatch && titleMatch[1]) {
+      const targetTitle = titleMatch[1].trim().toLowerCase();
+      const matchedJob = allJobs.find(j => j.jobTitle?.toLowerCase() === targetTitle || j.jobTitle?.toLowerCase().includes(targetTitle));
+      if (matchedJob) {
+        jobLink = `/jobs/${matchedJob.id}`;
+      }
+    }
+  }
+
+  if (type === 'invitation' || title.includes('Invitation') || message.includes('invited you to apply')) {
+    return {
+      icon: '🌟',
+      badge: 'Employer Invitation',
+      badgeClass: 'badge-gold',
+      actionText: 'View Job & Apply Directly ⚡',
+      actionLink: jobLink || '/jobs',
+    };
+  }
+
+  if (type === 'shortlist' || title.includes('Shortlist')) {
+    return {
+      icon: '🏆',
+      badge: 'Shortlisted',
+      badgeClass: 'badge-gold',
+      actionText: 'View Applications',
+      actionLink: '/applications',
+    };
+  }
+
+  if (type === 'interview' || title.includes('Interview')) {
+    return {
+      icon: '🗓️',
+      badge: 'Interview Scheduled',
+      badgeClass: 'badge-purple',
+      actionText: 'View Interviews',
+      actionLink: '/interviews',
+    };
+  }
+
+  if (type === 'message' || title.includes('Message')) {
+    return {
+      icon: '💬',
+      badge: 'Direct Message',
+      badgeClass: 'badge-blue',
+      actionText: 'Open Chat',
+      actionLink: '/employee/messages',
+    };
+  }
+
+  if (type === 'job_match' || title.includes('Match')) {
+    return {
+      icon: '🎯',
+      badge: '80%+ Skill Match',
+      badgeClass: 'badge-purple',
+      actionText: 'Explore Jobs',
+      actionLink: jobLink || '/jobs',
+    };
+  }
+
+  if (type === 'alert') {
+    return {
+      icon: '🔔',
+      badge: 'Job Alert',
+      badgeClass: 'badge-amber',
+      actionText: 'View Jobs',
+      actionLink: jobLink || '/jobs',
+    };
+  }
+
+  return {
+    icon: '✨',
+    badge: 'Update',
+    badgeClass: 'badge-default',
+    actionText: jobLink ? 'View Details ⚡' : null,
+    actionLink: jobLink,
+  };
+};
+---
+
+<DashboardLayout title="Notifications" userType={payload.userType} activePath="/notifications">
+  <div class="page-header">
+    <div>
+      <div class="header-badge-row">
+        <h1 class="page-title">Notifications</h1>
+        {unreadCount > 0 && (
+          <span class="unread-pill">
+            <span class="pulse-dot"></span>
+            {unreadCount} Unread
+          </span>
+        )}
+      </div>
+      <p class="page-subtitle">Real-time alerts for shortlisting, employer invitations, messages, and skill match openings.</p>
+    </div>
+
+    {unreadCount > 0 && (
+      <button type="button" id="markAllReadBtn" class="btn btn-outline btn-sm">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"></polyline></svg>
+        Mark all as read
+      </button>
+    )}
+  </div>
+
+  <div class="notifications-container">
+    {userNotifications.length === 0 ? (
+      <div class="empty-state">
+        <div class="empty-icon-wrapper">
+          <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="var(--color-primary)" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path>
+            <path d="M13.73 21a2 2 0 0 1-3.46 0"></path>
+          </svg>
+        </div>
+        <h3>No notifications yet</h3>
+        <p>When companies shortlist your application, send you direct messages, or publish jobs matching 80%+ of your skills, you'll be instantly notified here.</p>
+        <div class="empty-actions">
+          <a href="/jobs" class="btn btn-primary">Find Matching Jobs</a>
+          <a href="/settings" class="btn btn-outline">Update Skills in Profile</a>
+        </div>
+      </div>
+    ) : (
+      <div class="notifications-list card">
+        {userNotifications.map((notif) => {
+          const meta = getNotifMeta(notif);
+          return (
+            <div class={`notification-item ${!notif.isRead ? 'unread' : ''}`} data-id={notif.id}>
+              <div class="notif-icon-box">
+                <span class="type-emoji">{meta.icon}</span>
+              </div>
+              <div class="notif-content">
+                <div class="notif-top-row">
+                  <div class="notif-heading-group">
+                    <span class={`notif-type-tag ${meta.badgeClass}`}>{meta.badge}</span>
+                    <h4 class="notif-title">{notif.title}</h4>
+                  </div>
+                  <span class="notif-time">
+                    {notif.createdAt ? new Date(notif.createdAt instanceof Date ? notif.createdAt : notif.createdAt * 1000).toLocaleDateString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : 'Just now'}
+                  </span>
+                </div>
+                <p class="notif-message">{notif.message}</p>
+                <div class="notif-action-row">
+                  {meta.actionLink && (
+                    <a href={meta.actionLink} class="notif-action-btn">
+                      <span>{meta.actionText}</span>
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 18 15 12 9 6"></polyline></svg>
+                    </a>
+                  )}
+                  {!notif.isRead ? (
+                    <button
+                      type="button"
+                      class="btn-mark-item-read"
+                      onclick={`markCandidateNotifRead('${notif.id}', this)`}
+                    >
+                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                      Mark as read
+                    </button>
+                  ) : (
+                    <span class="read-check-label">✓ Read</span>
+                  )}
+                </div>
+              </div>
+              {!notif.isRead && <div class="unread-dot" title="Unread"></div>}
+            </div>
+          );
+        })}
+      </div>
+    )}
+  </div>
+</DashboardLayout>
+
+<style>
+  .page-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 2rem;
+    gap: 1rem;
+    flex-wrap: wrap;
+  }
+  .header-badge-row {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    margin-bottom: 0.25rem;
+  }
+  .page-title {
+    font-size: 1.75rem;
+    font-weight: 700;
+    margin: 0;
+    color: var(--color-text-main);
+  }
+  .page-subtitle {
+    color: var(--color-text-muted);
+    font-size: 0.95rem;
+    margin: 0;
+    max-width: 650px;
+    line-height: 1.5;
+  }
+  .unread-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    background: rgba(124, 58, 237, 0.12);
+    color: var(--color-primary);
+    padding: 0.25rem 0.75rem;
+    border-radius: 2rem;
+    font-size: 0.8rem;
+    font-weight: 700;
+    border: 1px solid rgba(124, 58, 237, 0.25);
+  }
+  .pulse-dot {
+    width: 6px;
+    height: 6px;
+    background: var(--color-primary);
+    border-radius: 50%;
+    animation: pulse 2s infinite;
+  }
+  @keyframes pulse {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.4; transform: scale(1.3); }
+  }
+
+  .btn-sm {
+    padding: 0.45rem 0.9rem;
+    font-size: 0.85rem;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+  }
+
+  .notifications-container {
+    max-width: 880px;
+  }
+
+  .notifications-list {
+    padding: 0;
+    overflow: hidden;
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: 1.25rem;
+  }
+
+  .notification-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 1.25rem;
+    padding: 1.5rem 1.75rem;
+    border-bottom: 1px solid var(--color-border);
+    transition: background-color 0.2s, border-color 0.2s;
+    position: relative;
+  }
+  .notification-item:last-child {
+    border-bottom: none;
+  }
+  .notification-item:hover {
+    background: var(--color-surface-hover, rgba(255, 255, 255, 0.03));
+  }
+  .notification-item.unread {
+    background: rgba(124, 58, 237, 0.04);
+  }
+  .notification-item.unread::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: 4px;
+    background: var(--color-primary);
+    border-top-left-radius: 4px;
+    border-bottom-left-radius: 4px;
+  }
+
+  .notif-icon-box {
+    width: 48px;
+    height: 48px;
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: 1rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+  }
+  .type-emoji {
+    font-size: 1.4rem;
+  }
+
+  .notif-content {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .notif-top-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 1rem;
+    margin-bottom: 0.4rem;
+  }
+  .notif-heading-group {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    flex-wrap: wrap;
+  }
+
+  .notif-type-tag {
+    font-size: 0.725rem;
+    font-weight: 700;
+    padding: 0.2rem 0.6rem;
+    border-radius: 0.5rem;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+  }
+  .badge-gold {
+    background: rgba(245, 158, 11, 0.12);
+    color: #D97706;
+    border: 1px solid rgba(245, 158, 11, 0.25);
+  }
+  .badge-blue {
+    background: rgba(59, 130, 246, 0.12);
+    color: #2563EB;
+    border: 1px solid rgba(59, 130, 246, 0.25);
+  }
+  .badge-purple {
+    background: rgba(124, 58, 237, 0.12);
+    color: #7C3AED;
+    border: 1px solid rgba(124, 58, 237, 0.25);
+  }
+  .badge-amber {
+    background: rgba(249, 115, 22, 0.12);
+    color: #EA580C;
+    border: 1px solid rgba(249, 115, 22, 0.25);
+  }
+  .badge-default {
+    background: var(--color-surface);
+    color: var(--color-text-muted);
+    border: 1px solid var(--color-border);
+  }
+
+  .notif-title {
+    font-size: 1.05rem;
+    font-weight: 700;
+    color: var(--color-text-main);
+    margin: 0;
+  }
+  .notif-message {
+    font-size: 0.925rem;
+    color: var(--color-text-muted);
+    margin: 0 0 0.75rem 0;
+    line-height: 1.55;
+  }
+  .notif-time {
+    font-size: 0.8rem;
+    color: var(--color-text-muted);
+    white-space: nowrap;
+    opacity: 0.85;
+  }
+
+  .notif-action-row {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+    margin-top: 0.75rem;
+  }
+  .notif-action-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--color-primary);
+    text-decoration: none;
+    padding: 0.35rem 0.75rem;
+    background: rgba(124, 58, 237, 0.08);
+    border: 1px solid rgba(124, 58, 237, 0.2);
+    border-radius: 0.5rem;
+    transition: all 0.2s ease;
+  }
+  .notif-action-btn:hover {
+    background: var(--color-primary);
+    color: white;
+    transform: translateX(2px);
+  }
+
+  .unread-dot {
+    width: 9px;
+    height: 9px;
+    background: var(--color-primary);
+    border-radius: 50%;
+    flex-shrink: 0;
+    margin-top: 0.4rem;
+    box-shadow: 0 0 8px var(--color-primary);
+  }
+
+  .btn-mark-item-read {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    font-size: 0.775rem;
+    font-weight: 600;
+    color: var(--color-text-muted);
+    background: transparent;
+    border: 1px solid var(--color-border);
+    border-radius: var(--border-radius-sm);
+    padding: 0.3rem 0.65rem;
+    cursor: pointer;
+    transition: all 0.2s ease;
+  }
+  .btn-mark-item-read:hover {
+    color: var(--color-primary);
+    border-color: var(--color-primary);
+    background: var(--color-surface-hover);
+  }
+
+  @media (max-width: 640px) {
+    .notification-item {
+      padding: 1rem 0.85rem !important;
+      gap: 0.75rem !important;
+    }
+    .notif-icon-box {
+      width: 40px !important;
+      height: 40px !important;
+      border-radius: 0.75rem !important;
+    }
+    .type-emoji {
+      font-size: 1.15rem !important;
+    }
+    .notif-top-row {
+      flex-direction: column !important;
+      align-items: flex-start !important;
+      gap: 0.25rem !important;
+    }
+    .notif-heading-group {
+      flex-direction: row !important;
+      flex-wrap: wrap !important;
+      gap: 0.4rem !important;
+      align-items: center !important;
+    }
+    .notif-title {
+      font-size: 0.95rem !important;
+    }
+    .notif-time {
+      font-size: 0.75rem !important;
+    }
+    .notif-message {
+      font-size: 0.85rem !important;
+    }
+    .notif-action-row {
+      flex-direction: column !important;
+      align-items: stretch !important;
+      gap: 0.5rem !important;
+    }
+    .notif-action-btn {
+      width: 100% !important;
+      justify-content: center !important;
+    }
+    .btn-mark-item-read {
+      width: 100% !important;
+      justify-content: center !important;
+    }
+  }
+
+  .read-check-label {
+    font-size: 0.75rem;
+    color: var(--color-text-muted);
+    font-weight: 500;
+  }
+
+  .empty-state {
+    text-align: center;
+    padding: 5rem 2rem;
+    background: var(--color-surface);
+    border-radius: 1.5rem;
+    border: 1px solid var(--color-border);
+    max-width: 600px;
+    margin: 0 auto;
+  }
+  .empty-icon-wrapper {
+    width: 80px;
+    height: 80px;
+    margin: 0 auto 1.5rem;
+    background: rgba(124, 58, 237, 0.08);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid rgba(124, 58, 237, 0.2);
+  }
+  .empty-state h3 {
+    margin: 0 0 0.75rem 0;
+    font-size: 1.35rem;
+    color: var(--color-text-main);
+  }
+  .empty-state p {
+    color: var(--color-text-muted);
+    margin: 0 0 2rem 0;
+    line-height: 1.6;
+    font-size: 0.95rem;
+  }
+  .empty-actions {
+    display: flex;
+    gap: 1rem;
+    justify-content: center;
+    flex-wrap: wrap;
+  }
+</style>
+
+<script is:inline>
+  async function markCandidateNotifRead(id, btn) {
+    if (btn) btn.disabled = true;
+    try {
+      const res = await fetch('/api/notifications/read', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ notificationId: id })
+      });
+      if (res.ok) {
+        const item = document.querySelector(`.notification-item[data-id="${id}"]`);
+        if (item) {
+          item.classList.remove('unread');
+          const dot = item.querySelector('.unread-dot');
+          if (dot) dot.remove();
+        }
+        if (btn) {
+          const span = document.createElement('span');
+          span.className = 'read-check-label';
+          span.textContent = '✓ Read';
+          btn.replaceWith(span);
+        }
+        if (typeof window.decrementNotificationBadge === 'function') {
+          window.decrementNotificationBadge(1);
+        }
+        const unreadItems = document.querySelectorAll('.notification-item.unread').length;
+        const pill = document.querySelector('.unread-pill');
+        const markBtn = document.getElementById('markAllReadBtn');
+        if (unreadItems === 0) {
+          if (pill) pill.remove();
+          if (markBtn) markBtn.remove();
+        }
+      }
+    } catch (err) {
+      console.error('Failed to mark notification read:', err);
+    } finally {
+      if (btn) btn.disabled = false;
+    }
+  }
+
+  document.addEventListener('DOMContentLoaded', () => {
+    const markBtn = document.getElementById('markAllReadBtn');
+    
+    async function markAllAsRead() {
+      try {
+        const res = await fetch('/api/notifications/read', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ all: true })
+        });
+        if (res.ok) {
+          document.querySelectorAll('.notification-item.unread').forEach(el => el.classList.remove('unread'));
+          document.querySelectorAll('.unread-dot').forEach(el => el.remove());
+          document.querySelectorAll('.btn-mark-item-read').forEach(b => {
+            const span = document.createElement('span');
+            span.className = 'read-check-label';
+            span.textContent = '✓ Read';
+            b.replaceWith(span);
+          });
+          const pill = document.querySelector('.unread-pill');
+          if (pill) pill.remove();
+          if (markBtn) markBtn.remove();
+          if (typeof window.clearNotificationBadge === 'function') {
+            window.clearNotificationBadge();
+          }
+          const topbarBadge = document.getElementById('topbarNotificationBadge') || document.querySelector('.topbar-actions .badge');
+          if (topbarBadge) topbarBadge.remove();
+        }
+      } catch (err) {
+        console.error('Failed to mark notifications read', err);
+      }
+    }
+
+    markBtn?.addEventListener('click', markAllAsRead);
+  });
+</script>
+

@@ -1,0 +1,464 @@
+---
+import DashboardLayout from '../../layouts/DashboardLayout.astro';
+import { getDb } from '../../lib/db';
+import { users, jobPostings, applications } from '../../db/schema';
+import { count, sql, ne, desc, eq, notLike } from 'drizzle-orm';
+
+const db = getDb();
+
+const totalUsersResult = await db.select({ count: count() }).from(users).where(ne(users.userType, 'external_applicant'));
+const totalUsers = totalUsersResult[0]?.count || 0;
+
+const totalEmployersResult = await db.select({ count: count() }).from(users).where(sql`user_type = 'employer'`);
+const totalEmployers = totalEmployersResult[0]?.count || 0;
+
+const totalJobsResult = await db.select({ count: count() }).from(jobPostings).where(notLike(jobPostings.id, 'external_%'));
+const totalJobs = totalJobsResult[0]?.count || 0;
+
+const totalApplicationsResult = await db.select({ count: count() }).from(applications).where(notLike(applications.jobPostingId, 'external_%'));
+const totalApplications = totalApplicationsResult[0]?.count || 0;
+
+const recentJobs = await db.select({
+  id: jobPostings.id,
+  title: jobPostings.jobTitle,
+  employer: users.companyName,
+  employerFirstName: users.firstName,
+  employerLastName: users.lastName,
+  createdAt: jobPostings.createdAt,
+  status: jobPostings.status
+}).from(jobPostings)
+  .leftJoin(users, eq(jobPostings.employerId, users.id))
+  .where(notLike(jobPostings.id, 'external_%'))
+  .orderBy(desc(jobPostings.createdAt))
+  .limit(6);
+---
+
+<DashboardLayout title="Admin Dashboard" userType="admin" activePath="/admin">
+  <!-- Admin Welcome Banner -->
+  <div class="welcome-banner">
+    <div class="banner-content">
+      <div>
+        <span class="banner-tag">Platform Administration</span>
+        <h1>Admin Control Hub 🛡️</h1>
+        <p class="banner-subtitle">Monitor registered users, review open listings, and manage employer verification status.</p>
+      </div>
+      <div class="banner-actions">
+        <a href="/admin/jobs" class="btn btn-primary btn-glow">Moderate Jobs</a>
+        <a href="/admin/users" class="btn btn-outline">User Directory ↗</a>
+      </div>
+    </div>
+  </div>
+
+  <!-- Key Metrics Row -->
+  <div class="metrics-grid mb-4">
+    <div class="metric-card">
+      <div class="metric-icon-wrap icon-blue">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
+      </div>
+      <div class="metric-info">
+        <span class="metric-val">{totalUsers}</span>
+        <span class="metric-label">Total Platform Users</span>
+      </div>
+    </div>
+
+    <div class="metric-card">
+      <div class="metric-icon-wrap icon-purple">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="7" width="20" height="14" rx="2" ry="2"></rect><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"></path></svg>
+      </div>
+      <div class="metric-info">
+        <span class="metric-val">{totalEmployers}</span>
+        <span class="metric-label">Verified Employers</span>
+      </div>
+    </div>
+
+    <div class="metric-card">
+      <div class="metric-icon-wrap icon-yellow">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline></svg>
+      </div>
+      <div class="metric-info">
+        <span class="metric-val">{totalJobs}</span>
+        <span class="metric-label">Total Job Listings</span>
+      </div>
+    </div>
+
+    <div class="metric-card">
+      <div class="metric-icon-wrap icon-green">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>
+      </div>
+      <div class="metric-info">
+        <span class="metric-val">{totalApplications}</span>
+        <span class="metric-label">Applications Routed</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Recent Jobs Table Section -->
+  <div class="admin-table-card">
+    <div class="table-card-header">
+      <div>
+        <h3>Recent Job Submissions</h3>
+        <p class="subtext">Review latest postings from registered company recruiters</p>
+      </div>
+      <a href="/admin/jobs" class="view-all-link">View All Jobs &rarr;</a>
+    </div>
+
+    <div class="table-responsive">
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>Job Role & Title</th>
+            <th>Company / Employer</th>
+            <th>Status</th>
+            <th>Submission Date</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {recentJobs.length === 0 ? (
+            <tr>
+              <td colspan="5" style="text-align: center; color: var(--color-text-muted); padding: 3rem;">No recent job submissions.</td>
+            </tr>
+          ) : (
+            recentJobs.map((job) => (
+              <tr class="data-row">
+                <td class="col-title">
+                  <strong class="job-title-text">{job.title}</strong>
+                </td>
+                <td class="col-employer">
+                  <span class="company-text">🏢 {job.employer || (job.employerFirstName ? `${job.employerFirstName} ${job.employerLastName || ''}`.trim() : 'Employer')}</span>
+                </td>
+                <td class="col-status">
+                  <span class={`status-pill status-${job.status}`}>
+                    {job.status.charAt(0).toUpperCase() + job.status.slice(1)}
+                  </span>
+                </td>
+                <td class="col-date">
+                  <span class="date-text">
+                    📅 {job.createdAt ? new Date(job.createdAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : '—'}
+                  </span>
+                </td>
+                <td class="col-actions">
+                  <a href={`/jobs/${job.id}`} target="_blank" class="btn-action-icon" title="View Job Details">
+                    <span>👁️</span>
+                  </a>
+                </td>
+              </tr>
+            ))
+          )}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</DashboardLayout>
+
+<style>
+  .mb-4 { margin-bottom: 1.75rem; }
+
+  /* Welcome Banner */
+  .welcome-banner {
+    background: linear-gradient(135deg, rgba(99, 102, 241, 0.08) 0%, rgba(168, 85, 247, 0.08) 100%);
+    border: 1px solid rgba(99, 102, 241, 0.2);
+    border-radius: var(--border-radius-lg);
+    padding: 2rem 2.5rem;
+    margin-bottom: 1.5rem;
+  }
+
+  .banner-content {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 2rem;
+    flex-wrap: wrap;
+  }
+
+  .banner-tag {
+    display: inline-block;
+    padding: 0.25rem 0.75rem;
+    background: rgba(99, 102, 241, 0.15);
+    color: var(--color-primary);
+    border-radius: 9999px;
+    font-size: 0.75rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin-bottom: 0.5rem;
+  }
+
+  .welcome-banner h1 {
+    margin: 0 0 0.4rem 0;
+    font-size: 1.75rem;
+    font-weight: 800;
+    color: var(--color-text-main);
+  }
+
+  .banner-subtitle {
+    margin: 0;
+    font-size: 0.95rem;
+    color: var(--color-text-muted);
+  }
+
+  .banner-actions {
+    display: flex;
+    gap: 0.75rem;
+    align-items: center;
+  }
+
+  .btn-glow {
+    box-shadow: 0 4px 14px rgba(99, 102, 241, 0.35);
+  }
+
+  /* Metrics Grid */
+  .metrics-grid {
+    display: grid !important;
+    grid-template-columns: repeat(4, 1fr) !important;
+    gap: 1.25rem;
+  }
+
+  .metric-card {
+    background: var(--color-surface);
+    backdrop-filter: blur(16px);
+    border: 1px solid var(--color-border);
+    border-radius: var(--border-radius-md);
+    padding: 1.25rem 1.5rem;
+    display: flex !important;
+    flex-direction: row !important;
+    align-items: center !important;
+    gap: 1.25rem !important;
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+  }
+  .metric-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.06);
+  }
+
+  .metric-icon-wrap {
+    width: 48px;
+    height: 48px;
+    border-radius: 12px;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    flex-shrink: 0;
+  }
+  .icon-blue { background: rgba(59, 130, 246, 0.12); color: #3b82f6; }
+  .icon-purple { background: rgba(168, 85, 247, 0.12); color: #a855f7; }
+  .icon-yellow { background: rgba(245, 158, 11, 0.12); color: #f59e0b; }
+  .icon-green { background: rgba(16, 185, 129, 0.12); color: #10b981; }
+
+  .metric-info {
+    display: flex;
+    flex-direction: column;
+  }
+  .metric-val {
+    font-size: 1.6rem;
+    font-weight: 800;
+    color: var(--color-text-main);
+    line-height: 1.1;
+  }
+  .metric-label {
+    font-size: 0.8rem;
+    font-weight: 500;
+    color: var(--color-text-muted);
+    margin-top: 0.2rem;
+  }
+
+  /* Table Card */
+  .admin-table-card {
+    background: var(--color-surface);
+    backdrop-filter: blur(16px);
+    border: 1px solid var(--color-border);
+    border-radius: var(--border-radius-lg);
+    overflow: hidden;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.04);
+  }
+
+  .table-card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-end;
+    padding: 1.75rem 2rem 1.25rem 2rem;
+    border-bottom: 1px solid var(--color-border);
+  }
+
+  .table-card-header h3 {
+    margin: 0 0 0.2rem 0;
+    font-size: 1.2rem;
+    font-weight: 800;
+    color: var(--color-text-main);
+  }
+
+  .subtext {
+    margin: 0;
+    font-size: 0.85rem;
+    color: var(--color-text-muted);
+  }
+
+  .view-all-link {
+    font-size: 0.85rem;
+    font-weight: 700;
+    color: var(--color-primary);
+    text-decoration: none;
+  }
+  .view-all-link:hover { text-decoration: underline; }
+
+  .table-responsive {
+    overflow-x: auto;
+  }
+
+  .data-table {
+    width: 100%;
+    border-collapse: collapse;
+    text-align: left;
+  }
+
+  .data-table th {
+    padding: 1.1rem 1.75rem;
+    font-weight: 700;
+    color: var(--color-text-muted);
+    font-size: 0.8rem;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    border-bottom: 1px solid var(--color-border);
+    background: rgba(255, 255, 255, 0.02);
+  }
+
+  .data-table td {
+    padding: 1.25rem 1.75rem;
+    border-bottom: 1px solid var(--color-border);
+    vertical-align: middle;
+  }
+
+  .data-row:hover {
+    background: rgba(99, 102, 241, 0.02);
+  }
+
+  .job-title-text {
+    font-size: 1rem;
+    color: var(--color-text-main);
+  }
+
+  .company-text {
+    font-size: 0.88rem;
+    color: var(--color-text-muted);
+    font-weight: 500;
+  }
+
+  .status-pill {
+    padding: 0.25rem 0.75rem;
+    border-radius: 9999px;
+    font-size: 0.72rem;
+    font-weight: 700;
+    text-transform: uppercase;
+  }
+  .status-published { background: rgba(16, 185, 129, 0.15); color: #10b981; border: 1px solid rgba(16, 185, 129, 0.3); }
+  .status-draft { background: rgba(245, 158, 11, 0.15); color: #f59e0b; border: 1px solid rgba(245, 158, 11, 0.3); }
+  .status-closed { background: rgba(239, 68, 68, 0.15); color: #ef4444; border: 1px solid rgba(239, 68, 68, 0.3); }
+
+  .date-text {
+    font-size: 0.85rem;
+    color: var(--color-text-muted);
+  }
+
+  .btn-action-icon {
+    width: 34px;
+    height: 34px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 8px;
+    background: var(--color-bg);
+    border: 1px solid var(--color-border);
+    text-decoration: none;
+    transition: all 0.2s ease;
+  }
+  .btn-action-icon:hover {
+    background: var(--color-primary);
+    border-color: var(--color-primary);
+    transform: translateY(-2px);
+  }
+
+  @media (max-width: 1024px) {
+    .metrics-grid { grid-template-columns: repeat(2, 1fr) !important; }
+  }
+
+  @media (max-width: 768px) {
+    .welcome-banner {
+      padding: 1.25rem 1rem !important;
+    }
+    .banner-content {
+      flex-direction: column !important;
+      align-items: flex-start !important;
+      gap: 1rem !important;
+    }
+    .banner-actions {
+      width: 100% !important;
+      flex-direction: column !important;
+      gap: 0.5rem !important;
+    }
+    .banner-actions .btn {
+      width: 100% !important;
+      text-align: center !important;
+      justify-content: center !important;
+    }
+    .metrics-grid {
+      grid-template-columns: repeat(2, 1fr) !important;
+      gap: 0.75rem !important;
+    }
+    .metric-card {
+      flex-direction: column !important;
+      align-items: flex-start !important;
+      padding: 1rem 0.85rem !important;
+      gap: 0.5rem !important;
+    }
+    .metric-val {
+      font-size: 1.3rem !important;
+    }
+    .metric-label {
+      font-size: 0.75rem !important;
+    }
+
+    .table-card-header {
+      flex-direction: column !important;
+      align-items: flex-start !important;
+      gap: 0.75rem !important;
+      padding: 1.25rem 1rem !important;
+    }
+
+    .table-responsive {
+      background: transparent !important;
+      border: none !important;
+      box-shadow: none !important;
+      overflow: visible !important;
+    }
+
+    .data-table,
+    .data-table thead,
+    .data-table tbody {
+      display: block !important;
+      width: 100% !important;
+      box-sizing: border-box !important;
+    }
+
+    .data-table thead {
+      display: none !important;
+    }
+
+    .data-row {
+      background: var(--color-surface) !important;
+      backdrop-filter: blur(16px) !important;
+      border: 1px solid var(--color-border) !important;
+      border-radius: var(--border-radius-md) !important;
+      padding: 1.15rem 1rem !important;
+      margin-bottom: 1rem !important;
+      display: flex !important;
+      flex-direction: column !important;
+      gap: 0.65rem !important;
+      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.04) !important;
+    }
+
+    .data-table td {
+      padding: 0 !important;
+      border: none !important;
+    }
+  }
+</style>

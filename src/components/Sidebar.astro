@@ -1,0 +1,367 @@
+---
+import { getDb } from '../lib/db';
+import { users, plans } from '../db/schema';
+import { eq } from 'drizzle-orm';
+
+const { userType, activePath = "/dashboard" } = Astro.props;
+
+// SVG icons map (Lucide-style, stroke-based)
+const svgIcons: Record<string, string> = {
+  "dashboard-icon": `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>`,
+  "search-icon": `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>`,
+  "file-icon": `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>`,
+  "calendar-icon": `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>`,
+  "heart-icon": `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>`,
+  "star-icon": `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>`,
+  "bell-icon": `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>`,
+  "message-icon": `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>`,
+  "briefcase-icon": `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="7" width="20" height="14" rx="2" ry="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg>`,
+  "users-icon": `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>`,
+  "chart-icon": `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/><line x1="2" y1="20" x2="22" y2="20"/></svg>`,
+  "building-icon": `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>`,
+  "shield-icon": `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>`,
+  "credit-card-icon": `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="4" width="22" height="16" rx="2" ry="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>`,
+  "settings-icon": `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>`,
+  "logout-icon": `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>`,
+};
+
+// Sidebar navigation based on user role
+const employeeLinks = [
+  { name: "Dashboard", path: "/dashboard", icon: "dashboard-icon" },
+  { name: "Find Jobs", path: "/jobs", icon: "search-icon" },
+  { name: "My Applications", path: "/applications", icon: "file-icon" },
+  { name: "Interviews", path: "/employee/interviews", icon: "calendar-icon" },
+  { name: "Saved Jobs", path: "/saved", icon: "heart-icon" },
+  { name: "Recommended", path: "/recommended", icon: "star-icon" },
+  { name: "Messages", path: "/employee/messages", icon: "message-icon" },
+];
+
+const employerLinks = [
+  { name: "Overview", path: "/employer", icon: "dashboard-icon" },
+  { name: "AI Screening & Ranking", path: "/employer/screening", icon: "star-icon" },
+  { name: "My Jobs", path: "/employer/jobs", icon: "briefcase-icon" },
+  { name: "Applications", path: "/employer/applications", icon: "users-icon" },
+  { name: "Interviews", path: "/employer/interviews", icon: "calendar-icon" },
+  { name: "Find Talent", path: "/employer/candidates", icon: "search-icon" },
+  { name: "Analytics", path: "/employer/analytics", icon: "chart-icon" },
+  { name: "Messages", path: "/employer/messages", icon: "message-icon" },
+];
+
+const adminLinks = [
+  { name: "Overview", path: "/admin", icon: "dashboard-icon" },
+  { name: "Users", path: "/admin/users", icon: "users-icon" },
+  { name: "Employers", path: "/admin/employers", icon: "building-icon" },
+  { name: "Job Posts", path: "/admin/jobs", icon: "briefcase-icon" },
+];
+
+const superadminLinks = [
+  { name: "Overview", path: "/superadmin", icon: "dashboard-icon" },
+  { name: "Fraud & Security", path: "/superadmin/security", icon: "shield-icon" },
+  { name: "Users", path: "/superadmin/users", icon: "users-icon" },
+  { name: "Employers", path: "/superadmin/employers", icon: "building-icon" },
+  { name: "Applications", path: "/superadmin/applications", icon: "file-icon" },
+  { name: "Plans & Pricing", path: "/superadmin/plans", icon: "credit-card-icon" },
+];
+
+const masteradminLinks = [
+  { name: "Overview", path: "/masteradmin", icon: "dashboard-icon" },
+  { name: "Fraud & Security", path: "/masteradmin/security", icon: "shield-icon" },
+  { name: "Users", path: "/masteradmin/users", icon: "users-icon" },
+  { name: "Employers", path: "/masteradmin/employers", icon: "building-icon" },
+  { name: "Applications", path: "/masteradmin/applications", icon: "file-icon" },
+  { name: "Plans & Pricing", path: "/masteradmin/plans", icon: "credit-card-icon" },
+];
+
+let links: { name: string; path: string; icon: string }[] = [];
+if (userType === "employee") links = employeeLinks;
+if (userType === "employer") links = employerLinks;
+if (userType === "admin") links = adminLinks;
+if (userType === "superadmin") links = superadminLinks;
+if (userType === "masteradmin") links = masteradminLinks;
+
+try {
+  const payload = Astro.locals.user as any;
+  if (payload && (userType === 'employer' || userType === 'employee')) {
+    const db = getDb();
+    const userRecord = await db.select({
+      planFeatures: plans.features
+    }).from(users).leftJoin(plans, eq(users.planId, plans.planId)).where(eq(users.id, payload.userId)).get();
+    
+    if (userRecord && userRecord.planFeatures) {
+      const featureFlags = typeof userRecord.planFeatures === 'string' ? JSON.parse(userRecord.planFeatures) : userRecord.planFeatures;
+      if (featureFlags) {
+        if (userType === 'employee') {
+          if (featureFlags.emp_jobs === false) links = links.filter(l => l.name !== 'Find Jobs');
+          if (featureFlags.emp_applications === false) links = links.filter(l => l.name !== 'My Applications');
+          if (featureFlags.emp_interviews === false) links = links.filter(l => l.name !== 'Interviews');
+          if (featureFlags.emp_saved === false) links = links.filter(l => l.name !== 'Saved Jobs');
+          if (featureFlags.emp_recommended === false) links = links.filter(l => l.name !== 'Recommended');
+          if (featureFlags.emp_messaging === false || featureFlags.messaging === false) links = links.filter(l => l.name !== 'Messages');
+        } else if (userType === 'employer') {
+          if (featureFlags.er_screening === false && featureFlags.ai_screening !== true) links = links.filter(l => l.name !== 'AI Screening & Ranking');
+          if (featureFlags.er_jobs === false) links = links.filter(l => l.name !== 'My Jobs');
+          if (featureFlags.er_applications === false) links = links.filter(l => l.name !== 'Applications');
+          if (featureFlags.er_interviews === false) links = links.filter(l => l.name !== 'Interviews');
+          if (featureFlags.er_candidates === false) links = links.filter(l => l.name !== 'Find Talent');
+          if (featureFlags.er_analytics === false && featureFlags.analytics !== true) links = links.filter(l => l.name !== 'Analytics');
+          if (featureFlags.er_messaging === false || featureFlags.messaging === false) links = links.filter(l => l.name !== 'Messages');
+        }
+      }
+    }
+  }
+} catch (e) {
+  console.error("Error fetching plan features for sidebar", e);
+}
+const logoHomePath = 
+  userType === "employer" ? "/employer" :
+  userType === "admin" ? "/admin" :
+  userType === "superadmin" ? "/superadmin" :
+  userType === "masteradmin" ? "/masteradmin" :
+  userType === "employee" ? "/dashboard" : "/";
+---
+
+<aside class="sidebar" id="appSidebar">
+  <div class="sidebar-header">
+    <a href={logoHomePath} style="text-decoration: none; color: inherit; display: flex; align-items: center;">
+      <div class="logo">
+        <svg width="24" height="24" viewBox="0 0 128 128" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <polygon points="64,18 104,41 104,87 64,110 24,87 24,41" stroke="var(--color-primary)" stroke-width="10" stroke-linejoin="round" stroke-linecap="round" />
+          <path d="M64,64 L64,110 M64,64 L24,41 M64,64 L104,41" stroke="var(--color-primary)" stroke-width="10" stroke-linejoin="round" stroke-linecap="round" />
+        </svg>
+        <span class="logo-text">RecruitNest</span>
+      </div>
+    </a>
+    <button type="button" class="sidebar-close-btn" id="sidebarCloseBtn" aria-label="Close sidebar">✕</button>
+  </div>
+
+  <nav class="sidebar-nav">
+    <ul>
+      {
+        links.map((link) => (
+          <li>
+            <a
+              href={link.path}
+              class={activePath === link.path ? "active" : ""}
+            >
+              <span class="nav-icon" set:html={svgIcons[link.icon] || svgIcons["dashboard-icon"]} />
+              {link.name}
+            </a>
+          </li>
+        ))
+      }
+      <li>
+        <a
+          href={
+            userType === "employer" ? "/employer/settings" :
+            userType === "admin" ? "/admin/settings" :
+            userType === "superadmin" ? "/superadmin/settings" :
+            userType === "masteradmin" ? "/masteradmin/settings" :
+            "/settings"
+          }
+          class={activePath.includes("settings") ? "active" : ""}
+        >
+          <span class="nav-icon" set:html={svgIcons["settings-icon"]} />
+          {userType === "admin" || userType === "superadmin" || userType === "masteradmin" ? "User Settings" : "Settings"}
+        </a>
+      </li>
+      <li>
+        <a
+          href={
+            userType === "employer" ? "/employer/notifications" :
+            userType === "admin" ? "/admin/notifications" :
+            userType === "superadmin" ? "/superadmin/notifications" :
+            userType === "masteradmin" ? "/masteradmin/notifications" :
+            "/notifications"
+          }
+          class={activePath.includes("notifications") ? "active" : ""}
+        >
+          <span class="nav-icon" set:html={svgIcons["bell-icon"]} />
+          Notifications
+        </a>
+      </li>
+      {
+        userType === "employer" && (
+          <li>
+            <a
+              href="/employer/billing"
+              class={activePath === "/employer/billing" ? "active" : ""}
+            >
+              <span class="nav-icon" set:html={svgIcons["credit-card-icon"]} />
+              Billing
+            </a>
+          </li>
+        )
+      }
+      <li>
+        <a href="/logout" class="logout-link">
+          <span class="nav-icon" set:html={svgIcons["logout-icon"]} />
+          Logout
+        </a>
+      </li>
+    </ul>
+  </nav>
+</aside>
+
+
+<style>
+  .sidebar {
+    width: 260px;
+    flex-shrink: 0;
+    height: 100vh;
+    background-color: var(--color-surface);
+    border-right: 1px solid var(--color-border);
+    display: flex;
+    flex-direction: column;
+    position: sticky;
+    top: 0;
+    z-index: 120;
+    transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+
+  .sidebar-header {
+    height: 70px;
+    box-sizing: border-box;
+    padding: 0 1.5rem;
+    border-bottom: 1px solid var(--color-border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .logo {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 1.25rem;
+    font-weight: 700;
+    color: var(--color-text-main);
+  }
+
+  .sidebar-close-btn {
+    display: none;
+    background: transparent;
+    border: none;
+    color: var(--color-text-muted);
+    font-size: 1.25rem;
+    cursor: pointer;
+    padding: 0.25rem;
+  }
+
+  .sidebar-nav {
+    flex: 1;
+    padding: 1.5rem;
+    overflow-y: auto;
+  }
+
+  .nav-section-title {
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: var(--color-text-muted);
+    letter-spacing: 0.05em;
+    margin-bottom: 0.75rem;
+    padding-left: 1rem;
+  }
+
+  .mt-4 {
+    margin-top: 1.5rem;
+  }
+
+  .sidebar-nav ul {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+  }
+
+  .sidebar-nav li {
+    margin-bottom: 0.25rem;
+  }
+
+  .sidebar-nav a {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.625rem 1rem;
+    border-radius: var(--border-radius-md);
+    color: var(--color-text-muted);
+    font-weight: 500;
+    font-size: 0.875rem;
+    text-decoration: none;
+    transition: all 0.2s;
+  }
+
+  .sidebar-nav a:hover {
+    background-color: var(--color-bg);
+    color: var(--color-text-main);
+  }
+
+  .nav-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    width: 18px;
+    height: 18px;
+    opacity: 0.75;
+    transition: opacity 0.2s;
+  }
+
+  .sidebar-nav a:hover .nav-icon,
+  .sidebar-nav a.active .nav-icon,
+  .logout-link:hover .nav-icon {
+    opacity: 1;
+  }
+
+  .sidebar-nav a.active {
+    background-color: var(--color-primary-light);
+    color: var(--color-primary-dark);
+    font-weight: 600;
+  }
+
+  .sidebar-footer {
+    padding: 1.5rem;
+    border-top: 1px solid var(--color-border);
+  }
+
+  .logout-link {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    color: var(--color-text-muted);
+    font-weight: 500;
+    font-size: 0.875rem;
+    text-decoration: none;
+    transition: color 0.2s;
+  }
+
+  .logout-link:hover {
+    color: var(--color-danger);
+  }
+
+  @media (max-width: 768px) {
+    .sidebar {
+      position: fixed;
+      left: 0;
+      top: 0;
+      bottom: 0;
+      width: min(280px, 85vw);
+      height: 100vh;
+      z-index: 1000;
+      transform: translateX(-100%);
+      box-shadow: 0 0 40px rgba(0, 0, 0, 0.45);
+      background-color: var(--color-bg);
+      display: flex;
+      visibility: hidden;
+      transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1), visibility 0.3s;
+    }
+    .sidebar.sidebar-open {
+      visibility: visible;
+      transform: translateX(0);
+    }
+    .sidebar-close-btn {
+      display: block;
+    }
+    .sidebar-nav {
+      padding-bottom: 5rem;
+    }
+  }
+</style>

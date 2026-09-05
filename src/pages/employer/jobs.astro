@@ -1,0 +1,538 @@
+---
+import DashboardLayout from '../../layouts/DashboardLayout.astro';
+import { getDb } from '../../lib/db';
+import { jobPostings } from '../../db/schema';
+import { eq, desc, and } from 'drizzle-orm';
+
+const payload = Astro.locals.user;
+if (!payload || payload.userType !== 'employer') {
+  return Astro.redirect('/login');
+}
+
+const db = getDb();
+const jobs = await db.select().from(jobPostings).where(and(eq(jobPostings.employerId, payload.userId), eq(jobPostings.isDeleted, false))).orderBy(desc(jobPostings.createdAt)).all();
+---
+
+<DashboardLayout title="My Jobs" userType="employer" activePath="/employer/jobs">
+  <div class="jobs-header mb-4">
+    <div class="header-titles">
+      <span class="badge-tag">Recruiter Workspace</span>
+      <h1>Job Postings & Roles</h1>
+      <p class="subtitle">Create, monitor, and update your active company vacancies in real-time.</p>
+    </div>
+    <a href="/employer/post-job" class="btn btn-primary btn-glow">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+      Post New Job
+    </a>
+  </div>
+
+  <div class="jobs-container">
+    {jobs.length === 0 ? (
+      <div class="empty-state">
+        <div class="empty-icon">📢</div>
+        <h3>No Job Openings Yet</h3>
+        <p>Start finding top talent by publishing your first job opening on RecruitNest.</p>
+        <a href="/employer/post-job" class="btn btn-primary mt-3">+ Post a Job</a>
+      </div>
+    ) : (
+      <div class="table-responsive">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>Job Information</th>
+              <th>Status Switcher</th>
+              <th>Applications</th>
+              <th>Posted Date</th>
+              <th>Quick Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {jobs.map((job) => (
+              <tr class="job-row">
+                <td class="col-info">
+                  <a href={`/jobs/${job.id}`} class="job-title-link">
+                    <strong>{job.jobTitle}</strong>
+                  </a>
+                  <div class="job-sub-meta">
+                    <span>📍 {job.locationCity || (job.locationRemote ? 'Remote' : 'Onsite')}</span>
+                    <span>•</span>
+                    <span>⏱ {job.employmentType || 'Full-time'}</span>
+                    <span>•</span>
+                    <span>🎯 {job.experienceLevel || 'Mid Level'}</span>
+                  </div>
+                </td>
+                <td class="col-status">
+                  <div class="custom-select-wrap">
+                    <select class={`status-select select-status-${job.status}`} data-job-id={job.id}>
+                      <option value="published" selected={job.status === 'published'}>● Active</option>
+                      <option value="draft" selected={job.status === 'draft'}>● Draft</option>
+                      <option value="closed" selected={job.status === 'closed'}>● Inactive</option>
+                    </select>
+                  </div>
+                </td>
+                <td class="col-apps">
+                  <a href={`/employer/applications?jobId=${job.id}`} class="app-count-badge" title="View candidates for this job">
+                    <span class="app-num">{job.applicationsCount || 0}</span>
+                    <span class="app-txt">Applicants ↗</span>
+                  </a>
+                </td>
+                <td class="col-date">
+                  <span class="date-text">
+                    {new Date(job.createdAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
+                  </span>
+                </td>
+                <td class="col-actions">
+                  <span class="mobile-date-text">
+                    {new Date(job.createdAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
+                  </span>
+                  <div class="actions">
+                    <a href={`/jobs/${job.id}`} class="btn-action-icon" title="View Public Job Page">
+                      <span>👁️</span>
+                    </a>
+                    <a href={`/employer/jobs/${job.id}/edit`} class="btn-action-icon" title="Edit Job Posting">
+                      <span>✏️</span>
+                    </a>
+                    <button class="btn-action-icon btn-delete-job" data-job-id={job.id} title="Delete Job Posting" style="cursor: pointer; border: none; color: inherit; font-size: inherit;">
+                      <span>🗑️</span>
+                    </button>
+                  </div>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    )}
+  </div>
+</DashboardLayout>
+
+<style>
+  .mb-4 { margin-bottom: 1.75rem; }
+  .mt-3 { margin-top: 1rem; }
+
+  .jobs-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-end;
+    gap: 1.5rem;
+    flex-wrap: wrap;
+  }
+
+  .badge-tag {
+    display: inline-block;
+    padding: 0.25rem 0.75rem;
+    background: rgba(99, 102, 241, 0.15);
+    color: var(--color-primary);
+    border-radius: 9999px;
+    font-size: 0.75rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin-bottom: 0.4rem;
+  }
+
+  .header-titles h1 {
+    margin: 0 0 0.3rem 0;
+    font-size: 1.75rem;
+    font-weight: 800;
+    color: var(--color-text-main);
+  }
+
+  .subtitle {
+    margin: 0;
+    font-size: 0.95rem;
+    color: var(--color-text-muted);
+  }
+
+  .btn-glow {
+    box-shadow: 0 4px 14px rgba(99, 102, 241, 0.35);
+  }
+
+  .empty-state {
+    padding: 5rem 2rem;
+    text-align: center;
+    background: var(--color-surface);
+    backdrop-filter: blur(16px);
+    border-radius: var(--border-radius-lg);
+    border: 1px solid var(--color-border);
+  }
+  .empty-icon { font-size: 3rem; margin-bottom: 0.75rem; }
+  .empty-state h3 { margin: 0 0 0.5rem 0; font-size: 1.3rem; }
+  .empty-state p { color: var(--color-text-muted); margin: 0; }
+
+  .table-responsive {
+    overflow-x: auto;
+    background: var(--color-surface);
+    backdrop-filter: blur(16px);
+    border-radius: var(--border-radius-lg);
+    border: 1px solid var(--color-border);
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.04);
+  }
+
+  .data-table {
+    width: 100%;
+    border-collapse: collapse;
+    text-align: left;
+  }
+
+  .data-table th {
+    padding: 1.1rem 1.5rem;
+    font-weight: 700;
+    color: var(--color-text-muted);
+    font-size: 0.8rem;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    border-bottom: 1px solid var(--color-border);
+    background: rgba(255, 255, 255, 0.02);
+  }
+
+  .data-table td {
+    padding: 1.25rem 1.5rem;
+    border-bottom: 1px solid var(--color-border);
+    vertical-align: middle;
+  }
+
+  .job-row:hover {
+    background: rgba(99, 102, 241, 0.02);
+  }
+
+  .job-title-link {
+    text-decoration: none;
+    color: var(--color-text-main);
+    font-size: 1.05rem;
+    font-weight: 700;
+    transition: color 0.15s;
+  }
+  .job-title-link:hover {
+    color: var(--color-primary);
+  }
+
+  .job-sub-meta {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    font-size: 0.82rem;
+    color: var(--color-text-muted);
+    margin-top: 0.35rem;
+  }
+
+  /* Custom Dropdown Styling */
+  .custom-select-wrap {
+    position: relative;
+    display: inline-block;
+  }
+
+  .status-select {
+    appearance: none;
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    padding: 0.45rem 2rem 0.45rem 0.85rem;
+    border-radius: 2rem;
+    border: 1px solid var(--color-border);
+    font-size: 0.8rem;
+    font-weight: 700;
+    cursor: pointer;
+    font-family: inherit;
+    transition: all 0.2s ease;
+    outline: none;
+    background-color: var(--color-bg);
+  }
+
+  .select-status-published {
+    background-color: rgba(16, 185, 129, 0.1) !important;
+    color: #10b981 !important;
+    border-color: rgba(16, 185, 129, 0.3) !important;
+  }
+  .select-status-draft {
+    background-color: rgba(245, 158, 11, 0.1) !important;
+    color: #f59e0b !important;
+    border-color: rgba(245, 158, 11, 0.3) !important;
+  }
+  .select-status-closed {
+    background-color: rgba(239, 68, 68, 0.1) !important;
+    color: #ef4444 !important;
+    border-color: rgba(239, 68, 68, 0.3) !important;
+  }
+
+  .status-select:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+  }
+
+  .status-select:focus {
+    box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.2);
+  }
+
+  .app-count-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.4rem 0.85rem;
+    border-radius: 8px;
+    background: rgba(99, 102, 241, 0.08);
+    border: 1px solid rgba(99, 102, 241, 0.2);
+    text-decoration: none;
+    transition: all 0.2s ease;
+  }
+  .app-count-badge:hover {
+    background: rgba(99, 102, 241, 0.18);
+    transform: translateY(-1px);
+  }
+
+  .app-num {
+    font-size: 1rem;
+    font-weight: 800;
+    color: var(--color-primary);
+  }
+
+  .app-txt {
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--color-text-muted);
+  }
+
+  .date-text {
+    font-size: 0.88rem;
+    color: var(--color-text-muted);
+    font-weight: 500;
+  }
+
+  .mobile-date-text {
+    display: none;
+    font-size: 0.82rem;
+    color: var(--color-text-muted);
+    font-weight: 500;
+  }
+
+  .actions {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+
+  .btn-action-icon {
+    width: 34px;
+    height: 34px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 8px;
+    background: var(--color-bg);
+    border: 1px solid var(--color-border);
+    text-decoration: none;
+    transition: all 0.2s ease;
+  }
+  .btn-action-icon:hover {
+    background: var(--color-primary);
+    border-color: var(--color-primary);
+    color: white;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 10px rgba(99, 102, 241, 0.3);
+  }
+
+  /* Responsive Mobile Transformations */
+  @media (max-width: 768px) {
+    .jobs-header {
+      flex-direction: column !important;
+      align-items: flex-start !important;
+      gap: 1rem !important;
+    }
+    .jobs-header .btn {
+      width: 100% !important;
+      justify-content: center !important;
+      text-align: center !important;
+    }
+    .header-titles h1 {
+      font-size: 1.35rem !important;
+    }
+
+    .table-responsive {
+      background: transparent !important;
+      border: none !important;
+      box-shadow: none !important;
+      overflow: visible !important;
+    }
+
+    .data-table,
+    .data-table thead,
+    .data-table tbody {
+      display: block !important;
+      width: 100% !important;
+      box-sizing: border-box !important;
+    }
+
+    .data-table thead {
+      display: none !important;
+    }
+
+    .job-row {
+      background: var(--color-surface) !important;
+      backdrop-filter: blur(16px) !important;
+      border: 1px solid var(--color-border) !important;
+      border-radius: var(--border-radius-md) !important;
+      padding: 1.15rem 1rem !important;
+      margin-bottom: 1rem !important;
+      display: flex !important;
+      flex-wrap: wrap !important;
+      gap: 0.75rem !important;
+      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.04) !important;
+    }
+
+    .data-table td {
+      padding: 0 !important;
+      border: none !important;
+    }
+
+    .col-info {
+      width: 100% !important;
+    }
+
+    .job-title-link {
+      font-size: 1.05rem !important;
+      line-height: 1.3 !important;
+      word-break: break-word !important;
+    }
+
+    .job-sub-meta {
+      flex-wrap: wrap !important;
+      gap: 0.3rem 0.4rem !important;
+      font-size: 0.78rem !important;
+      margin-top: 0.25rem !important;
+    }
+
+    .job-sub-meta span {
+      white-space: nowrap !important;
+    }
+
+    /* Side-by-Side Status Selector and Applicants Count Box */
+    .col-status {
+      flex: 1 1 calc(50% - 0.375rem) !important;
+      min-width: 0 !important;
+      margin-bottom: 0 !important;
+    }
+
+    .col-apps {
+      flex: 1 1 calc(50% - 0.375rem) !important;
+      min-width: 0 !important;
+      margin-bottom: 0 !important;
+    }
+
+    .data-table td.col-date {
+      display: none !important;
+    }
+
+    .custom-select-wrap {
+      width: 100% !important;
+      display: block !important;
+    }
+
+
+
+    .app-count-badge {
+      width: 100% !important;
+      height: 40px !important;
+      display: flex !important;
+      justify-content: space-between !important;
+      align-items: center !important;
+      padding: 0.45rem 0.75rem !important;
+      border-radius: 10px !important;
+      box-sizing: border-box !important;
+      gap: 0.25rem !important;
+    }
+
+    .app-num {
+      font-size: 0.95rem !important;
+    }
+
+    .app-txt {
+      font-size: 0.75rem !important;
+      white-space: nowrap !important;
+    }
+
+    .col-actions {
+      width: 100% !important;
+      display: flex !important;
+      justify-content: space-between !important;
+      align-items: center !important;
+      padding-top: 0.75rem !important;
+      border-top: 1px solid var(--color-border) !important;
+      margin-top: 0.25rem !important;
+    }
+
+    .mobile-date-text {
+      display: inline-block !important;
+      font-size: 0.82rem !important;
+      color: var(--color-text-muted) !important;
+      font-weight: 600 !important;
+    }
+  }
+</style>
+
+<script>
+  const statusSelects = document.querySelectorAll('.status-select');
+  const deleteBtns = document.querySelectorAll('.btn-delete-job');
+
+  deleteBtns.forEach(btn => {
+    btn.addEventListener('click', async (e) => {
+      if (!confirm('Are you sure you want to delete this job posting? This action cannot be undone.')) return;
+      const target = e.currentTarget as HTMLButtonElement;
+      const jobId = target.getAttribute('data-job-id');
+      if (!jobId) return;
+
+      try {
+        const res = await fetch(`/api/employer/jobs/${jobId}`, {
+          method: 'DELETE'
+        });
+
+        if (res.ok) {
+          // @ts-ignore
+          if (window.showToast) window.showToast('Job deleted successfully!');
+          window.location.reload();
+        } else {
+          const result = await res.json();
+          // @ts-ignore
+          if (window.showToast) window.showToast(result.error || 'Failed to delete job', 'error');
+        }
+      } catch (err) {
+        // @ts-ignore
+        if (window.showToast) window.showToast('An error occurred while deleting', 'error');
+      }
+    });
+  });
+
+  statusSelects.forEach(select => {
+    select.addEventListener('change', async (e) => {
+      const target = e.target as HTMLSelectElement;
+      const jobId = target.getAttribute('data-job-id');
+      const status = target.value;
+
+      if (!jobId) return;
+
+      try {
+        const res = await fetch('/api/employer/jobs/status', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          credentials: 'same-origin',
+          body: JSON.stringify({ jobId, status })
+        });
+
+        if (res.ok) {
+          // @ts-ignore
+          if (window.showToast) window.showToast('Job status updated successfully!');
+          window.location.reload();
+        } else {
+          const result = await res.json();
+          // @ts-ignore
+          if (window.showToast) window.showToast(result.error || 'Failed to update status', 'error');
+          window.location.reload();
+        }
+      } catch (err) {
+        // @ts-ignore
+        if (window.showToast) window.showToast('An error occurred while updating job status', 'error');
+        window.location.reload();
+      }
+    });
+  });
+</script>

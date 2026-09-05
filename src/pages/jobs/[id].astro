@@ -1,0 +1,1379 @@
+---
+import { getResumeViewerUrl } from '../../lib/resume-helper';
+import DashboardLayout from "../../layouts/DashboardLayout.astro";
+import { getDb } from "../../lib/db";
+import { jobPostings, applications, users } from "../../db/schema";
+import { eq, and, desc } from "drizzle-orm";
+
+// @ts-ignore
+const payload = Astro.locals.user;
+if (!payload) {
+  return Astro.redirect("/login");
+}
+
+const { id } = Astro.params;
+
+let defaultBackUrl = "/jobs";
+if (payload.userType === "masteradmin") {
+  defaultBackUrl = "/masteradmin/employers";
+} else if (payload.userType === "superadmin") {
+  defaultBackUrl = "/superadmin/employers";
+} else if (payload.userType === "admin") {
+  defaultBackUrl = "/admin/jobs";
+} else if (payload.userType === "employer") {
+  defaultBackUrl = "/employer/jobs";
+}
+
+if (!id) {
+  return Astro.redirect(defaultBackUrl);
+}
+
+const db = getDb();
+let job = null;
+let alreadyApplied = false;
+let appId = null;
+
+try {
+  // 1. Fetch job with employer details
+  job = await db
+    .select({
+      id: jobPostings.id,
+      jobTitle: jobPostings.jobTitle,
+      description: jobPostings.description,
+      requirements: jobPostings.requirements,
+      salaryMin: jobPostings.salaryMin,
+      salaryMax: jobPostings.salaryMax,
+      salaryCurrency: jobPostings.salaryCurrency,
+      locationCity: jobPostings.locationCity,
+      locationRemote: jobPostings.locationRemote,
+      employmentType: jobPostings.employmentType,
+      experienceLevel: jobPostings.experienceLevel,
+      companyName: users.companyName,
+      companyIndustry: users.companyIndustry,
+      companyWebsite: users.companyWebsite,
+      employerId: jobPostings.employerId,
+      status: jobPostings.status,
+      isDeleted: jobPostings.isDeleted,
+      applicationFormConfig: jobPostings.applicationFormConfig,
+    })
+    .from(jobPostings)
+    .leftJoin(users, eq(jobPostings.employerId, users.id))
+    .where(eq(jobPostings.id, id))
+    .get();
+
+  const isPrivilegedUser = ['masteradmin', 'superadmin', 'admin'].includes(payload.userType) || (payload.userType === 'employer' && job?.employerId === payload.userId);
+  if (!job || (!isPrivilegedUser && (job.status !== "published" || job.isDeleted))) {
+    return Astro.redirect(defaultBackUrl);
+  }
+
+  // 2. Check if already applied
+  const existingApp = await db
+    .select()
+    .from(applications)
+    .where(
+      and(
+        eq(applications.jobPostingId, id),
+        eq(applications.applicantId, payload.userId)
+      )
+    )
+    .get();
+  
+  if (existingApp) {
+    alreadyApplied = true;
+    appId = existingApp.id;
+  }
+} catch (e) {
+  console.error("Error loading job detail page:", e);
+  return Astro.redirect(defaultBackUrl);
+}
+
+let candidateUser: any = null;
+if (payload.userType === 'employee') {
+  try {
+    candidateUser = await db.select().from(users).where(eq(users.id, payload.userId)).get();
+  } catch (err) {
+    console.error('Failed to load candidate user profile:', err);
+  }
+}
+
+let jobApplicants: any[] = [];
+if (payload.userType === 'employer') {
+  try {
+    jobApplicants = await db
+      .select({
+        id: applications.id,
+        status: applications.status,
+        appliedAt: applications.appliedAt,
+        applicantFirstName: users.firstName,
+        applicantLastName: users.lastName,
+        applicantEmail: users.email,
+        resumeUrl: applications.resumeUrl,
+        aiScore: applications.aiScore,
+        headline: users.headline,
+        avatarUrl: users.avatarUrl,
+      })
+      .from(applications)
+      .innerJoin(users, eq(applications.applicantId, users.id))
+      .where(eq(applications.jobPostingId, id))
+      .orderBy(desc(applications.appliedAt))
+      .all();
+  } catch (err) {
+    console.error('Failed to load job applicants on detail page:', err);
+  }
+}
+
+let screeningQuestions: any[] = [];
+if (job.applicationFormConfig) {
+  try {
+    const parsed = typeof job.applicationFormConfig === 'string' ? JSON.parse(job.applicationFormConfig) : job.applicationFormConfig;
+    if (Array.isArray(parsed)) {
+      screeningQuestions = parsed;
+    } else if (parsed && Array.isArray(parsed.questions)) {
+      screeningQuestions = parsed.questions;
+    }
+  } catch (e) {}
+}
+
+const formatSalary = (min: any, max: any, currency: string | null) => {
+  if (!min && !max) return null;
+  const c = (currency || 'USD').trim();
+  const numMin = Number(min);
+  const numMax = Number(max);
+  const validMin = !isNaN(numMin) && isFinite(numMin) && numMin > 0;
+  const validMax = !isNaN(numMax) && isFinite(numMax) && numMax > 0;
+  if (!validMin && !validMax) return null;
+
+  const fmtNum = (n: number) => {
+    if (n >= 1_000_000_000_000) {
+      const val = n / 1_000_000_000_000;
+      return val > 999 ? '999T+' : `${val.toFixed(1).replace(/\.0$/, '')}T`;
+    }
+    if (n >= 1_000_000_000) return `${(n / 1_000_000_000).toFixed(1).replace(/\.0$/, '')}B`;
+    if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1).replace(/\.0$/, '')}M`;
+    if (n >= 1_000) return `${(n / 1_000).toFixed(0)}k`;
+    return String(Math.round(n));
+  };
+
+  const fMin = validMin ? fmtNum(numMin) : null;
+  const fMax = validMax ? fmtNum(numMax) : null;
+
+  if (fMin && fMax) {
+    if (fMin === fMax) return `${c} ${fMin}`;
+    return `${c} ${fMin}–${fMax}`;
+  }
+  if (fMin) return `${c} ${fMin}+`;
+  if (fMax) return `Up to ${c} ${fMax}`;
+  return null;
+};
+
+const salary = formatSalary(job.salaryMin, job.salaryMax, job.salaryCurrency);
+const logoColor = `hsl(${Math.abs((job.companyName || "X").charCodeAt(0) * 7) % 360}, 60%, 52%)`;
+---
+
+<DashboardLayout title={`${job.jobTitle} - Job Details`} userType={payload.userType} activePath={
+  payload.userType === 'employer' ? '/employer/jobs' : 
+  payload.userType === 'masteradmin' ? '/masteradmin/employers' : 
+  payload.userType === 'superadmin' ? '/superadmin/employers' : 
+  payload.userType === 'admin' ? '/admin/jobs' : '/jobs'
+}>
+  <div class="job-detail-page-wrapper">
+    <div class="back-nav mb-5">
+      <a 
+        href={defaultBackUrl} 
+        class="back-link"
+        onclick="if (window.history && window.history.length > 1 && document.referrer && document.referrer.includes(window.location.host)) { window.history.back(); return false; }"
+      >
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <line x1="19" y1="12" x2="5" y2="12"></line>
+          <polyline points="12 19 5 12 12 5"></polyline>
+        </svg>
+        Back
+      </a>
+    </div>
+
+    <div class="card main-info-card">
+      <div class="header-section">
+        <div class="company-logo-large" style={`background: ${logoColor}`}>
+          {(job.companyName || "?").charAt(0).toUpperCase()}
+        </div>
+        <div class="header-meta">
+          <h1>{job.jobTitle}</h1>
+          <p class="company-name-text">
+            {job.companyName || "Company"} 
+            {job.companyWebsite && (
+              <a href={job.companyWebsite} target="_blank" rel="noopener noreferrer" class="website-link">
+                Visit Website ↗
+              </a>
+            )}
+          </p>
+          <div class="tags mt-3">
+            {job.locationRemote && <span class="tag tag-green">🌐 Remote</span>}
+            {job.locationCity && !job.locationRemote && <span class="tag">📍 {job.locationCity}</span>}
+            {job.employmentType && <span class="tag">⏱ {job.employmentType}</span>}
+            {job.experienceLevel && <span class="tag">🎯 {job.experienceLevel}</span>}
+            {salary && <span class="tag tag-salary">💰 {salary}</span>}
+          </div>
+        </div>
+      </div>
+
+      <hr class="divider mt-6 mb-6" />
+
+      <div class="content-section">
+        <h2>Job Description</h2>
+        <div class="description-text" set:html={job.description} />
+      </div>
+
+      {job.requirements && (
+        <div class="content-section mt-6">
+          <h2>Requirements</h2>
+          <div class="requirements-text">{job.requirements}</div>
+        </div>
+      )}
+
+      <hr class="divider mt-8 mb-8" />
+
+      <!-- Apply Option / View Application Button below description -->
+      {payload.userType === 'employee' && (
+        <div class="application-section">
+          {alreadyApplied ? (
+            <div class="applied-state-inline">
+              <div class="applied-info">
+                <span class="applied-badge">✓ Applied</span>
+                <p>You have already submitted an application for this job posting.</p>
+              </div>
+              <a href={`/applications/${appId}`} class="btn btn-outline">View My Application</a>
+            </div>
+          ) : (
+            <div class="apply-container-inline">
+              <h2>Apply for this Job</h2>
+              <p class="subtitle">Please fill out the form below to submit your resume and profile.</p>
+              
+              <form id="applyForm" class="apply-form mt-4">
+                <input type="hidden" name="jobId" id="applyJobId" value={job.id} />
+                <input type="hidden" id="hasDefaultResume" value={candidateUser?.defaultResumeUrl ? 'true' : 'false'} />
+                
+                <div class="form-grid">
+                  <!-- Resume Choice Section -->
+                  {candidateUser?.defaultResumeUrl ? (
+                    <div class="form-group full-width-group">
+                      <label class="form-label">Resume Submission <span class="required">*</span></label>
+                      <div class="resume-choice-toggle-container">
+                        <label class="resume-choice-card active" id="choiceDefaultResumeLabel">
+                          <input type="radio" name="resumeMode" id="modeDefaultResume" value="default" checked />
+                          <div class="resume-choice-content">
+                            <div class="choice-header">
+                              <span class="choice-title">📄 Apply with Saved Default Resume</span>
+                              <span class="choice-badge">Recommended</span>
+                            </div>
+                            <p class="choice-sub">Uses your pre-uploaded profile resume for fast 1-click application.</p>
+                            <div class="default-resume-preview-row">
+                              <span class="resume-ready-indicator">✓ Active Resume Attached</span>
+                              <a href={getResumeViewerUrl(candidateUser.defaultResumeUrl, Astro.url.origin)} target="_blank" class="preview-mini-link">Preview Resume ↗</a>
+                            </div>
+                          </div>
+                        </label>
+
+                        <label class="resume-choice-card" id="choiceCustomResumeLabel">
+                          <input type="radio" name="resumeMode" id="modeCustomResume" value="custom" />
+                          <div class="resume-choice-content">
+                            <div class="choice-header">
+                              <span class="choice-title">📤 Upload a Different Resume</span>
+                            </div>
+                            <p class="choice-sub">Upload a tailored resume PDF specifically for this job role.</p>
+                          </div>
+                        </label>
+                      </div>
+
+                      <div id="customResumeUploadBox" class="custom-upload-container mt-3" style="display: none;">
+                        <label class="form-label" for="resumeFile">Select Custom PDF Resume <span class="required">*</span></label>
+                        <input type="file" id="resumeFile" class="form-input" accept="application/pdf" />
+                        <span class="input-helper">Please upload your custom resume in PDF format (max 5MB).</span>
+                        <label class="checkbox-option mt-2">
+                          <input type="checkbox" id="saveAsDefault" name="saveAsDefault" />
+                          <span class="checkbox-text">Update my saved default resume with this file</span>
+                        </label>
+                      </div>
+                    </div>
+                  ) : (
+                    <div class="form-group full-width-group">
+                      <div class="no-default-resume-tip mb-3">
+                        <span class="tip-icon">💡</span>
+                        <div class="tip-body">
+                          <strong>No default resume set up yet</strong>
+                          <p>Upload your resume below and keep <em>"Save this resume as my default resume"</em> checked to enable 1-click applications for all future jobs! You can also manage it in <a href="/settings" class="tip-link">Settings ↗</a>.</p>
+                        </div>
+                      </div>
+                      <label class="form-label" for="resumeFile">Resume (PDF) <span class="required">*</span></label>
+                      <input type="file" id="resumeFile" class="form-input" accept="application/pdf" required />
+                      <span class="input-helper">Please upload your latest resume in PDF format (max 5MB).</span>
+                      <label class="checkbox-option mt-2">
+                        <input type="checkbox" id="saveAsDefault" name="saveAsDefault" checked />
+                        <span class="checkbox-text">Save this resume as my default resume for future applications</span>
+                      </label>
+                    </div>
+                  )}
+
+                  <div class="form-group">
+                    <label class="form-label" for="photoFile">
+                      Profile Photo 
+                      {candidateUser?.avatarUrl ? <span class="optional-badge">(Optional to replace)</span> : <span class="required">*</span>}
+                    </label>
+                    {candidateUser?.avatarUrl && (
+                      <div class="existing-avatar-preview mb-2">
+                        <img src={candidateUser.avatarUrl} alt="Avatar" class="avatar-thumbnail" />
+                        <span class="avatar-status-text">✓ Using existing profile photo</span>
+                      </div>
+                    )}
+                    <input type="file" id="photoFile" class="form-input" accept="image/*" required={!candidateUser?.avatarUrl} />
+                    <span class="input-helper">Upload a clean portrait photo (PNG, JPG, WEBP).</span>
+                  </div>
+
+                  <div class="form-group">
+                    <label class="form-label" for="linkedinUrl">LinkedIn Profile URL <span class="required">*</span></label>
+                    <input type="url" id="linkedinUrl" class="form-input" placeholder="https://linkedin.com/in/username" value={candidateUser?.linkedinUrl || ''} required />
+                  </div>
+
+                  <div class="form-group full-width-group">
+                    <label class="form-label" for="portfolioUrl">Portfolio / Personal Website</label>
+                    <input type="url" id="portfolioUrl" class="form-input" placeholder="https://myportfolio.com" value={candidateUser?.portfolioUrl || ''} />
+                  </div>
+                </div>
+
+                <!-- Custom Screening Questions Section -->
+                {screeningQuestions.length > 0 && (
+                  <div class="screening-questions-container mt-4 mb-4">
+                    <div class="screening-header mb-3">
+                      <h3>📝 Applicant Screening Questions</h3>
+                      <p class="screening-sub">The employer has requested answers to the following questions before reviewing your application:</p>
+                    </div>
+
+                    <div class="screening-questions-list">
+                      {screeningQuestions.map((q: any, idx: number) => (
+                        <div class="screening-question-card" data-q-id={q.id} data-q-type={q.type} data-q-text={q.text} data-q-required={q.required ? 'true' : 'false'}>
+                          <label class="screening-q-label">
+                            <span class="q-number-pill">Q{idx + 1}</span>
+                            <span class="q-prompt-text">{q.text}</span>
+                            {q.required ? <span class="required-badge">* Required</span> : <span class="optional-badge">(Optional)</span>}
+                          </label>
+
+                          {q.type === 'text' && (
+                            <input 
+                              type="text" 
+                              class="form-input screening-answer-input" 
+                              name={`sq_${q.id}`} 
+                              required={q.required} 
+                              placeholder="Type your response here..." 
+                            />
+                          )}
+
+                          {q.type === 'paragraph' && (
+                            <textarea 
+                              class="form-textarea screening-answer-input" 
+                              name={`sq_${q.id}`} 
+                              rows="3" 
+                              required={q.required} 
+                              placeholder="Type your detailed response here..."
+                            ></textarea>
+                          )}
+
+                          {q.type === 'number' && (
+                            <input 
+                              type="number" 
+                              class="form-input screening-answer-input" 
+                              name={`sq_${q.id}`} 
+                              required={q.required} 
+                              placeholder="e.g. 3" 
+                              step="any"
+                            />
+                          )}
+
+                          {q.type === 'yes_no' && (
+                            <div class="yes-no-options">
+                              <label class="radio-option">
+                                <input type="radio" name={`sq_${q.id}`} value="Yes" required={q.required} />
+                                <span class="radio-custom"></span>
+                                <span class="radio-text">Yes</span>
+                              </label>
+                              <label class="radio-option">
+                                <input type="radio" name={`sq_${q.id}`} value="No" required={q.required} />
+                                <span class="radio-custom"></span>
+                                <span class="radio-text">No</span>
+                              </label>
+                            </div>
+                          )}
+
+                          {q.type === 'select' && (
+                            <select class="form-input screening-answer-input" name={`sq_${q.id}`} required={q.required}>
+                              <option value="">Select an option...</option>
+                              {(q.options || []).map((opt: string) => (
+                                <option value={opt}>{opt}</option>
+                              ))}
+                            </select>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                <div class="form-group mt-3">
+                  <label class="form-label" for="coverLetter">Cover Letter / Note to Recruiter</label>
+                  <textarea id="coverLetter" class="form-textarea" rows="4" placeholder="Tell the employer why you are a great fit for this position..."></textarea>
+                </div>
+
+                <div class="submit-row mt-4">
+                  <button type="submit" class="btn btn-primary" id="submitApplyBtn">
+                    <span id="submitApplyText">Submit Application</span>
+                    <span id="submitApplySpinner" style="display: none;">Submitting...</span>
+                  </button>
+                </div>
+              </form>
+            </div>
+          )}
+        </div>
+      )}
+
+      <!-- Employer Applicants Management Section -->
+      {payload.userType === 'employer' && (
+        <div class="employer-applicants-section mt-8">
+          <div class="applicants-section-header">
+            <div>
+              <div class="section-title-badge">
+                <span class="badge-tag">Recruiter View</span>
+                <h2>Applicants for this Role ({jobApplicants.length})</h2>
+              </div>
+              <p class="subtitle">Review candidates who applied for "{job.jobTitle}"</p>
+            </div>
+            <div class="header-action-buttons">
+              <a href={`/employer/jobs/${job.id}/edit`} class="btn btn-outline">
+                ✏️ Edit Job
+              </a>
+              <a href={`/employer/applications?jobId=${job.id}`} class="btn btn-primary">
+                Open Full Table ↗
+              </a>
+            </div>
+          </div>
+
+          {jobApplicants.length === 0 ? (
+            <div class="empty-applicants-box mt-4">
+              <div class="empty-icon">📭</div>
+              <h3>No applications received yet</h3>
+              <p>When candidates apply, their resumes, profiles, and compatibility scores will be listed here.</p>
+              <a href="/employer/candidates" class="btn btn-outline mt-3">Find Matching Candidates</a>
+            </div>
+          ) : (
+            <div class="applicants-cards-grid mt-5">
+              {jobApplicants.map((app) => (
+                <div class="candidate-applicant-card">
+                  <div class="candidate-card-header">
+                    <div class="candidate-avatar">
+                      {app.avatarUrl ? (
+                        <img src={app.avatarUrl} alt={`${app.applicantFirstName} ${app.applicantLastName}`} />
+                      ) : (
+                        <span>{app.applicantFirstName?.charAt(0) || 'C'}{app.applicantLastName?.charAt(0) || ''}</span>
+                      )}
+                    </div>
+                    <div class="candidate-primary-info">
+                      <h4 class="candidate-name">{app.applicantFirstName} {app.applicantLastName}</h4>
+                      <span class="candidate-email">{app.applicantEmail}</span>
+                      {app.headline && <p class="candidate-headline">{app.headline}</p>}
+                    </div>
+                  </div>
+
+                  <div class="candidate-card-badges">
+                    {app.aiScore !== null && app.aiScore !== undefined ? (
+                      <span class={`score-pill ${app.aiScore >= 75 ? 'score-high' : app.aiScore >= 50 ? 'score-mid' : 'score-low'}`}>
+                        ⚡ {app.aiScore}% Match
+                      </span>
+                    ) : (
+                      <span class="score-pill score-pending">AI Evaluating</span>
+                    )}
+                    <span class={`status-badge status-${app.status}`}>
+                      {app.status.replace('_', ' ')}
+                    </span>
+                  </div>
+
+                  <div class="candidate-card-footer">
+                    <span class="applied-date-label">
+                      Applied {new Date(app.appliedAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
+                    </span>
+                    <div class="candidate-action-links">
+                      {app.resumeUrl && (
+                        <a href={getResumeViewerUrl(app.resumeUrl, Astro.url.origin)} target="_blank" rel="noopener noreferrer" class="btn-applicant-action" title="View PDF Resume">
+                          📄 Resume
+                        </a>
+                      )}
+                      <a href={`/employer/applications/${app.id}`} class="btn-applicant-action btn-review" title="Review & Shortlist">
+                        Review Candidate →
+                      </a>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  </div>
+
+  <!-- Toast Notification element -->
+  <div id="toast" class="toast" style="display: none;"></div>
+</DashboardLayout>
+
+<script>
+  // Add Toast helper
+  function showToast(message: string, type: 'success' | 'error' = 'success') {
+    if (typeof (window as any).showToast === 'function') {
+      (window as any).showToast(message, type);
+      return;
+    }
+    const toast = document.getElementById('toast');
+    if (!toast) return;
+    toast.textContent = message;
+    toast.className = `toast ${type === 'error' ? 'toast-error' : 'toast-success'}`;
+    toast.style.display = 'block';
+    setTimeout(() => {
+      toast.style.display = 'none';
+    }, 4000);
+  }
+
+  // Handle Resume Mode Toggle (Default vs Custom)
+  const modeDefaultEl = document.getElementById('modeDefaultResume') as HTMLInputElement | null;
+  const modeCustomEl = document.getElementById('modeCustomResume') as HTMLInputElement | null;
+  const customUploadBox = document.getElementById('customResumeUploadBox');
+  const labelDefault = document.getElementById('choiceDefaultResumeLabel');
+  const labelCustom = document.getElementById('choiceCustomResumeLabel');
+  const resumeFileInput = document.getElementById("resumeFile") as HTMLInputElement | null;
+
+  function updateResumeModeUI() {
+    if (modeCustomEl && modeCustomEl.checked) {
+      if (customUploadBox) customUploadBox.style.display = 'block';
+      if (labelCustom) labelCustom.classList.add('active');
+      if (labelDefault) labelDefault.classList.remove('active');
+      if (resumeFileInput) resumeFileInput.required = true;
+    } else if (modeDefaultEl && modeDefaultEl.checked) {
+      if (customUploadBox) customUploadBox.style.display = 'none';
+      if (labelDefault) labelDefault.classList.add('active');
+      if (labelCustom) labelCustom.classList.remove('active');
+      if (resumeFileInput) {
+        resumeFileInput.required = false;
+        resumeFileInput.value = '';
+      }
+    }
+  }
+
+  modeDefaultEl?.addEventListener('change', updateResumeModeUI);
+  modeCustomEl?.addEventListener('change', updateResumeModeUI);
+
+  const form = document.getElementById("applyForm");
+  if (form) {
+    form.addEventListener("submit", async (e) => {
+      e.preventDefault();
+
+      const jobId = (document.getElementById("applyJobId") as HTMLInputElement).value;
+      const hasDefaultResume = (document.getElementById("hasDefaultResume") as HTMLInputElement)?.value === 'true';
+      const isCustomMode = modeCustomEl ? modeCustomEl.checked : !hasDefaultResume;
+      const useDefault = hasDefaultResume && !isCustomMode;
+
+      const photoFileInput = document.getElementById("photoFile") as HTMLInputElement | null;
+      const linkedinUrlInput = document.getElementById("linkedinUrl") as HTMLInputElement;
+      const portfolioUrlInput = document.getElementById("portfolioUrl") as HTMLInputElement;
+      const coverLetter = (document.getElementById("coverLetter") as HTMLTextAreaElement).value.trim();
+
+      const file = resumeFileInput?.files?.[0];
+      const photoFile = photoFileInput?.files?.[0];
+
+      if (!useDefault && !file) {
+        showToast("Please upload your resume", "error");
+        resumeFileInput?.focus();
+        return;
+      }
+
+      if (!photoFile && photoFileInput?.required) {
+        showToast("Please upload a profile photo", "error");
+        photoFileInput?.focus();
+        return;
+      }
+
+      const linkedinUrl = linkedinUrlInput.value.trim();
+      const linkedinRegex = /^https?:\/\/(www\.)?linkedin\.com\/(in|pub|profile)\/[a-zA-Z0-9%\-_]+(\/.*)?$/i;
+      if (!linkedinUrl || !linkedinRegex.test(linkedinUrl)) {
+        showToast("Please enter a valid LinkedIn profile URL (e.g., https://linkedin.com/in/yourname)", "error");
+        linkedinUrlInput.focus();
+        return;
+      }
+
+      let portfolioUrl = portfolioUrlInput.value.trim();
+      if (portfolioUrl && !/^https?:\/\//i.test(portfolioUrl)) {
+        portfolioUrl = "https://" + portfolioUrl;
+      }
+
+      // Collect screening questions answers
+      const screeningCards = document.querySelectorAll('.screening-question-card');
+      const screeningAnswers: any[] = [];
+      let hasValidationError = false;
+
+      screeningCards.forEach(card => {
+        if (hasValidationError) return;
+        const qId = card.getAttribute('data-q-id') || '';
+        const qType = card.getAttribute('data-q-type') || '';
+        const qText = card.getAttribute('data-q-text') || '';
+        const isRequired = card.getAttribute('data-q-required') === 'true';
+
+        let answer = '';
+        if (qType === 'yes_no') {
+          const checkedRadio = card.querySelector(`input[name="sq_${qId}"]:checked`) as HTMLInputElement | null;
+          answer = checkedRadio ? checkedRadio.value : '';
+        } else if (qType === 'select') {
+          const selectEl = card.querySelector(`select[name="sq_${qId}"]`) as HTMLSelectElement | null;
+          answer = selectEl ? selectEl.value.trim() : '';
+        } else if (qType === 'paragraph') {
+          const textareaEl = card.querySelector(`textarea[name="sq_${qId}"]`) as HTMLTextAreaElement | null;
+          answer = textareaEl ? textareaEl.value.trim() : '';
+        } else {
+          const inputEl = card.querySelector(`input[name="sq_${qId}"]`) as HTMLInputElement | null;
+          answer = inputEl ? inputEl.value.trim() : '';
+        }
+
+        if (isRequired && !answer) {
+          showToast(`Please answer required question: "${qText}"`, "error");
+          hasValidationError = true;
+          return;
+        }
+
+        if (answer) {
+          screeningAnswers.push({
+            id: qId,
+            question: qText,
+            type: qType,
+            answer: answer
+          });
+        }
+      });
+
+      if (hasValidationError) {
+        return;
+      }
+
+      const submitBtn = document.getElementById("submitApplyBtn") as HTMLButtonElement;
+      const submitText = document.getElementById("submitApplyText") as HTMLElement;
+      const submitSpinner = document.getElementById("submitApplySpinner") as HTMLElement;
+
+      submitBtn.disabled = true;
+      submitText.style.display = "none";
+      submitSpinner.style.display = "inline";
+
+      try {
+        const formData = new FormData();
+        formData.append("jobPostingId", jobId);
+
+        if (useDefault) {
+          formData.append("useDefaultResume", "true");
+        } else if (file) {
+          formData.append("resume", file);
+          const saveAsDefaultCheckbox = document.getElementById("saveAsDefault") as HTMLInputElement | null;
+          if (saveAsDefaultCheckbox && saveAsDefaultCheckbox.checked) {
+            formData.append("saveAsDefault", "true");
+          }
+        }
+
+        if (photoFile) {
+          formData.append("photo", photoFile);
+        }
+
+        formData.append("linkedinUrl", linkedinUrl);
+        if (portfolioUrl) {
+          formData.append("portfolioUrl", portfolioUrl);
+        }
+        if (coverLetter) {
+          formData.append("coverLetter", coverLetter);
+        }
+        if (screeningAnswers.length > 0) {
+          formData.append("screeningAnswers", JSON.stringify(screeningAnswers));
+        }
+
+        const res = await fetch("/api/employee/apply", {
+          method: "POST",
+          body: formData,
+        });
+
+        const data = await res.json();
+
+        if (res.ok) {
+          showToast("Application submitted successfully! 🎉");
+          setTimeout(() => {
+            window.location.reload();
+          }, 1500);
+        } else {
+          showToast(data.error || "Failed to submit application", "error");
+        }
+      } catch (err) {
+        showToast("Network error. Please try again.", "error");
+      } finally {
+        submitBtn.disabled = false;
+        submitText.style.display = "inline";
+        submitSpinner.style.display = "none";
+      }
+    });
+  }
+</script>
+
+<style>
+  .no-default-resume-tip {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.75rem;
+    padding: 0.875rem 1rem;
+    background: rgba(59, 130, 246, 0.08);
+    border: 1px solid rgba(59, 130, 246, 0.25);
+    border-radius: var(--border-radius-md);
+    font-size: 0.85rem;
+  }
+  .tip-icon {
+    font-size: 1.2rem;
+    line-height: 1;
+  }
+  .tip-body strong {
+    display: block;
+    color: var(--color-text-main);
+    margin-bottom: 0.2rem;
+  }
+  .tip-body p {
+    margin: 0;
+    color: var(--color-text-muted);
+    line-height: 1.4;
+  }
+  .tip-link {
+    color: var(--color-primary);
+    font-weight: 600;
+    text-decoration: none;
+  }
+  .tip-link:hover {
+    text-decoration: underline;
+  }
+  .full-width-group {
+    grid-column: 1 / -1;
+  }
+  .resume-choice-toggle-container {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 0.875rem;
+    margin-top: 0.25rem;
+  }
+  .resume-choice-card {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.75rem;
+    padding: 1rem;
+    background: var(--color-surface-hover);
+    border: 2px solid var(--color-border);
+    border-radius: var(--border-radius-md);
+    cursor: pointer;
+    transition: all 0.2s ease;
+  }
+  .resume-choice-card:hover {
+    border-color: var(--color-primary);
+  }
+  .resume-choice-card.active {
+    border-color: var(--color-primary);
+    background: rgba(59, 130, 246, 0.04);
+  }
+  .resume-choice-card input[type="radio"] {
+    margin-top: 0.25rem;
+    accent-color: var(--color-primary);
+  }
+  .resume-choice-content {
+    flex: 1;
+  }
+  .choice-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 0.5rem;
+  }
+  .choice-title {
+    font-weight: 700;
+    font-size: 0.9375rem;
+    color: var(--color-text-main);
+  }
+  .choice-badge {
+    font-size: 0.7rem;
+    font-weight: 700;
+    background: rgba(16, 185, 129, 0.15);
+    color: #059669;
+    padding: 0.15rem 0.45rem;
+    border-radius: 9999px;
+  }
+  .choice-sub {
+    font-size: 0.8rem;
+    color: var(--color-text-muted);
+    margin: 0.25rem 0 0.5rem 0;
+  }
+  .default-resume-preview-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+    font-size: 0.775rem;
+  }
+  .resume-ready-indicator {
+    color: #10b981;
+    font-weight: 600;
+  }
+  .preview-mini-link {
+    color: var(--color-primary);
+    text-decoration: none;
+    font-weight: 600;
+  }
+  .preview-mini-link:hover {
+    text-decoration: underline;
+  }
+  .custom-upload-container {
+    padding: 1rem;
+    background: var(--color-bg);
+    border: 1px dashed var(--color-border);
+    border-radius: var(--border-radius-md);
+  }
+  .checkbox-option {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    cursor: pointer;
+    font-size: 0.825rem;
+    color: var(--color-text-muted);
+  }
+  .checkbox-option input[type="checkbox"] {
+    accent-color: var(--color-primary);
+  }
+  .existing-avatar-preview {
+    display: flex;
+    align-items: center;
+    gap: 0.625rem;
+  }
+  .avatar-thumbnail {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    object-fit: cover;
+    border: 1px solid var(--color-border);
+  }
+  .avatar-status-text {
+    font-size: 0.775rem;
+    color: #10b981;
+    font-weight: 600;
+  }
+  .job-detail-page-wrapper {
+    padding: 1.5rem 2rem 3rem 2.5rem;
+    max-width: 1000px;
+    margin: 0 auto;
+  }
+
+  .back-nav {
+    display: flex;
+    align-items: center;
+    margin-bottom: 1.5rem;
+  }
+  
+  .back-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    color: var(--color-text-muted);
+    text-decoration: none;
+    font-weight: 500;
+    transition: color 0.2s;
+  }
+  
+  .back-link:hover {
+    color: var(--color-primary);
+  }
+
+  .main-info-card {
+    padding: 2rem;
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--border-radius-lg);
+  }
+
+  .header-section {
+    display: flex;
+    gap: 1.5rem;
+    align-items: flex-start;
+  }
+
+  .company-logo-large {
+    width: 64px;
+    height: 64px;
+    border-radius: var(--border-radius-md);
+    color: white;
+    font-size: 1.75rem;
+    font-weight: 800;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+  }
+
+  .header-meta h1 {
+    font-size: 1.6rem;
+    margin: 0 0 0.25rem 0;
+    color: var(--color-text-main);
+  }
+
+  .company-name-text {
+    font-size: 1rem;
+    color: var(--color-text-muted);
+    margin: 0;
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+  }
+
+  .website-link {
+    font-size: 0.85rem;
+    color: var(--color-primary);
+    text-decoration: none;
+    font-weight: 600;
+  }
+
+  .tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+
+  .tag {
+    padding: 0.35rem 0.75rem;
+    background: var(--color-bg);
+    border: 1px solid var(--color-border);
+    border-radius: 9999px;
+    font-size: 0.82rem;
+    font-weight: 600;
+    color: var(--color-text-main);
+  }
+
+  .tag-green {
+    background: rgba(16, 185, 129, 0.12);
+    color: #10b981;
+    border-color: rgba(16, 185, 129, 0.25);
+  }
+
+  .tag-salary {
+    background: rgba(99, 102, 241, 0.12);
+    color: var(--color-primary);
+    border-color: rgba(99, 102, 241, 0.25);
+    max-width: 280px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .divider {
+    border: none;
+    border-top: 1px solid var(--color-border);
+    margin: 1.75rem 0;
+  }
+
+  .content-section h2 {
+    font-size: 1.2rem;
+    margin: 0 0 0.75rem 0;
+    color: var(--color-text-main);
+  }
+
+  .description-text, .requirements-text {
+    font-size: 0.95rem;
+    line-height: 1.7;
+    color: var(--color-text-main);
+    white-space: pre-wrap;
+  }
+
+  .applied-state-inline {
+    background: rgba(16, 185, 129, 0.08);
+    border: 1px solid rgba(16, 185, 129, 0.25);
+    padding: 1.5rem;
+    border-radius: var(--border-radius-md);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 1rem;
+  }
+
+  .applied-info p {
+    margin: 0.35rem 0 0 0;
+    color: var(--color-text-muted);
+    font-size: 0.9rem;
+  }
+
+  .applied-badge {
+    display: inline-block;
+    background-color: #10b981;
+    color: white;
+    font-weight: 700;
+    padding: 0.25rem 0.75rem;
+    border-radius: 9999px;
+    font-size: 0.82rem;
+  }
+
+  .apply-container-inline h2 {
+    font-size: 1.3rem;
+    font-weight: 700;
+    margin: 0 0 0.25rem 0;
+    color: var(--color-text-main);
+  }
+
+  .subtitle {
+    font-size: 0.9rem;
+    color: var(--color-text-muted);
+    margin: 0 0 1.5rem 0;
+  }
+
+  .apply-form {
+    display: flex;
+    flex-direction: column;
+    gap: 1.25rem;
+  }
+
+  .form-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1.5rem;
+  }
+
+  .form-group {
+    display: flex;
+    flex-direction: column;
+    gap: 0.45rem;
+  }
+
+  .form-label {
+    font-weight: 600;
+    font-size: 0.88rem;
+    color: var(--color-text-main);
+  }
+
+  .required {
+    color: #ef4444;
+  }
+
+  .form-input, .form-textarea {
+    padding: 0.75rem 1rem;
+    border: 1px solid var(--color-border);
+    border-radius: 10px;
+    background: var(--color-bg);
+    color: var(--color-text-main);
+    font-size: 0.95rem;
+    font-family: inherit;
+    transition: all 0.2s;
+  }
+
+  .form-input:focus, .form-textarea:focus {
+    border-color: var(--color-primary);
+    outline: none;
+    box-shadow: 0 0 0 3px var(--color-primary-light);
+  }
+
+  .input-helper {
+    font-size: 0.78rem;
+    color: var(--color-text-muted);
+  }
+
+  /* Screening Questions UI */
+  .screening-questions-container {
+    background: var(--color-bg);
+    border: 1px solid var(--color-border);
+    border-radius: var(--border-radius-md);
+    padding: 1.5rem;
+  }
+
+  .screening-header h3 {
+    margin: 0 0 0.25rem 0;
+    font-size: 1.1rem;
+    color: var(--color-text-main);
+  }
+
+  .screening-sub {
+    margin: 0;
+    font-size: 0.85rem;
+    color: var(--color-text-muted);
+  }
+
+  .screening-questions-list {
+    display: flex;
+    flex-direction: column;
+    gap: 1.25rem;
+    margin-top: 1rem;
+  }
+
+  .screening-question-card {
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: 10px;
+    padding: 1.25rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.65rem;
+  }
+
+  .screening-q-label {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+  }
+
+  .q-number-pill {
+    background: var(--color-primary);
+    color: white;
+    font-size: 0.75rem;
+    font-weight: 800;
+    padding: 0.15rem 0.5rem;
+    border-radius: 6px;
+  }
+
+  .q-prompt-text {
+    font-size: 0.95rem;
+    font-weight: 700;
+    color: var(--color-text-main);
+  }
+
+  .required-badge {
+    font-size: 0.75rem;
+    font-weight: 700;
+    color: #ef4444;
+    background: rgba(239, 68, 68, 0.1);
+    padding: 0.15rem 0.45rem;
+    border-radius: 4px;
+  }
+
+  .optional-badge {
+    font-size: 0.75rem;
+    color: var(--color-text-muted);
+  }
+
+  .yes-no-options {
+    display: flex;
+    gap: 1.5rem;
+    margin-top: 0.25rem;
+  }
+
+  .radio-option {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    cursor: pointer;
+    font-size: 0.92rem;
+    font-weight: 600;
+    color: var(--color-text-main);
+  }
+
+  .radio-option input {
+    cursor: pointer;
+    width: 16px;
+    height: 16px;
+  }
+
+  .submit-row {
+    display: flex;
+    justify-content: flex-start;
+  }
+
+  /* Toast Notification */
+  .toast {
+    position: fixed;
+    bottom: 2rem;
+    right: 2rem;
+    padding: 1rem 1.5rem;
+    border-radius: var(--border-radius-md);
+    color: white;
+    font-weight: 500;
+    z-index: 1000;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    animation: slideInRight 0.3s ease-out;
+  }
+  .toast-success { background-color: #10b981; }
+  .toast-error { background-color: #ef4444; }
+
+  @keyframes slideInRight {
+    from {
+      transform: translateX(100%);
+      opacity: 0;
+    }
+    to {
+      transform: translateX(0);
+      opacity: 1;
+    }
+  }
+
+  /* Employer Applicants Section Styles */
+  .employer-applicants-section {
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--border-radius-lg);
+    padding: 2rem;
+  }
+
+  .applicants-section-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-end;
+    flex-wrap: wrap;
+    gap: 1rem;
+    padding-bottom: 1.25rem;
+    border-bottom: 1px solid var(--color-border);
+  }
+
+  .section-title-badge {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+  }
+  .section-title-badge h2 {
+    margin: 0;
+    font-size: 1.5rem;
+    font-weight: 800;
+    color: var(--color-text-main);
+  }
+
+  .badge-tag {
+    display: inline-block;
+    width: fit-content;
+    padding: 0.2rem 0.6rem;
+    background: rgba(124, 58, 237, 0.15);
+    color: var(--color-primary);
+    border-radius: 9999px;
+    font-size: 0.72rem;
+    font-weight: 700;
+    background: var(--color-primary-light);
+    color: var(--color-primary-dark);
+    border-radius: 9999px;
+    margin-left: 0.5rem;
+  }
+
+  .empty-applicants-box {
+    text-align: center;
+    padding: 3rem 1.5rem;
+    background: var(--color-bg);
+    border: 1px dashed var(--color-border);
+    border-radius: var(--border-radius-md);
+  }
+
+  .applicants-cards-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    gap: 1.25rem;
+  }
+
+  .candidate-applicant-card {
+    background: var(--color-bg);
+    border: 1px solid var(--color-border);
+    border-radius: var(--border-radius-md);
+    padding: 1.25rem;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    gap: 1rem;
+    transition: transform 0.2s, border-color 0.2s, box-shadow 0.2s;
+  }
+
+  .candidate-card-header {
+    display: flex;
+    gap: 0.85rem;
+    align-items: flex-start;
+  }
+
+  .candidate-avatar {
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 700;
+    font-size: 0.95rem;
+    color: var(--color-primary);
+    flex-shrink: 0;
+    overflow: hidden;
+  }
+
+  .candidate-card-footer {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding-top: 0.75rem;
+    border-top: 1px solid var(--color-border);
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+
+  .toast {
+    position: fixed;
+    bottom: 2rem;
+    right: 2rem;
+    padding: 0.75rem 1.25rem;
+    border-radius: var(--border-radius-md);
+    color: white;
+    font-weight: 600;
+    font-size: 0.875rem;
+    z-index: 1000;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+  }
+  .toast-success { background: #10b981; }
+  .toast-error { background: #ef4444; }
+
+  @media (max-width: 768px) {
+    .job-detail-page-wrapper {
+      padding: 0 0 2rem 0;
+    }
+    .main-info-card {
+      padding: 1.25rem 0.875rem;
+      border-radius: var(--border-radius-md);
+    }
+    .header-section {
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 1rem;
+    }
+    .company-logo-large {
+      width: 52px;
+      height: 52px;
+      font-size: 1.35rem;
+    }
+    .header-meta h1 {
+      font-size: 1.35rem;
+    }
+    .form-grid {
+      grid-template-columns: 1fr;
+      gap: 1rem;
+    }
+    .application-section {
+      padding: 1rem 0.75rem;
+    }
+    .resume-choice-toggle-container {
+      grid-template-columns: 1fr;
+      gap: 0.75rem;
+    }
+    .resume-choice-card {
+      padding: 0.875rem 0.75rem;
+    }
+    .choice-title {
+      font-size: 0.875rem;
+    }
+    .default-resume-preview-row {
+      flex-wrap: wrap;
+      gap: 0.35rem;
+    }
+    .applicants-cards-grid {
+      grid-template-columns: 1fr;
+    }
+    .toast {
+      bottom: 1rem;
+      right: 1rem;
+      left: 1rem;
+      text-align: center;
+    }
+  }
+</style>

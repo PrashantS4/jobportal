@@ -1,0 +1,504 @@
+---
+import DashboardLayout from '../layouts/DashboardLayout.astro';
+import { getRecommendedJobs, type RecommendedJob } from '../lib/recommendations';
+import { getDb } from '../lib/db';
+import { applications } from '../db/schema';
+import { eq } from 'drizzle-orm';
+
+// @ts-ignore
+const payload = Astro.locals.user;
+if (!payload || payload.userType !== 'employee') {
+  return Astro.redirect('/login');
+}
+
+Astro.response.headers.set('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0');
+let jobs: RecommendedJob[] = [];
+let appliedJobIds: Set<string> = new Set();
+
+try {
+  const db = getDb();
+  jobs = await getRecommendedJobs(payload.userId);
+  
+  const userApps = await db
+    .select({ jobPostingId: applications.jobPostingId })
+    .from(applications)
+    .where(eq(applications.applicantId, payload.userId))
+    .all();
+
+  appliedJobIds = new Set(userApps.map(a => a.jobPostingId));
+} catch (e) {
+  console.error('Error loading recommended jobs:', e);
+}
+
+function formatDate(ts: any) {
+  if (!ts) return '';
+  const d = ts instanceof Date ? ts : new Date(typeof ts === 'number' && ts < 1e11 ? ts * 1000 : ts);
+  if (isNaN(d.getTime())) return '';
+  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+}
+
+function formatNumber(num: number): string {
+  if (isNaN(num) || !isFinite(num) || num <= 0) return '0';
+  if (num >= 1_000_000_000_000) {
+    const val = num / 1_000_000_000_000;
+    return val > 999 ? '999T+' : `${val.toFixed(1).replace(/\.0$/, '')}T`;
+  }
+  if (num >= 1_000_000_000) return `${(num / 1_000_000_000).toFixed(1).replace(/\.0$/, '')}B`;
+  if (num >= 1_000_000) return `${(num / 1_000_000).toFixed(1).replace(/\.0$/, '')}M`;
+  if (num >= 1_000) return `${(num / 1_000).toFixed(0)}k`;
+  return String(Math.round(num));
+}
+
+function salaryDisplay(min: number | null, max: number | null, currency: string | null) {
+  if (!min && !max) return null;
+  const c = (currency || 'USD').trim();
+  const numMin = Number(min);
+  const numMax = Number(max);
+  const validMin = !isNaN(numMin) && isFinite(numMin) && numMin > 0;
+  const validMax = !isNaN(numMax) && isFinite(numMax) && numMax > 0;
+  if (!validMin && !validMax) return null;
+
+  const fMin = validMin ? formatNumber(numMin) : null;
+  const fMax = validMax ? formatNumber(numMax) : null;
+
+  if (fMin && fMax) {
+    if (fMin === fMax) return `${c} ${fMin}`;
+    return `${c} ${fMin}–${fMax}`;
+  }
+  if (fMin) return `${c} ${fMin}+`;
+  if (fMax) return `Up to ${c} ${fMax}`;
+  return null;
+}
+
+const hasCandidateProfile = jobs.some(j => j.hasProfile);
+---
+
+<DashboardLayout title="Recommended Jobs" userType="employee" activePath="/recommended">
+  <div class="page-header">
+    <div>
+      <h1 class="page-title">Recommended Jobs</h1>
+      <p class="page-subtitle">Intelligently matched to your skills, experience, and search history</p>
+    </div>
+    <div class="count-badge">{jobs.length} open positions</div>
+  </div>
+
+  {!hasCandidateProfile && (
+    <div class="complete-profile-banner card">
+      <div class="banner-icon">🎯</div>
+      <div class="banner-text">
+        <h4 class="banner-title">Personalized Compatibility Scores</h4>
+        <p class="banner-desc">Complete your skills and experience in your profile settings so RecruitNest can calculate your exact compatibility match percentage for each opening.</p>
+      </div>
+      <a href="/settings" class="btn btn-sm btn-primary banner-action">Complete Profile ⚡</a>
+    </div>
+  )}
+
+  {jobs.length === 0 ? (
+    <div class="empty-state">
+      <div class="empty-icon">🌟</div>
+      <h3>No jobs available yet</h3>
+      <p>Check back soon — employers are posting new jobs regularly.</p>
+    </div>
+  ) : (
+    <div class="jobs-list">
+      {jobs.map((job, i) => {
+        const salary = salaryDisplay(job.salaryMin, job.salaryMax, job.salaryCurrency);
+        const logoColor = `hsl(${Math.abs(((job.companyName || 'X').charCodeAt(0)) * 7) % 360}, 60%, 52%)`;
+        const rankClass = i === 0 ? 'rank-1' : i === 1 ? 'rank-2' : i === 2 ? 'rank-3' : 'rank-other';
+        return (
+          <div class="card job-card" onclick={`window.location.href='/jobs/${job.id}'`} style="cursor: pointer;">
+            <div class={`job-rank ${rankClass}`}>{i + 1}</div>
+            <div class="company-logo" style={`background: ${logoColor}`}>
+              {(job.companyName || '?').charAt(0).toUpperCase()}
+            </div>
+            <div class="job-info">
+              <div class="job-top-row">
+                <h3 class="job-title">{job.jobTitle}</h3>
+                <div class="job-meta-right">
+                  <span class="posted-time">{formatDate(job.publishedAt)}</span>
+                  {job.hasProfile && job.matchScore > 0 && (
+                    <span class="match-score-badge" style={`background: ${job.matchScore >= 80 ? 'var(--color-success-light)' : 'var(--color-warning-light)'}; color: ${job.matchScore >= 80 ? 'var(--color-success)' : 'var(--color-warning-dark)'}; padding: 0.25rem 0.5rem; border-radius: 1rem; font-size: 0.75rem; font-weight: 600; margin-left: 0.5rem;`}>
+                      ✨ {job.matchScore}% Match
+                    </span>
+                  )}
+                  {job.applicationsCount && job.applicationsCount > 0
+                    ? <span class="applicants-badge">{job.applicationsCount} applicant{job.applicationsCount !== 1 ? 's' : ''}</span>
+                    : <span class="applicants-badge new">New</span>
+                  }
+                </div>
+              </div>
+              <p class="company-name">
+                {job.companyName || 'Company'}
+                {job.companyIndustry ? <span class="industry"> · {job.companyIndustry}</span> : ''}
+              </p>
+              <div class="tags">
+                {job.locationRemote && <span class="tag tag-green">🌐 Remote</span>}
+                {job.locationCity && !job.locationRemote && <span class="tag">📍 {job.locationCity}</span>}
+                {job.employmentType && <span class="tag">⏱ {job.employmentType}</span>}
+                {job.experienceLevel && <span class="tag">🎯 {job.experienceLevel}</span>}
+                {salary && <span class="tag tag-salary">💰 {salary}</span>}
+              </div>
+              <p class="job-desc">{(job.description || '').slice(0, 150)}{(job.description || '').length > 150 ? '…' : ''}</p>
+            </div>
+            <div class="job-actions">
+              {appliedJobIds.has(job.id) ? (
+                <button class="btn btn-outline apply-btn" disabled style="opacity: 0.7; cursor: default; background: rgba(16, 185, 129, 0.1); color: #10b981; border-color: rgba(16, 185, 129, 0.3);">
+                  ✓ Applied
+                </button>
+              ) : (
+                <a href={`/jobs/${job.id}`} class="btn btn-primary apply-btn" onclick="event.stopPropagation()">Apply Now</a>
+              )}
+              <button
+                class="save-btn"
+                onclick={`event.stopPropagation(); saveJob(${JSON.stringify(job)})`}
+                title="Save job"
+              >
+                🔖 Save
+              </button>
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  )}
+</DashboardLayout>
+
+<style>
+  .page-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1.5rem;
+  }
+  .page-title { font-size: 1.5rem; font-weight: 700; margin: 0 0 0.25rem 0; }
+  .page-subtitle { color: var(--color-text-muted); font-size: 0.875rem; margin: 0; }
+  .count-badge {
+    background: var(--color-primary-light);
+    color: var(--color-primary-dark);
+    padding: 0.375rem 0.875rem;
+    border-radius: 2rem;
+    font-size: 0.8rem;
+    font-weight: 600;
+  }
+
+  .complete-profile-banner {
+    display: flex;
+    align-items: center;
+    gap: 1.25rem;
+    padding: 1.25rem 1.5rem;
+    margin-bottom: 1.5rem;
+    background: linear-gradient(135deg, rgba(124, 58, 237, 0.08) 0%, rgba(99, 102, 241, 0.05) 100%);
+    border: 1px solid rgba(124, 58, 237, 0.2);
+    border-radius: var(--border-radius-lg);
+  }
+  .banner-icon {
+    font-size: 2rem;
+    flex-shrink: 0;
+  }
+  .banner-text {
+    flex: 1;
+  }
+  .banner-title {
+    font-size: 1rem;
+    font-weight: 700;
+    margin: 0 0 0.25rem 0;
+    color: var(--color-text-main);
+  }
+  .banner-desc {
+    font-size: 0.875rem;
+    color: var(--color-text-muted);
+    margin: 0;
+    line-height: 1.5;
+  }
+  .banner-action {
+    flex-shrink: 0;
+    white-space: nowrap;
+  }
+
+  .jobs-list { display: flex; flex-direction: column; gap: 0.875rem; }
+
+  .job-card {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    padding: 1.25rem;
+    transition: box-shadow 0.2s, transform 0.2s;
+  }
+  .job-card:hover { box-shadow: var(--shadow-md); transform: translateY(-1px); }
+
+  .job-rank {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.85rem;
+    font-weight: 700;
+    flex-shrink: 0;
+  }
+  .rank-1 {
+    background: linear-gradient(135deg, #FBBF24, #F59E0B);
+    color: white;
+    box-shadow: 0 2px 8px rgba(245, 158, 11, 0.35);
+  }
+  .rank-2 {
+    background: linear-gradient(135deg, #9CA3AF, #6B7280);
+    color: white;
+    box-shadow: 0 2px 8px rgba(107, 114, 128, 0.3);
+  }
+  .rank-3 {
+    background: linear-gradient(135deg, #F97316, #C2410C);
+    color: white;
+    box-shadow: 0 2px 8px rgba(194, 65, 12, 0.35);
+  }
+  .rank-other {
+    background: var(--color-bg);
+    color: var(--color-text-muted);
+    border: 1px solid var(--color-border);
+  }
+
+  .company-logo {
+    width: 52px;
+    height: 52px;
+    border-radius: var(--border-radius-md);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    font-weight: 700;
+    font-size: 1.25rem;
+    flex-shrink: 0;
+  }
+
+  .job-info { flex: 1; min-width: 0; }
+
+  .job-top-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 0.5rem;
+    margin-bottom: 0.125rem;
+  }
+  .job-title { font-size: 1rem; font-weight: 700; margin: 0; }
+  .job-meta-right {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex-shrink: 0;
+  }
+  .posted-time { font-size: 0.75rem; color: var(--color-text-muted); }
+  .applicants-badge {
+    font-size: 0.7rem;
+    padding: 0.15rem 0.5rem;
+    background: #DBEAFE;
+    color: #1D4ED8;
+    border-radius: 1rem;
+    font-weight: 600;
+  }
+  .applicants-badge.new { background: #DCFCE7; color: #15803D; }
+
+  .company-name {
+    font-size: 0.8rem;
+    color: var(--color-text-muted);
+    margin: 0 0 0.4rem 0;
+  }
+  .industry { color: var(--color-text-muted); }
+
+  .tags { display: flex; flex-wrap: wrap; align-items: center; gap: 0.35rem; margin-bottom: 0.5rem; flex: 1; min-width: 0; }
+  .tag {
+    font-size: 0.7rem;
+    padding: 0.15rem 0.5rem;
+    background: var(--color-bg);
+    border: 1px solid var(--color-border);
+    border-radius: 1rem;
+    color: var(--color-text-muted);
+    display: inline-flex;
+    align-items: center;
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .tag-green { background: #DCFCE7; border-color: #86EFAC; color: #15803D; }
+  .tag-salary {
+    background: #EDE9FE;
+    border-color: #C4B5FD;
+    color: #6D28D9;
+    max-width: 220px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .job-desc {
+    font-size: 0.78rem;
+    color: var(--color-text-muted);
+    line-height: 1.5;
+    margin: 0;
+  }
+
+  .job-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    flex-shrink: 0;
+  }
+  .apply-btn {
+    font-size: 0.85rem;
+    padding: 0.5rem 1.25rem;
+    white-space: nowrap;
+    flex-shrink: 0;
+    color: #ffffff !important;
+    background: linear-gradient(135deg, #6366f1, #8b5cf6);
+    border-radius: var(--border-radius-md);
+    box-shadow: 0 4px 12px rgba(99, 102, 241, 0.25);
+    transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  .apply-btn:hover,
+  .job-card:hover .apply-btn:not([disabled]) {
+    background: linear-gradient(135deg, #4f46e5, #7c3aed) !important;
+    color: #ffffff !important;
+    transform: translateY(-2px);
+    box-shadow: 0 6px 18px rgba(99, 102, 241, 0.4);
+  }
+  .save-btn {
+    background: none;
+    border: 1px solid var(--color-border);
+    border-radius: var(--border-radius-md);
+    font-family: inherit;
+    font-size: 0.8rem;
+    cursor: pointer;
+    padding: 0.375rem 0.75rem;
+    color: var(--color-text-muted);
+    transition: all 0.2s;
+    text-align: center;
+  }
+  .save-btn:hover { background: var(--color-bg); color: var(--color-primary); border-color: var(--color-primary); }
+  .save-btn.saved { background: #DCFCE7; color: #15803D; border-color: #86EFAC; }
+
+  .empty-state { text-align: center; padding: 5rem 2rem; }
+  .empty-icon { font-size: 3rem; margin-bottom: 1rem; }
+  .empty-state h3 { margin: 0 0 0.5rem 0; }
+  .empty-state p { color: var(--color-text-muted); margin: 0; }
+
+  @media (max-width: 768px) {
+    .complete-profile-banner {
+      flex-direction: column;
+      text-align: center;
+      gap: 1rem;
+      padding: 1.5rem 1rem;
+    }
+    .page-header {
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 0.5rem;
+    }
+    .job-card {
+      flex-direction: column;
+      align-items: flex-start;
+      position: relative;
+    }
+    .company-logo {
+      margin-bottom: 0.5rem;
+    }
+    .job-rank {
+      position: absolute;
+      top: 1.25rem;
+      right: 1.25rem;
+    }
+    .job-top-row {
+      flex-direction: column;
+      align-items: flex-start;
+      margin-bottom: 0.5rem;
+    }
+    .job-meta-right {
+      margin-top: 0.25rem;
+      flex-wrap: wrap;
+    }
+    .job-actions {
+      flex-direction: row;
+      width: 100%;
+      margin-top: 0.5rem;
+    }
+    .apply-btn {
+      flex: 2;
+    }
+    .save-btn {
+      flex: 1;
+    }
+  }
+</style>
+
+<script>
+  const STORAGE_KEY = 'recruitnest_saved_jobs';
+
+  function getSaved() {
+    try { return JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]'); } catch { return []; }
+  }
+
+  function markSavedButtons(savedList: any[]) {
+    const savedIds = new Set(savedList.map(j => j.id));
+    document.querySelectorAll('.save-btn').forEach(btn => {
+      const onclick = btn.getAttribute('onclick') || '';
+      const match = onclick.match(/saveJob\((.+)\)$/s);
+      if (match) {
+        try {
+          const job = JSON.parse(match[1]);
+          if (savedIds.has(job.id)) {
+            btn.textContent = '✓ Saved';
+            btn.classList.add('saved');
+          }
+        } catch {}
+      }
+    });
+  }
+
+  // Initial check from local storage
+  markSavedButtons(getSaved());
+
+  // Cloud sync from database across devices
+  fetch('/api/saved')
+    .then(r => r.ok ? r.json() : null)
+    .then(data => {
+      if (data && data.success && Array.isArray(data.savedJobs)) {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(data.savedJobs));
+        markSavedButtons(data.savedJobs);
+      }
+    })
+    .catch(() => {});
+
+  window.saveJob = async function(job) {
+    const saved = getSaved();
+    const existing = saved.findIndex(j => j.id === job.id);
+
+    if (existing !== -1) {
+      showToast('Job already saved!');
+      return;
+    }
+
+    saved.unshift(job);
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(saved));
+    showToast('Job saved! View in Saved Jobs 🔖');
+
+    // Find and update the button immediately
+    document.querySelectorAll('.save-btn').forEach(btn => {
+      const onclick = btn.getAttribute('onclick') || '';
+      if (onclick.includes(job.id)) {
+        btn.textContent = '✓ Saved';
+        btn.classList.add('saved');
+      }
+    });
+
+    // Cloud persist to D1 DB across devices
+    try {
+      await fetch('/api/saved', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'save', jobId: job.id, jobData: job })
+      });
+    } catch (e) {
+      console.error('Error saving job to database:', e);
+    }
+  };
+</script>

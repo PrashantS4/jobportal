@@ -1,0 +1,1 @@
+export const GET = ({ locals }) => new Response(JSON.stringify(Object.keys(locals)), { status: 200 });

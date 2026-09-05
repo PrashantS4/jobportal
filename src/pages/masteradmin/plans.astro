@@ -1,0 +1,329 @@
+---
+import DashboardLayout from '../../layouts/DashboardLayout.astro';
+import { getDb } from '../../lib/db';
+import { plans } from '../../db/schema';
+import { asc } from 'drizzle-orm';
+
+const user = Astro.locals.user;
+if (!user || (user.userType !== "masteradmin" && user.userType !== "superadmin")) {
+  return Astro.redirect("/login");
+}
+
+const db = getDb();
+const allPlans = await db.select().from(plans).orderBy(asc(plans.planId));
+---
+
+<DashboardLayout title="Manage Plans - MasterAdmin" userType="masteradmin" activePath="/masteradmin/plans">
+  <div class="dashboard-header">
+    <div class="header-content">
+      <div class="title-with-icon">
+        <div class="icon-box bg-primary">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2"><rect x="2" y="7" width="20" height="14" rx="2" ry="2"></rect><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"></path></svg>
+        </div>
+        <div>
+          <h1>Subscription Plans</h1>
+          <p class="text-muted" style="margin: 0; font-size: 0.875rem;">Manage platform pricing, limits, and features.</p>
+        </div>
+      </div>
+      {allPlans.length === 0 ? (
+        <form action="/api/superadmin/seed-plans" method="POST">
+          <button type="submit" class="btn btn-primary">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 0.5rem;"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+            Seed Initial Plans
+          </button>
+        </form>
+      ) : (
+        <button class="btn btn-primary" onclick="showToast('Creating new plans is disabled in demo mode. Only P001, P002, and P003 are active.')">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 0.5rem;"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+          Create New Plan
+        </button>
+      )}
+    </div>
+  </div>
+
+  <!-- Warning Banner as per SRS -->
+  <div class="alert alert-warning" style="margin-bottom: 2rem;">
+    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
+    <div>
+      <strong>CRITICAL ARCHITECTURE RULE</strong>
+      <p style="margin: 0.25rem 0 0 0;">Plan IDs (P001, P002, P003) are deeply integrated into the database relations. You may edit Plan Names, Limits, and Prices below, but <strong>Plan IDs are permanently locked</strong> to prevent system corruption.</p>
+    </div>
+  </div>
+
+  <div class="plans-grid">
+    {allPlans.length === 0 ? (
+      <div style="grid-column: 1 / -1; text-align: center; padding: 4rem; color: var(--color-text-muted); border: 1px dashed var(--color-border); border-radius: var(--border-radius-md);">
+        No plans found in the database. Click "Seed Initial Plans" to initialize P001, P002, and P003.
+      </div>
+    ) : (
+      allPlans.map((plan) => {
+        let featuresObj: Record<string, any> = {};
+        try {
+          featuresObj = typeof plan.features === 'string' ? JSON.parse(plan.features) : (plan.features || {});
+        } catch (e) {}
+        
+        return (
+        <form action="/api/superadmin/plans" method="POST" class={`card plan-card ${plan.planId === 'P003' ? 'border-primary' : ''}`}>
+          <input type="hidden" name="planId" value={plan.planId} />
+          <div class="plan-header">
+            <span class={`badge ${plan.planId === 'P003' ? 'bg-primary-light text-primary' : 'bg-surface-hover text-muted'}`} style="font-family: monospace; font-size: 1rem;">ID: {plan.planId}</span>
+            <span class="badge bg-success-light text-success">{plan.isActive ? 'Active' : 'Inactive'}</span>
+          </div>
+          <div class="form-row-2">
+            <div class="form-group">
+              <label>Plan Name</label>
+              <input type="text" name="planName" class="form-control" value={plan.planName} required />
+            </div>
+            <div class="form-group">
+              <label>Currency</label>
+              <select name="currency" class="form-control plan-currency-select">
+                <option value="USD" selected={plan.currency === 'USD'}>USD ($)</option>
+                <option value="INR" selected={plan.currency === 'INR'}>INR (₹)</option>
+              </select>
+            </div>
+          </div>
+          <div class="form-group price-group">
+            <div class="form-group">
+              <label class="price-label">Monthly Price ({plan.currency || 'INR'})</label>
+              <input type="number" name="price" step="0.01" class="form-control" value={plan.price} required />
+            </div>
+            <div class="form-group">
+              <label class="price-label">Annual Price ({plan.currency || 'INR'})</label>
+              <input type="number" name="annualPrice" step="0.01" class="form-control" value={plan.annualPrice || (plan.price * 10)} required />
+            </div>
+          </div>
+          <div class="form-group">
+            <label>Max Job Postings</label>
+            <input type="number" name="jobPostingLimit" class="form-control" value={plan.jobPostingLimit} required />
+            {plan.planId === 'P003' && <small class="text-muted">Max system limit reached</small>}
+          </div>
+          <div class="form-group">
+            <label>Max Resumes Limit</label>
+            <input type="number" name="resumeLimit" class="form-control" value={plan.resumeLimit} required />
+            {plan.planId === 'P003' && <small class="text-muted">Max system limit reached</small>}
+          </div>
+          
+          <div class="form-group" style="padding-top: 1rem; border-top: 1px dashed var(--color-border); margin-top: 1rem;">
+            <label style="margin-bottom: 0.75rem; font-weight: 600; color: var(--color-primary);">Employee Features</label>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem;">
+              <label style="display: flex; align-items: center; gap: 0.5rem; font-weight: 500; font-size: 0.875rem; cursor: pointer;">
+                <input type="checkbox" name="feature_emp_jobs" value="true" checked={featuresObj.emp_jobs !== false} style="width: 1rem; height: 1rem; cursor: pointer;" />
+                Find Jobs
+              </label>
+              <label style="display: flex; align-items: center; gap: 0.5rem; font-weight: 500; font-size: 0.875rem; cursor: pointer;">
+                <input type="checkbox" name="feature_emp_applications" value="true" checked={featuresObj.emp_applications !== false} style="width: 1rem; height: 1rem; cursor: pointer;" />
+                My Applications
+              </label>
+              <label style="display: flex; align-items: center; gap: 0.5rem; font-weight: 500; font-size: 0.875rem; cursor: pointer;">
+                <input type="checkbox" name="feature_emp_interviews" value="true" checked={featuresObj.emp_interviews !== false} style="width: 1rem; height: 1rem; cursor: pointer;" />
+                Interviews
+              </label>
+              <label style="display: flex; align-items: center; gap: 0.5rem; font-weight: 500; font-size: 0.875rem; cursor: pointer;">
+                <input type="checkbox" name="feature_emp_saved" value="true" checked={featuresObj.emp_saved !== false} style="width: 1rem; height: 1rem; cursor: pointer;" />
+                Saved Jobs
+              </label>
+              <label style="display: flex; align-items: center; gap: 0.5rem; font-weight: 500; font-size: 0.875rem; cursor: pointer;">
+                <input type="checkbox" name="feature_emp_recommended" value="true" checked={featuresObj.emp_recommended !== false} style="width: 1rem; height: 1rem; cursor: pointer;" />
+                Recommended
+              </label>
+              <label style="display: flex; align-items: center; gap: 0.5rem; font-weight: 500; font-size: 0.875rem; cursor: pointer;">
+                <input type="checkbox" name="feature_emp_messaging" value="true" checked={featuresObj.emp_messaging !== false && featuresObj.messaging !== false} style="width: 1rem; height: 1rem; cursor: pointer;" />
+                Messages
+              </label>
+            </div>
+
+            <label style="margin-top: 1rem; margin-bottom: 0.75rem; font-weight: 600; color: var(--color-primary);">Employer Features</label>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem;">
+              <label style="display: flex; align-items: center; gap: 0.5rem; font-weight: 500; font-size: 0.875rem; cursor: pointer;">
+                <input type="checkbox" name="feature_er_screening" value="true" checked={featuresObj.er_screening === true || featuresObj.ai_screening === true} style="width: 1rem; height: 1rem; cursor: pointer;" />
+                AI Screening
+              </label>
+              <label style="display: flex; align-items: center; gap: 0.5rem; font-weight: 500; font-size: 0.875rem; cursor: pointer;">
+                <input type="checkbox" name="feature_er_jobs" value="true" checked={featuresObj.er_jobs !== false} style="width: 1rem; height: 1rem; cursor: pointer;" />
+                My Jobs
+              </label>
+              <label style="display: flex; align-items: center; gap: 0.5rem; font-weight: 500; font-size: 0.875rem; cursor: pointer;">
+                <input type="checkbox" name="feature_er_applications" value="true" checked={featuresObj.er_applications !== false} style="width: 1rem; height: 1rem; cursor: pointer;" />
+                Applications
+              </label>
+              <label style="display: flex; align-items: center; gap: 0.5rem; font-weight: 500; font-size: 0.875rem; cursor: pointer;">
+                <input type="checkbox" name="feature_er_interviews" value="true" checked={featuresObj.er_interviews !== false} style="width: 1rem; height: 1rem; cursor: pointer;" />
+                Interviews
+              </label>
+              <label style="display: flex; align-items: center; gap: 0.5rem; font-weight: 500; font-size: 0.875rem; cursor: pointer;">
+                <input type="checkbox" name="feature_er_candidates" value="true" checked={featuresObj.er_candidates !== false} style="width: 1rem; height: 1rem; cursor: pointer;" />
+                Find Talent
+              </label>
+              <label style="display: flex; align-items: center; gap: 0.5rem; font-weight: 500; font-size: 0.875rem; cursor: pointer;">
+                <input type="checkbox" name="feature_er_analytics" value="true" checked={featuresObj.er_analytics === true || featuresObj.analytics === true} style="width: 1rem; height: 1rem; cursor: pointer;" />
+                Analytics
+              </label>
+              <label style="display: flex; align-items: center; gap: 0.5rem; font-weight: 500; font-size: 0.875rem; cursor: pointer;">
+                <input type="checkbox" name="feature_er_messaging" value="true" checked={featuresObj.er_messaging !== false && featuresObj.messaging !== false} style="width: 1rem; height: 1rem; cursor: pointer;" />
+                Messages
+              </label>
+            </div>
+          </div>
+
+          <div class="plan-actions" style="margin-top: 1.5rem;">
+            <button type="submit" class="btn btn-block btn-primary">Update {plan.planId}</button>
+          </div>
+        </form>
+      )})
+    )}
+  </div>
+</DashboardLayout>
+
+<style>
+  .dashboard-header {
+    margin-bottom: 2rem;
+  }
+  
+  .header-content {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 1rem;
+  }
+
+  .title-with-icon {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+  }
+
+  .icon-box {
+    width: 48px;
+    height: 48px;
+    border-radius: var(--border-radius-md);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 4px 10px rgba(99, 102, 241, 0.25);
+  }
+
+  .title-with-icon h1 {
+    font-size: 1.75rem;
+    font-weight: 800;
+    color: var(--color-text-main);
+    margin: 0;
+  }
+
+  .alert {
+    padding: 1rem 1.25rem;
+    border-radius: var(--border-radius-md);
+    display: flex;
+    align-items: flex-start;
+    gap: 1rem;
+    font-size: 0.875rem;
+  }
+
+  .alert-warning {
+    background-color: rgba(245, 158, 11, 0.1);
+    border: 1px solid rgba(245, 158, 11, 0.3);
+    color: var(--color-text-main);
+  }
+
+  .alert-warning svg {
+    color: var(--color-warning);
+    flex-shrink: 0;
+  }
+
+  .plans-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: 1.5rem;
+  }
+
+  .plan-card {
+    padding: 1.5rem;
+    display: flex;
+    flex-direction: column;
+    gap: 1.25rem;
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--border-radius-lg);
+  }
+
+  .border-primary {
+    border-color: var(--color-primary) !important;
+    box-shadow: 0 4px 20px rgba(99, 102, 241, 0.15);
+  }
+
+  .plan-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+
+  .badge {
+    padding: 0.25rem 0.5rem;
+    border-radius: 4px;
+    font-size: 0.75rem;
+    font-weight: 600;
+  }
+
+  .bg-primary-light { background: var(--color-primary-light); }
+  .text-primary { color: var(--color-primary); }
+  .bg-surface-hover { background: var(--color-bg); }
+  .text-muted { color: var(--color-text-muted); }
+  .bg-success-light { background: rgba(16, 185, 129, 0.1); }
+  .text-success { color: var(--color-success); }
+
+  .form-group {
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+  }
+
+  .form-group label {
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--color-text-main);
+  }
+
+  .form-control {
+    width: 100%;
+    padding: 0.6rem 0.85rem;
+    border: 1px solid var(--color-border);
+    border-radius: var(--border-radius-sm);
+    background: var(--color-bg);
+    color: var(--color-text-main);
+    font-size: 0.9rem;
+  }
+
+  .form-row-2 {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.85rem;
+    align-items: flex-end;
+  }
+
+  .price-label {
+    white-space: nowrap !important;
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--color-text-main);
+  }
+
+  .plan-currency-select {
+    padding: 0.55rem 1.75rem 0.55rem 0.65rem !important;
+    font-size: 0.85rem !important;
+    height: auto !important;
+  }
+
+  .price-group {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1rem;
+  }
+
+  .plan-actions {
+    margin-top: 0.5rem;
+  }
+
+  .btn-block {
+    width: 100%;
+  }
+</style>

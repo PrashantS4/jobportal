@@ -1,0 +1,812 @@
+---
+import { getResumeViewerUrl } from '../../lib/resume-helper';
+import DashboardLayout from "../../layouts/DashboardLayout.astro";
+import { getDb } from "../../lib/db";
+import { applications, users, jobPostings } from "../../db/schema";
+import { eq, desc, asc, and, or, like, ne, notLike, count } from "drizzle-orm";
+
+Astro.response.headers.set(
+  "Cache-Control",
+  "no-store, no-cache, must-revalidate, max-age=0",
+);
+
+const user = Astro.locals.user;
+if (!user || (user.userType !== "masteradmin" && user.userType !== "superadmin")) {
+  return Astro.redirect("/login");
+}
+
+const db = getDb();
+
+const sourceParam = Astro.url.searchParams.get("source") || "alightway";
+const sortParam = Astro.url.searchParams.get("sort") || "date_desc";
+const positionParam = Astro.url.searchParams.get("position") || "all";
+
+let orderByClause = desc(applications.appliedAt);
+if (sortParam === "date_asc") {
+  orderByClause = asc(applications.appliedAt);
+} else if (sortParam === "status_asc") {
+  orderByClause = asc(applications.status);
+} else if (sortParam === "status_desc") {
+  orderByClause = desc(applications.status);
+} else if (sortParam === "name_asc") {
+  orderByClause = asc(users.firstName);
+} else if (sortParam === "name_desc") {
+  orderByClause = desc(users.firstName);
+} else if (sortParam === "job_asc") {
+  orderByClause = asc(jobPostings.jobTitle);
+} else if (sortParam === "job_desc") {
+  orderByClause = desc(jobPostings.jobTitle);
+}
+
+// Build base conditions based on source selection
+const sourceConditions = [];
+
+if (sourceParam === "alightway") {
+  sourceConditions.push(or(
+    eq(users.userType, "external_applicant"), 
+    like(jobPostings.id, "external_%"),
+    like(applications.notes, "%Alightway%")
+  ));
+} else if (sourceParam === "platform") {
+  sourceConditions.push(and(
+    ne(users.userType, "external_applicant"), 
+    notLike(jobPostings.id, "external_%")
+  ));
+}
+
+const baseSourceWhere = sourceConditions.length > 0 ? and(...sourceConditions) : undefined;
+
+// Fetch distinct positions with counts for current source scope
+const availablePositions = await db
+  .select({
+    jobTitle: jobPostings.jobTitle,
+    count: count(applications.id)
+  })
+  .from(applications)
+  .innerJoin(users, eq(applications.applicantId, users.id))
+  .innerJoin(jobPostings, eq(applications.jobPostingId, jobPostings.id))
+  .where(baseSourceWhere)
+  .groupBy(jobPostings.jobTitle)
+  .orderBy(desc(count(applications.id)));
+
+// Apply Position Filter condition if a specific position is selected
+const finalConditions = [...sourceConditions];
+if (positionParam && positionParam !== "all") {
+  finalConditions.push(eq(jobPostings.jobTitle, positionParam));
+}
+
+const whereClause = finalConditions.length > 0 ? and(...finalConditions) : undefined;
+
+// Fetch filtered applications
+const allApplications = await db
+  .select({
+    id: applications.id,
+    status: applications.status,
+    appliedAt: applications.appliedAt,
+    applicantFirstName: users.firstName,
+    applicantLastName: users.lastName,
+    applicantEmail: users.email,
+    applicantPhone: users.phone,
+    userType: users.userType,
+    jobTitle: jobPostings.jobTitle,
+    jobId: jobPostings.id,
+    jobIsDeleted: jobPostings.isDeleted,
+    appIsDeleted: applications.isDeleted,
+    resumeUrl: applications.resumeUrl,
+    coverLetter: applications.coverLetter,
+    notes: applications.notes,
+    customAnswers: applications.customAnswers,
+  })
+  .from(applications)
+  .innerJoin(users, eq(applications.applicantId, users.id))
+  .innerJoin(jobPostings, eq(applications.jobPostingId, jobPostings.id))
+  .where(whereClause)
+  .orderBy(orderByClause);
+
+// Calculate overall counts for stats pills
+const alightwayCountRes = await db
+  .select({ count: count() })
+  .from(applications)
+  .innerJoin(users, eq(applications.applicantId, users.id))
+  .innerJoin(jobPostings, eq(applications.jobPostingId, jobPostings.id))
+  .where(or(
+    eq(users.userType, "external_applicant"), 
+    like(jobPostings.id, "external_%"),
+    like(applications.notes, "%Alightway%")
+  ));
+
+const platformCountRes = await db
+  .select({ count: count() })
+  .from(applications)
+  .innerJoin(users, eq(applications.applicantId, users.id))
+  .innerJoin(jobPostings, eq(applications.jobPostingId, jobPostings.id))
+  .where(and(ne(users.userType, "external_applicant"), notLike(jobPostings.id, "external_%")));
+
+const totalAlightwayApps = alightwayCountRes[0]?.count || 0;
+const totalPlatformApps = platformCountRes[0]?.count || 0;
+const totalAppsAll = totalAlightwayApps + totalPlatformApps;
+const totalScopePositionsCount = availablePositions.reduce((acc, p) => acc + p.count, 0);
+---
+
+<DashboardLayout
+  title="Applications | MasterAdmin"
+  userType="masteradmin"
+  activePath="/masteradmin/applications"
+>
+  <div class="dashboard-page-container">
+    <div class="dashboard-header mb-4">
+      <div class="header-content">
+        <div class="title-with-icon">
+          <div class="icon-box bg-primary">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+              <polyline points="14 2 14 8 20 8"></polyline>
+              <line x1="16" y1="13" x2="8" y2="13"></line>
+              <line x1="16" y1="17" x2="8" y2="17"></line>
+              <polyline points="10 9 9 8 9"></polyline>
+            </svg>
+          </div>
+          <div>
+            <h1>Alightway & Platform Applications</h1>
+            <p class="text-muted" style="margin: 0; font-size: 0.875rem;">
+              Manage incoming applications from your live website (Alightway) and platform.
+            </p>
+          </div>
+        </div>
+        
+        <div class="header-actions">
+          <a href={`/api/superadmin/export-applications?source=${sourceParam}&position=${encodeURIComponent(positionParam)}&sort=${sortParam}`} class="btn btn-outline export-btn">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 0.4rem;"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+            Export CSV ({allApplications.length})
+          </a>
+        </div>
+      </div>
+    </div>
+
+    <!-- API Webhook Status Notice -->
+    <div class="api-notice-card mb-4">
+      <div class="api-notice-icon">🌐</div>
+      <div class="api-notice-content">
+        <strong>Alightway Live Website Submissions Active</strong>
+        <p>Applications submitted on your live website <em>(Alightway)</em> automatically sync to this MasterAdmin panel via the External Webhook API endpoint below.</p>
+      </div>
+      <div class="api-code-pill">
+        <code>POST /api/external/submit-application</code>
+        <span class="key-badge">Bearer Key: rn_live_8392jf9823f</span>
+      </div>
+    </div>
+
+    <!-- Source Tabs Row (Segmented Navigation) -->
+    <div class="source-tabs-row mb-3">
+      <a href={`/masteradmin/applications?source=alightway&position=${encodeURIComponent(positionParam)}&sort=${sortParam}`} class={`tab-pill ${sourceParam === 'alightway' ? 'active-tab' : ''}`}>
+        <span class="tab-icon">🌐</span>
+        <span>Alightway Live Website</span>
+        <span class="tab-count-badge">{totalAlightwayApps}</span>
+      </a>
+
+      <a href={`/masteradmin/applications?source=platform&position=${encodeURIComponent(positionParam)}&sort=${sortParam}`} class={`tab-pill ${sourceParam === 'platform' ? 'active-tab' : ''}`}>
+        <span class="tab-icon">🏢</span>
+        <span>RecruitNest Platform</span>
+        <span class="tab-count-badge">{totalPlatformApps}</span>
+      </a>
+
+      <a href={`/masteradmin/applications?source=all&position=${encodeURIComponent(positionParam)}&sort=${sortParam}`} class={`tab-pill ${sourceParam === 'all' ? 'active-tab' : ''}`}>
+        <span class="tab-icon">📊</span>
+        <span>All Applications</span>
+        <span class="tab-count-badge">{totalAppsAll}</span>
+      </a>
+    </div>
+
+    <!-- Dedicated Filter & Controls Toolbar Card -->
+    <div class="filter-controls-card mb-4">
+      <form action="/masteradmin/applications" method="GET" class="filter-controls-form">
+        <input type="hidden" name="source" value={sourceParam} />
+
+        <div class="form-inputs-left">
+          <!-- Position Filter Dropdown -->
+          <div class="select-group">
+            <label for="position-select" class="select-label">💼 Filter Position:</label>
+            <select id="position-select" name="position" class="filter-select" onchange="this.form.submit()">
+              <option value="all" selected={positionParam === "all"}>
+                All Positions
+              </option>
+              {availablePositions.map((pos) => (
+                <option value={pos.jobTitle} selected={positionParam === pos.jobTitle}>
+                  {pos.jobTitle} ({pos.count})
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <!-- Sort By Dropdown -->
+          <div class="select-group">
+            <label for="sort-select" class="select-label">⇅ Sort By:</label>
+            <select id="sort-select" name="sort" class="sort-select" onchange="this.form.submit()">
+              <option value="date_desc" selected={sortParam === "date_desc"}>Newest First</option>
+              <option value="date_asc" selected={sortParam === "date_asc"}>Oldest First</option>
+              <option value="status_asc" selected={sortParam === "status_asc"}>Status (A-Z)</option>
+              <option value="status_desc" selected={sortParam === "status_desc"}>Status (Z-A)</option>
+              <option value="name_asc" selected={sortParam === "name_asc"}>Applicant (A-Z)</option>
+              <option value="name_desc" selected={sortParam === "name_desc"}>Applicant (Z-A)</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="form-actions-right">
+          {positionParam !== "all" ? (
+            <div class="active-filter-badge">
+              <span>Position: <strong>{positionParam}</strong></span>
+              <a href={`/masteradmin/applications?source=${sourceParam}&position=all&sort=${sortParam}`} class="btn-clear-filter" title="Clear Position Filter">
+                ✕ Reset
+              </a>
+            </div>
+          ) : (
+            <span class="results-count-lbl">Showing {allApplications.length} applications</span>
+          )}
+        </div>
+      </form>
+    </div>
+
+    <!-- Data Table Card -->
+    <div class="table-card">
+      <div class="table-responsive">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>Application Source</th>
+              <th>Applicant</th>
+              <th>Applied Position</th>
+              <th>Status</th>
+              <th>Applied At</th>
+              <th>Resume</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {allApplications.length === 0 ? (
+              <tr>
+                <td colspan="7" class="empty-cell">
+                  <div class="empty-state">
+                    <div class="empty-icon">{sourceParam === 'alightway' ? '🌐' : '📁'}</div>
+                    <h3>No Applications Found</h3>
+                    <p>
+                      {positionParam !== "all" 
+                        ? `No applications found for position "${positionParam}".` 
+                        : 'No applications found matching the selected filters.'}
+                    </p>
+                  </div>
+                </td>
+              </tr>
+            ) : (
+              allApplications.map((app) => {
+                const isAlightway = app.userType === "external_applicant" || (app.jobId && app.jobId.startsWith("external_")) || (app.notes && app.notes.includes("Alightway"));
+
+                return (
+                  <tr class="app-row">
+                    <td>
+                      <span class={`source-tag ${isAlightway ? 'tag-alightway' : 'tag-platform'}`}>
+                        {isAlightway ? '🌐 Alightway Website' : '🏢 RecruitNest Platform'}
+                      </span>
+                    </td>
+                    <td>
+                      <div class="user-meta-cell">
+                        <div class="user-avatar-circle">
+                          {app.applicantFirstName?.charAt(0).toUpperCase() || "U"}
+                        </div>
+                        <div>
+                          <strong class="user-name-txt">{app.applicantFirstName} {app.applicantLastName}</strong>
+                          <div class="email-sub">{app.applicantEmail}</div>
+                          {app.applicantPhone && <div class="phone-sub">📞 {app.applicantPhone}</div>}
+                        </div>
+                      </div>
+                    </td>
+                    <td>
+                      <span class="job-title-txt">{app.jobTitle}</span>
+                      {app.jobIsDeleted && <span style="font-size: 0.65rem; background: rgba(239, 68, 68, 0.15); color: #ef4444; padding: 0.15rem 0.4rem; border-radius: 4px; margin-left: 0.3rem; vertical-align: middle;">Deleted Job</span>}
+                      {app.appIsDeleted && <span style="font-size: 0.65rem; background: rgba(239, 68, 68, 0.15); color: #ef4444; padding: 0.15rem 0.4rem; border-radius: 4px; margin-left: 0.3rem; vertical-align: middle;">Deleted App</span>}
+                    </td>
+                    <td>
+                      <span class={`status-badge status-${app.status}`}>
+                        {app.status}
+                      </span>
+                    </td>
+                    <td>
+                      <span class="date-txt">
+                        {app.appliedAt
+                          ? new Date(app.appliedAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
+                          : "-"}
+                      </span>
+                    </td>
+                    <td>
+                      {app.resumeUrl ? (
+                        <a href={getResumeViewerUrl(app.resumeUrl, Astro.url.origin)} target="_blank" class="btn-resume">
+                          📄 View Resume
+                        </a>
+                      ) : (
+                        <span class="no-resume">No resume</span>
+                      )}
+                    </td>
+                    <td>
+                      <div class="actions-cell">
+                        <button
+                          type="button"
+                          class="btn-action-icon view-action"
+                          title="View Full Application Details"
+                          onclick={`document.getElementById('dialog-${app.id}').showModal()`}
+                        >
+                          👁️
+                        </button>
+                        <button
+                          type="button"
+                          class="btn-action-icon delete-action"
+                          title="Delete Application"
+                          onclick={`deleteApplication('${app.id}')`}
+                        >
+                          🗑️
+                        </button>
+                      </div>
+
+                      <!-- Details Dialog -->
+                      <dialog id={`dialog-${app.id}`} class="app-dialog">
+                        <div class="dialog-content">
+                          <div class="dialog-header">
+                            <h3>Application Details</h3>
+                            <button type="button" class="dialog-close" onclick={`document.getElementById('dialog-${app.id}').close()`}>✕</button>
+                          </div>
+
+                          <div class="dialog-body">
+                            <div class="dialog-source-bar mb-3">
+                              <span class={`source-tag ${isAlightway ? 'tag-alightway' : 'tag-platform'}`}>
+                                {isAlightway ? '🌐 Submitted via Alightway Live Website' : '🏢 Submitted via RecruitNest Platform'}
+                              </span>
+                            </div>
+
+                            <div class="dialog-grid">
+                              <div class="dialog-item">
+                                <span class="lbl">Applicant Name</span>
+                                <span class="val">{app.applicantFirstName} {app.applicantLastName}</span>
+                              </div>
+                              <div class="dialog-item">
+                                <span class="lbl">Email Address</span>
+                                <span class="val">{app.applicantEmail}</span>
+                              </div>
+                              {app.applicantPhone && (
+                                <div class="dialog-item">
+                                  <span class="lbl">Phone Number</span>
+                                  <span class="val">{app.applicantPhone}</span>
+                                </div>
+                              )}
+                              <div class="dialog-item">
+                                <span class="lbl">Applied Position</span>
+                                <span class="val highlight">{app.jobTitle}</span>
+                              </div>
+                            </div>
+
+                            {app.coverLetter && (
+                              <div class="dialog-section mt-3">
+                                <span class="lbl">Cover Letter / Skills Notes</span>
+                                <div class="cover-letter-box">
+                                  {app.coverLetter}
+                                </div>
+                              </div>
+                            )}
+
+                            {(() => {
+                              let customData: any = {};
+                              if (app.customAnswers) {
+                                try {
+                                  customData = typeof app.customAnswers === 'string' ? JSON.parse(app.customAnswers) : app.customAnswers;
+                                } catch(e) {}
+                              }
+                              const screeningAnswers = Array.isArray(customData?.screeningAnswers) ? customData.screeningAnswers : [];
+                              if (screeningAnswers.length === 0) return null;
+                              return (
+                                <div class="dialog-section mt-3">
+                                  <span class="lbl">Candidate Screening Responses ({screeningAnswers.length})</span>
+                                  <div class="screening-dialog-list">
+                                    {screeningAnswers.map((sa: any, sIdx: number) => (
+                                      <div class="screening-dialog-item">
+                                        <div class="sq-prompt"><strong>Q{sIdx + 1}: {sa.question}</strong></div>
+                                        <div class="sq-ans">Answer: <span class="ans-highlight">{sa.answer || '—'}</span></div>
+                                      </div>
+                                    ))}
+                                  </div>
+                                </div>
+                              );
+                            })()}
+                          </div>
+
+                          <div class="dialog-footer">
+                            <button
+                              type="button"
+                              class="btn btn-outline"
+                              onclick={`document.getElementById('dialog-${app.id}').close()`}
+                            >
+                              Close
+                            </button>
+                          </div>
+                        </div>
+                      </dialog>
+                    </td>
+                  </tr>
+                );
+              })
+            )}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</DashboardLayout>
+
+<script>
+  async function deleteApplication(id: string) {
+    if (confirm("Are you sure you want to delete this application?")) {
+      try {
+        const res = await fetch(`/api/superadmin/delete-application`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ id }),
+        });
+
+        if (res.ok) {
+          // @ts-ignore
+          if (window.showToast) window.showToast("Application deleted successfully.");
+          window.location.reload();
+        } else {
+          // @ts-ignore
+          if (window.showToast) window.showToast("Failed to delete application.", "error");
+        }
+      } catch (e) {
+        // @ts-ignore
+        if (window.showToast) window.showToast("An error occurred while deleting.", "error");
+      }
+    }
+  }
+  // @ts-ignore
+  window.deleteApplication = deleteApplication;
+</script>
+
+<style>
+  .mb-3 { margin-bottom: 0.75rem; }
+  .mb-4 { margin-bottom: 1.5rem; }
+  .mt-3 { margin-top: 1rem; }
+
+  .dashboard-page-container {
+    padding-top: 0.5rem;
+    position: relative;
+    z-index: 1;
+  }
+
+  .dashboard-header {
+    position: relative;
+    z-index: 2;
+  }
+
+  .header-content {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 1.25rem;
+  }
+
+  .title-with-icon {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+  }
+
+  .icon-box {
+    width: 48px;
+    height: 48px;
+    border-radius: var(--border-radius-md);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 4px 10px rgba(99, 102, 241, 0.25);
+    flex-shrink: 0;
+  }
+
+  .title-with-icon h1 {
+    font-size: 1.75rem;
+    font-weight: 800;
+    color: var(--color-text-main);
+    margin: 0;
+    line-height: 1.2;
+  }
+
+  .export-btn {
+    border-radius: 9999px;
+    padding: 0.6rem 1.25rem;
+    font-weight: 700;
+    font-size: 0.88rem;
+    display: inline-flex;
+    align-items: center;
+  }
+
+  .api-notice-card {
+    background: linear-gradient(135deg, rgba(99, 102, 241, 0.08) 0%, rgba(168, 85, 247, 0.08) 100%);
+    border: 1px solid rgba(99, 102, 241, 0.25);
+    border-radius: var(--border-radius-md);
+    padding: 1.25rem 1.5rem;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1.5rem;
+    flex-wrap: wrap;
+  }
+
+  .api-notice-icon { font-size: 1.75rem; }
+  .api-notice-content strong { color: var(--color-text-main); display: block; font-size: 0.95rem; }
+  .api-notice-content p { color: var(--color-text-muted); font-size: 0.85rem; margin: 0.2rem 0 0 0; }
+
+  .api-code-pill {
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    padding: 0.5rem 0.85rem;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+  }
+  .api-code-pill code { font-family: monospace; font-weight: 700; color: var(--color-primary); font-size: 0.82rem; }
+  .key-badge { font-size: 0.72rem; color: var(--color-text-muted); font-weight: 600; }
+
+  /* Source Tabs Row */
+  .source-tabs-row {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+  }
+
+  .tab-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.65rem 1.25rem;
+    border-radius: 9999px;
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    color: var(--color-text-muted);
+    font-size: 0.88rem;
+    font-weight: 700;
+    text-decoration: none;
+    transition: all 0.2s ease;
+  }
+  .tab-pill:hover { border-color: var(--color-primary); color: var(--color-primary); }
+
+  .active-tab {
+    background: var(--color-primary) !important;
+    color: white !important;
+    border-color: var(--color-primary) !important;
+    box-shadow: 0 4px 14px rgba(99, 102, 241, 0.3);
+  }
+  .active-tab .tab-count-badge { background: rgba(255, 255, 255, 0.25); color: white; }
+
+  .tab-count-badge {
+    background: var(--color-bg);
+    color: var(--color-text-muted);
+    padding: 0.15rem 0.55rem;
+    border-radius: 9999px;
+    font-size: 0.78rem;
+  }
+
+  /* Filter Controls Card */
+  .filter-controls-card {
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--border-radius-md);
+    padding: 1rem 1.25rem;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.02);
+  }
+
+  .filter-controls-form {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1.25rem;
+    flex-wrap: wrap;
+  }
+
+  .form-inputs-left {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    flex-wrap: wrap;
+  }
+
+  .select-group {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+
+  .select-label {
+    font-size: 0.82rem;
+    font-weight: 700;
+    color: var(--color-text-muted);
+    white-space: nowrap;
+  }
+
+  .filter-select, .sort-select {
+    padding: 0.5rem 0.85rem;
+    border-radius: 8px;
+    background: var(--color-bg);
+    border: 1px solid var(--color-border);
+    color: var(--color-text-main);
+    font-size: 0.85rem;
+    font-weight: 600;
+    outline: none;
+    cursor: pointer;
+    min-width: 180px;
+    max-width: 260px;
+    transition: all 0.2s ease;
+  }
+  .filter-select:focus, .sort-select:focus {
+    border-color: var(--color-primary);
+    box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.2);
+  }
+
+  .form-actions-right {
+    display: flex;
+    align-items: center;
+    margin-left: auto;
+  }
+
+  .results-count-lbl {
+    font-size: 0.82rem;
+    font-weight: 600;
+    color: var(--color-text-muted);
+  }
+
+  .active-filter-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.35rem 0.85rem;
+    background: rgba(99, 102, 241, 0.1);
+    border: 1px solid rgba(99, 102, 241, 0.25);
+    border-radius: 9999px;
+    font-size: 0.82rem;
+    color: var(--color-text-main);
+  }
+
+  .btn-clear-filter {
+    font-size: 0.78rem;
+    font-weight: 700;
+    color: #ef4444;
+    text-decoration: none;
+    background: rgba(239, 68, 68, 0.1);
+    padding: 0.15rem 0.5rem;
+    border-radius: 9999px;
+  }
+  .btn-clear-filter:hover { background: rgba(239, 68, 68, 0.2); text-decoration: none; }
+
+  /* Table Card */
+  .table-card {
+    background: var(--color-surface);
+    backdrop-filter: blur(16px);
+    border: 1px solid var(--color-border);
+    border-radius: var(--border-radius-lg);
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.04);
+    overflow: hidden;
+  }
+
+  .table-responsive { overflow-x: auto; width: 100%; }
+
+  .data-table { width: 100%; min-width: 900px; border-collapse: collapse; text-align: left; }
+
+  .data-table th {
+    padding: 1.1rem 1.25rem;
+    font-weight: 700;
+    color: var(--color-text-muted);
+    font-size: 0.8rem;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    border-bottom: 1px solid var(--color-border);
+    background: rgba(255, 255, 255, 0.02);
+    white-space: nowrap;
+  }
+
+  .data-table td {
+    padding: 1.1rem 1.25rem;
+    border-bottom: 1px solid var(--color-border);
+    vertical-align: middle;
+    white-space: nowrap;
+  }
+
+  .app-row:hover { background: rgba(99, 102, 241, 0.02); }
+
+  .source-tag {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.3rem 0.65rem;
+    border-radius: 6px;
+    font-size: 0.75rem;
+    font-weight: 700;
+    white-space: nowrap;
+  }
+  .tag-alightway { background: rgba(59, 130, 246, 0.12); color: #3b82f6; border: 1px solid rgba(59, 130, 246, 0.25); }
+  .tag-platform { background: rgba(168, 85, 247, 0.12); color: #a855f7; border: 1px solid rgba(168, 85, 247, 0.25); }
+
+  .user-meta-cell { display: flex; align-items: center; gap: 0.85rem; }
+
+  .user-avatar-circle {
+    width: 40px; height: 40px; border-radius: 50%;
+    background: linear-gradient(135deg, #6366f1, #8b5cf6);
+    color: white; font-weight: 800; font-size: 1rem;
+    display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0;
+  }
+
+  .user-name-txt { font-size: 0.95rem; color: var(--color-text-main); }
+  .email-sub { font-size: 0.78rem; color: var(--color-text-muted); }
+  .phone-sub { font-size: 0.75rem; color: var(--color-primary); margin-top: 0.1rem; }
+
+  .job-title-txt { font-size: 0.9rem; font-weight: 600; color: var(--color-text-main); }
+
+  .status-badge {
+    display: inline-block; padding: 0.25rem 0.65rem; border-radius: 9999px;
+    font-size: 0.75rem; font-weight: 700; text-transform: uppercase;
+  }
+  .status-applied, .status-received { background: rgba(59, 130, 246, 0.12); color: #3b82f6; }
+  .status-shortlisted, .status-accepted { background: rgba(16, 185, 129, 0.12); color: #10b981; }
+  .status-rejected { background: rgba(239, 68, 68, 0.12); color: #ef4444; }
+
+  .date-txt { font-size: 0.85rem; color: var(--color-text-muted); }
+
+  .btn-resume {
+    display: inline-flex; align-items: center; gap: 0.3rem;
+    padding: 0.35rem 0.75rem; border-radius: 6px;
+    background: var(--color-bg); border: 1px solid var(--color-border);
+    color: var(--color-primary); text-decoration: none; font-size: 0.82rem; font-weight: 600;
+  }
+  .btn-resume:hover { background: var(--color-primary); color: white; }
+  .no-resume { font-size: 0.82rem; color: var(--color-text-muted); font-style: italic; }
+
+  .actions-cell { display: flex; gap: 0.4rem; }
+
+  .btn-action-icon {
+    width: 34px; height: 34px; border-radius: 8px;
+    background: var(--color-bg); border: 1px solid var(--color-border);
+    display: flex; align-items: center; justify-content: center;
+    cursor: pointer; font-size: 0.9rem; transition: all 0.2s ease;
+  }
+  .btn-action-icon:hover { transform: translateY(-2px); }
+  .delete-action:hover { background: rgba(239, 68, 68, 0.2); border-color: #ef4444; }
+
+  /* Dialog */
+  .app-dialog {
+    border: none; border-radius: 16px; padding: 0;
+    background: var(--color-surface); color: var(--color-text-main);
+    max-width: 580px; width: 90vw; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+  }
+  .app-dialog::backdrop { background: rgba(0,0,0,0.6); backdrop-filter: blur(4px); }
+
+  .dialog-content { padding: 1.5rem; display: flex; flex-direction: column; }
+  .dialog-header { display: flex; justify-content: space-between; align-items: center; padding-bottom: 1rem; border-bottom: 1px solid var(--color-border); }
+  .dialog-header h3 { margin: 0; font-size: 1.25rem; font-weight: 800; }
+  .dialog-close { background: none; border: none; font-size: 1.2rem; color: var(--color-text-muted); cursor: pointer; }
+
+  .dialog-body { padding: 1.25rem 0; display: flex; flex-direction: column; gap: 1rem; }
+  .dialog-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; background: var(--color-bg); padding: 1rem; border-radius: 10px; border: 1px solid var(--color-border); }
+  .dialog-item { display: flex; flex-direction: column; gap: 0.2rem; }
+  .dialog-item .lbl { font-size: 0.72rem; color: var(--color-text-muted); text-transform: uppercase; font-weight: 700; }
+  .dialog-item .val { font-size: 0.9rem; font-weight: 600; color: var(--color-text-main); }
+  .dialog-item .val.highlight { color: var(--color-primary); }
+
+  .cover-letter-box { background: var(--color-bg); border: 1px solid var(--color-border); border-radius: 10px; padding: 1rem; font-size: 0.88rem; line-height: 1.5; color: var(--color-text-main); white-space: pre-wrap; }
+
+  .screening-dialog-list { display: flex; flex-direction: column; gap: 0.75rem; margin-top: 0.5rem; }
+  .screening-dialog-item { background: var(--color-bg); border: 1px solid var(--color-border); border-radius: 8px; padding: 0.75rem; font-size: 0.85rem; }
+  .sq-prompt { color: var(--color-text-main); margin-bottom: 0.3rem; }
+  .sq-ans { color: var(--color-text-muted); }
+  .ans-highlight { color: var(--color-primary); font-weight: 700; }
+
+  .dialog-footer { padding-top: 1rem; border-top: 1px solid var(--color-border); display: flex; justify-content: flex-end; }
+
+  .empty-cell { padding: 4rem 2rem !important; text-align: center; }
+  .empty-icon { font-size: 2.5rem; margin-bottom: 0.5rem; }
+</style>

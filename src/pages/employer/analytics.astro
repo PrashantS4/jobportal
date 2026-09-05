@@ -1,0 +1,380 @@
+---
+import DashboardLayout from '../../layouts/DashboardLayout.astro';
+import { getDb } from '../../lib/db';
+import { jobPostings, applications } from '../../db/schema';
+import { eq } from 'drizzle-orm';
+
+const payload = Astro.locals.user;
+if (!payload || payload.userType !== 'employer') {
+  return Astro.redirect('/login');
+}
+
+const db = getDb();
+const jobs = await db.select().from(jobPostings).where(eq(jobPostings.employerId, payload.userId)).all();
+const apps = await db.select().from(applications).where(eq(applications.employerId, payload.userId)).all();
+
+const totalViews = jobs.reduce((acc, job) => acc + (job.viewCount || 0), 0);
+const totalApplications = apps.length;
+const totalShortlisted = apps.filter(a => a.status === 'shortlisted').length;
+const totalHired = apps.filter(a => a.status === 'accepted').length;
+
+// Weekly (Last 7 Days)
+const last7Days = Array.from({length: 7}, (_, i) => {
+  const d = new Date();
+  d.setDate(d.getDate() - (6 - i));
+  return d.toISOString().split('T')[0];
+});
+const weeklyData = last7Days.map(date => {
+  return apps.filter(app => app.appliedAt && new Date(app.appliedAt).toISOString().split('T')[0] === date).length;
+});
+const weeklyLabels = last7Days.map(date => new Date(date).toLocaleDateString(undefined, { weekday: 'short' }));
+
+// Monthly (Last 30 Days)
+const last30Days = Array.from({length: 30}, (_, i) => {
+  const d = new Date();
+  d.setDate(d.getDate() - (29 - i));
+  return d.toISOString().split('T')[0];
+});
+const monthlyData = last30Days.map(date => {
+  return apps.filter(app => app.appliedAt && new Date(app.appliedAt).toISOString().split('T')[0] === date).length;
+});
+const monthlyLabels = last30Days.map((date, idx) => {
+  if (idx === 0 || idx === 29 || idx % 5 === 0) {
+    return new Date(date).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+  }
+  return ''; 
+});
+
+// Yearly (Last 12 Months)
+const last12Months = Array.from({length: 12}, (_, i) => {
+  const d = new Date();
+  d.setMonth(d.getMonth() - (11 - i));
+  return { month: d.getMonth(), year: d.getFullYear() };
+});
+const yearlyData = last12Months.map(m => {
+  return apps.filter(app => {
+    if (!app.appliedAt) return false;
+    const d = new Date(app.appliedAt);
+    return d.getMonth() === m.month && d.getFullYear() === m.year;
+  }).length;
+});
+const yearlyLabels = last12Months.map(m => {
+  const d = new Date(m.year, m.month, 1);
+  return d.toLocaleDateString(undefined, { month: 'short' });
+});
+
+const chartConfig = {
+  weekly: { labels: weeklyLabels, data: weeklyData },
+  monthly: { labels: monthlyLabels, data: monthlyData },
+  yearly: { labels: yearlyLabels, data: yearlyData }
+};
+---
+
+<DashboardLayout title="Analytics & Performance" userType="employer" activePath="/employer/analytics">
+  <div class="analytics-header mb-4">
+    <div class="header-titles">
+      <span class="badge-tag">Growth Intelligence</span>
+      <h1>Performance & Analytics</h1>
+      <p class="subtitle">Real-time candidate traffic, application trends, and funnel conversions.</p>
+    </div>
+  </div>
+
+  <!-- Key Metrics Row - Clickable Cards -->
+  <div class="metrics-grid">
+    <a href="/employer/jobs" class="metric-card metric-card-link" title="View all active job postings & views">
+      <div class="metric-icon-wrap icon-blue">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+      </div>
+      <div class="metric-info">
+        <span class="metric-val">{totalViews.toLocaleString()}</span>
+        <span class="metric-label">Total Job Views ↗</span>
+      </div>
+    </a>
+
+    <a href="/employer/applications" class="metric-card metric-card-link" title="View all received candidate applications">
+      <div class="metric-icon-wrap icon-purple">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
+      </div>
+      <div class="metric-info">
+        <span class="metric-val">{totalApplications.toLocaleString()}</span>
+        <span class="metric-label">Applications Received ↗</span>
+      </div>
+    </a>
+
+    <a href="/employer/applications?status=shortlisted" class="metric-card metric-card-link" title="View shortlisted candidates">
+      <div class="metric-icon-wrap icon-yellow">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon></svg>
+      </div>
+      <div class="metric-info">
+        <span class="metric-val">{totalShortlisted.toLocaleString()}</span>
+        <span class="metric-label">Shortlisted Candidates ↗</span>
+      </div>
+    </a>
+
+    <a href="/employer/applications?status=accepted" class="metric-card metric-card-link" title="View hired candidates">
+      <div class="metric-icon-wrap icon-green">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>
+      </div>
+      <div class="metric-info">
+        <span class="metric-val">{totalHired.toLocaleString()}</span>
+        <span class="metric-label">Hired Candidates ↗</span>
+      </div>
+    </a>
+  </div>
+
+  <div class="charts-section mt-4">
+    <div class="chart-card">
+      <div class="chart-header">
+        <div>
+          <h3 class="chart-title">Application Volume & Trends</h3>
+          <p class="chart-sub">Track candidate submissions across your active job postings</p>
+        </div>
+        <select id="timeframeSelect" class="timeframe-select">
+          <option value="weekly">Last 7 Days</option>
+          <option value="monthly">Last 30 Days</option>
+          <option value="yearly">Last 12 Months</option>
+        </select>
+      </div>
+      <div class="chart-container">
+        <canvas id="analyticsChart"></canvas>
+      </div>
+    </div>
+  </div>
+</DashboardLayout>
+
+<style>
+  .mb-4 { margin-bottom: 1.75rem; }
+  .mt-4 { margin-top: 1.75rem; }
+
+  .analytics-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-end;
+  }
+
+  .badge-tag {
+    display: inline-block;
+    padding: 0.25rem 0.75rem;
+    background: rgba(99, 102, 241, 0.15);
+    color: var(--color-primary);
+    border-radius: 9999px;
+    font-size: 0.75rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin-bottom: 0.4rem;
+  }
+
+  .header-titles h1 {
+    margin: 0 0 0.3rem 0;
+    font-size: 1.75rem;
+    font-weight: 800;
+    color: var(--color-text-main);
+  }
+
+  .subtitle {
+    margin: 0;
+    font-size: 0.95rem;
+    color: var(--color-text-muted);
+  }
+
+  /* Metrics Grid */
+  .metrics-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 1.25rem;
+  }
+
+  .metric-card {
+    background: var(--color-surface);
+    backdrop-filter: blur(16px);
+    border: 1px solid var(--color-border);
+    border-radius: var(--border-radius-md);
+    padding: 1.25rem 1.5rem;
+    display: flex;
+    align-items: center;
+    gap: 1.25rem;
+    transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+    text-decoration: none;
+    color: inherit;
+  }
+
+  .metric-card-link {
+    cursor: pointer;
+  }
+
+  .metric-card:hover {
+    transform: translateY(-3px);
+    border-color: var(--color-primary);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
+  }
+
+  .metric-icon-wrap {
+    width: 48px;
+    height: 48px;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+  }
+  .icon-blue { background: rgba(59, 130, 246, 0.12); color: #3b82f6; }
+  .icon-purple { background: rgba(168, 85, 247, 0.12); color: #a855f7; }
+  .icon-yellow { background: rgba(245, 158, 11, 0.12); color: #f59e0b; }
+  .icon-green { background: rgba(16, 185, 129, 0.12); color: #10b981; }
+
+  .metric-info {
+    display: flex;
+    flex-direction: column;
+  }
+  .metric-val {
+    font-size: 1.6rem;
+    font-weight: 800;
+    color: var(--color-text-main);
+    line-height: 1.1;
+  }
+  .metric-label {
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--color-text-muted);
+    margin-top: 0.2rem;
+  }
+
+  /* Charts */
+  .chart-card {
+    background: var(--color-surface);
+    backdrop-filter: blur(16px);
+    border: 1px solid var(--color-border);
+    border-radius: var(--border-radius-lg);
+    padding: 1.75rem 2rem;
+  }
+
+  .chart-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1.5rem;
+    flex-wrap: wrap;
+    gap: 1rem;
+  }
+
+  .chart-title {
+    margin: 0 0 0.25rem 0;
+    font-size: 1.25rem;
+    font-weight: 700;
+    color: var(--color-text-main);
+  }
+
+  .chart-sub {
+    margin: 0;
+    font-size: 0.85rem;
+    color: var(--color-text-muted);
+  }
+
+  .timeframe-select {
+    padding: 0.5rem 1rem;
+    border-radius: 8px;
+    background: var(--color-bg);
+    color: var(--color-text-main);
+    border: 1px solid var(--color-border);
+    font-size: 0.85rem;
+    font-weight: 600;
+    outline: none;
+    cursor: pointer;
+  }
+
+  .chart-container {
+    height: 320px;
+    width: 100%;
+    position: relative;
+  }
+
+  @media (max-width: 1024px) {
+    .metrics-grid { grid-template-columns: repeat(2, 1fr); }
+  }
+  @media (max-width: 600px) {
+    .metrics-grid { grid-template-columns: repeat(2, 1fr); gap: 0.75rem; }
+    .metric-card { padding: 0.9rem 0.75rem; gap: 0.65rem; }
+    .metric-val { font-size: 1.3rem; }
+    .metric-label { font-size: 0.72rem; }
+  }
+</style>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script define:vars={{ chartConfig }}>
+  let myChart = null;
+
+  function initChart(data) {
+    const ctx = document.getElementById('analyticsChart');
+    if (!ctx) return;
+
+    if (myChart) myChart.destroy();
+
+    const isLight = document.documentElement.getAttribute('data-theme') === 'light';
+    const gridColor = isLight ? 'rgba(0, 0, 0, 0.05)' : 'rgba(255, 255, 255, 0.05)';
+    const textColor = isLight ? '#64748B' : '#94A3B8';
+
+    // @ts-ignore
+    const gradient = ctx.getContext('2d').createLinearGradient(0, 0, 0, 300);
+    gradient.addColorStop(0, 'rgba(99, 102, 241, 0.4)');
+    gradient.addColorStop(1, 'rgba(99, 102, 241, 0.0)');
+
+    // @ts-ignore
+    myChart = new Chart(ctx, {
+      type: 'line',
+      data: {
+        labels: data.labels,
+        datasets: [{
+          label: 'Applications',
+          data: data.data,
+          borderColor: '#6366f1',
+          borderWidth: 3,
+          backgroundColor: gradient,
+          fill: true,
+          tension: 0.35,
+          pointBackgroundColor: '#6366f1',
+          pointHoverRadius: 6,
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            backgroundColor: isLight ? '#ffffff' : '#1e1b4b',
+            titleColor: isLight ? '#0f172a' : '#f8fafc',
+            bodyColor: isLight ? '#334155' : '#e2e8f0',
+            borderColor: 'rgba(99, 102, 241, 0.3)',
+            borderWidth: 1,
+            padding: 12,
+            displayColors: false,
+          }
+        },
+        scales: {
+          x: {
+            grid: { color: gridColor },
+            ticks: { color: textColor, font: { size: 12 } }
+          },
+          y: {
+            beginAtZero: true,
+            grid: { color: gridColor },
+            ticks: { color: textColor, font: { size: 12 }, precision: 0 }
+          }
+        }
+      }
+    });
+  }
+
+  document.addEventListener('DOMContentLoaded', () => {
+    initChart(chartConfig.weekly);
+
+    const select = document.getElementById('timeframeSelect');
+    if (select) {
+      select.addEventListener('change', (e) => {
+        const val = e.target.value;
+        initChart(chartConfig[val] || chartConfig.weekly);
+      });
+    }
+  });
+</script>

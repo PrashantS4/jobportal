@@ -1,0 +1,1038 @@
+---
+import DashboardLayout from '../../../../layouts/DashboardLayout.astro';
+import { getDb } from '../../../../lib/db';
+import { jobPostings } from '../../../../db/schema';
+import { eq } from 'drizzle-orm';
+
+const payload = Astro.locals.user;
+if (!payload || payload.userType !== 'employer') {
+  return Astro.redirect('/login');
+}
+
+const { id } = Astro.params;
+if (!id) {
+  return Astro.redirect('/employer/jobs');
+}
+
+const db = getDb();
+const job = await db.select().from(jobPostings).where(eq(jobPostings.id, id)).get();
+
+if (!job || job.employerId !== payload.userId) {
+  return Astro.redirect('/employer/jobs');
+}
+
+let existingQuestions: any[] = [];
+if (job.applicationFormConfig) {
+  try {
+    const parsed = typeof job.applicationFormConfig === 'string' ? JSON.parse(job.applicationFormConfig) : job.applicationFormConfig;
+    if (Array.isArray(parsed)) {
+      existingQuestions = parsed;
+    } else if (parsed && Array.isArray(parsed.questions)) {
+      existingQuestions = parsed.questions;
+    }
+  } catch (e) {}
+}
+---
+
+<DashboardLayout title="Edit Job" userType="employer" activePath="/employer/jobs">
+  <div class="dashboard-header mb-4">
+    <div class="header-content">
+      <div class="title-with-icon">
+        <div class="icon-box bg-primary">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2"><path d="M12 20h9"></path><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path></svg>
+        </div>
+        <div>
+          <h1>Edit Job Posting</h1>
+          <p class="subtitle">Modify role requirements, compensation, and custom screening questions.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="post-job-container">
+    <form id="edit-job-form" class="job-form">
+      <input type="hidden" name="jobId" value={job.id} />
+      
+      <!-- Section 1: Job Details -->
+      <div class="form-card">
+        <div class="card-section-title">
+          <div class="step-num">1</div>
+          <div>
+            <h3>Job Overview & Description</h3>
+            <p>Update title and description</p>
+          </div>
+        </div>
+
+        <div class="form-body">
+          <div class="form-group full-width">
+            <label for="jobTitle">Job Title <span class="req">*</span></label>
+            <input type="text" id="jobTitle" name="jobTitle" required value={job.jobTitle} />
+          </div>
+
+          <div class="form-group full-width">
+            <label for="description">Job Description <span class="req">*</span></label>
+            <textarea id="description" name="description" rows="6" required>{job.description}</textarea>
+          </div>
+        </div>
+      </div>
+
+      <!-- Section 2: Requirements & Logistics -->
+      <div class="form-card">
+        <div class="card-section-title">
+          <div class="step-num">2</div>
+          <div>
+            <h3>Requirements & Logistics</h3>
+            <p>Update work arrangement, location, and seniority</p>
+          </div>
+        </div>
+
+        <div class="form-body">
+          <div class="form-grid">
+            <div class="form-group">
+              <label for="employmentType">Employment Type</label>
+              <select id="employmentType" name="employmentType">
+                <option value="Full-time" selected={job.employmentType === 'Full-time'}>Full-time</option>
+                <option value="Part-time" selected={job.employmentType === 'Part-time'}>Part-time</option>
+                <option value="Contract" selected={job.employmentType === 'Contract'}>Contract</option>
+                <option value="Internship" selected={job.employmentType === 'Internship'}>Internship</option>
+              </select>
+            </div>
+
+            <div class="form-group">
+              <label for="experienceLevel">Experience Level</label>
+              <select id="experienceLevel" name="experienceLevel">
+                <option value="Entry" selected={job.experienceLevel === 'Entry'}>Entry Level</option>
+                <option value="Mid" selected={job.experienceLevel === 'Mid'}>Mid Level</option>
+                <option value="Senior" selected={job.experienceLevel === 'Senior'}>Senior Level</option>
+                <option value="Lead" selected={job.experienceLevel === 'Lead'}>Lead / Director</option>
+              </select>
+            </div>
+
+            <div class="form-group">
+              <label for="locationCity">City / Location</label>
+              <input type="text" id="locationCity" name="locationCity" value={job.locationCity || ''} />
+            </div>
+
+            <div class="form-group checkbox-card">
+              <label class="custom-checkbox-container">
+                <input type="checkbox" id="locationRemote" name="locationRemote" value="true" checked={job.locationRemote} />
+                <span class="checkmark"></span>
+                <span class="checkbox-label">
+                  <strong>Remote Eligible</strong>
+                  <small>Candidates worldwide can apply</small>
+                </span>
+              </label>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Section 3: Compensation -->
+      <div class="form-card">
+        <div class="card-section-title">
+          <div class="step-num">3</div>
+          <div>
+            <h3>Compensation (Optional)</h3>
+            <p>Update salary range</p>
+          </div>
+        </div>
+
+        <div class="form-body">
+          <div class="form-grid-3">
+            <div class="form-group">
+              <label for="salaryMin">Minimum Salary</label>
+              <input type="number" id="salaryMin" name="salaryMin" value={job.salaryMin || ''} />
+            </div>
+
+            <div class="form-group">
+              <label for="salaryMax">Maximum Salary</label>
+              <input type="number" id="salaryMax" name="salaryMax" value={job.salaryMax || ''} />
+            </div>
+
+            <div class="form-group">
+              <label for="salaryCurrency">Currency</label>
+              <select id="salaryCurrency" name="salaryCurrency">
+                <option value="USD" selected={job.salaryCurrency === 'USD'}>USD ($)</option>
+                <option value="EUR" selected={job.salaryCurrency === 'EUR'}>EUR (€)</option>
+                <option value="GBP" selected={job.salaryCurrency === 'GBP'}>GBP (£)</option>
+                <option value="INR" selected={job.salaryCurrency === 'INR'}>INR (₹)</option>
+              </select>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Section 4: Custom Screening Questions -->
+      <div class="form-card">
+        <div class="card-section-title">
+          <div class="step-num">4</div>
+          <div class="title-with-badge">
+            <div>
+              <h3>Applicant Screening Questions (Optional)</h3>
+              <p>Add custom questions for candidates to answer when applying for this role</p>
+            </div>
+            <span class="feature-tag">Custom Questions</span>
+          </div>
+        </div>
+
+        <div class="form-body">
+          <!-- Preset Suggestions -->
+          <div class="presets-wrap mb-3">
+            <span class="presets-lbl">Quick Presets:</span>
+            <div class="preset-chips">
+              <button type="button" class="chip-btn" data-preset="exp">
+                + Years of Experience
+              </button>
+              <button type="button" class="chip-btn" data-preset="notice">
+                + Notice Period / Availability
+              </button>
+              <button type="button" class="chip-btn" data-preset="auth">
+                + Work Authorization
+              </button>
+              <button type="button" class="chip-btn" data-preset="salary">
+                + Expected Compensation
+              </button>
+              <button type="button" class="chip-btn" data-preset="custom">
+                + Custom Question
+              </button>
+            </div>
+          </div>
+
+          <!-- Question Cards Container -->
+          <div id="questions-container" class="questions-list"></div>
+
+          <button type="button" class="btn btn-outline btn-add-q" id="add-question-btn">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+            Add Another Screening Question
+          </button>
+        </div>
+      </div>
+
+      <!-- Actions -->
+      <div class="form-actions-bar">
+        <a href="/employer/jobs" class="btn btn-outline">Cancel</a>
+        <button type="submit" class="btn btn-primary btn-glow" id="submit-job-btn">Save Changes</button>
+      </div>
+    </form>
+  </div>
+</DashboardLayout>
+
+<style>
+  .mb-3 { margin-bottom: 1rem; }
+  .mb-4 { margin-bottom: 1.75rem; }
+
+  .dashboard-header { margin-bottom: 2rem; }
+  .header-content { display: flex; justify-content: space-between; align-items: center; }
+  .title-with-icon { display: flex; align-items: center; gap: 1rem; }
+  .title-with-icon h1 { margin: 0 0 0.2rem 0; font-size: 1.6rem; font-weight: 800; }
+  .subtitle { margin: 0; font-size: 0.9rem; color: var(--color-text-muted); }
+  .icon-box {
+    width: 44px; height: 44px;
+    border-radius: var(--border-radius-md);
+    display: flex; align-items: center; justify-content: center;
+  }
+
+  .post-job-container {
+    max-width: 900px;
+    margin: 0 auto;
+  }
+
+  .job-form {
+    display: flex;
+    flex-direction: column;
+    gap: 1.75rem;
+  }
+
+  .form-card {
+    background: var(--color-surface);
+    backdrop-filter: blur(16px);
+    border: 1px solid var(--color-border);
+    border-radius: var(--border-radius-lg);
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.03);
+    padding: 1.75rem 2rem;
+  }
+
+  .card-section-title {
+    display: flex;
+    align-items: flex-start;
+    gap: 1rem;
+    padding-bottom: 1.25rem;
+    border-bottom: 1px solid var(--color-border);
+    margin-bottom: 1.5rem;
+  }
+
+  .title-with-badge {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    width: 100%;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+
+  .feature-tag {
+    font-size: 0.75rem;
+    font-weight: 700;
+    background: rgba(16, 185, 129, 0.15);
+    color: #10b981;
+    border: 1px solid rgba(16, 185, 129, 0.3);
+    padding: 0.2rem 0.6rem;
+    border-radius: 9999px;
+  }
+
+  .step-num {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    background: var(--color-primary);
+    color: white;
+    font-weight: 800;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.95rem;
+    flex-shrink: 0;
+    box-shadow: 0 2px 8px rgba(99, 102, 241, 0.4);
+  }
+
+  .card-section-title h3 {
+    margin: 0 0 0.2rem 0;
+    font-size: 1.15rem;
+    font-weight: 700;
+    color: var(--color-text-main);
+  }
+
+  .card-section-title p {
+    margin: 0;
+    font-size: 0.85rem;
+    color: var(--color-text-muted);
+  }
+
+  .form-body {
+    display: flex;
+    flex-direction: column;
+    gap: 1.25rem;
+  }
+
+  .form-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 1.25rem;
+  }
+
+  .form-grid-3 {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 1.25rem;
+  }
+
+  .form-group {
+    display: flex;
+    flex-direction: column;
+    gap: 0.45rem;
+  }
+
+  .form-group.full-width {
+    grid-column: 1 / -1;
+  }
+
+  .form-group label {
+    font-size: 0.88rem;
+    font-weight: 600;
+    color: var(--color-text-main);
+  }
+
+  .req {
+    color: #ef4444;
+  }
+
+  .form-group input,
+  .form-group textarea {
+    padding: 0.75rem 1rem;
+    border: 1px solid var(--color-border);
+    border-radius: 10px;
+    font-size: 0.95rem;
+    font-family: inherit;
+    background: var(--color-bg);
+    color: var(--color-text-main);
+    transition: all 0.2s ease;
+  }
+
+  .form-group select {
+    padding: 0.75rem 2.25rem 0.75rem 1rem;
+    border: 1px solid var(--color-border);
+    border-radius: 10px;
+    font-size: 0.95rem;
+    font-family: inherit;
+    background-color: var(--color-bg);
+    color: var(--color-text-main);
+    transition: all 0.2s ease;
+  }
+
+  .form-group input:focus,
+  .form-group select:focus,
+  .form-group textarea:focus {
+    outline: none;
+    border-color: var(--color-primary);
+    box-shadow: 0 0 0 3px var(--color-primary-light);
+  }
+
+  .checkbox-card {
+    justify-content: flex-end;
+  }
+
+  .custom-checkbox-container {
+    display: flex;
+    align-items: center;
+    position: relative;
+    padding: 0.65rem 1rem;
+    background: var(--color-bg);
+    border: 1px solid var(--color-border);
+    border-radius: 10px;
+    cursor: pointer;
+    user-select: none;
+    transition: all 0.2s ease;
+  }
+
+  .custom-checkbox-container:hover {
+    border-color: var(--color-primary);
+  }
+
+  .custom-checkbox-container input {
+    position: absolute;
+    opacity: 0;
+    cursor: pointer;
+    height: 0;
+    width: 0;
+  }
+
+  .checkmark {
+    height: 20px;
+    width: 20px;
+    background-color: var(--color-surface);
+    border: 2px solid var(--color-border);
+    border-radius: 6px;
+    margin-right: 0.75rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s ease;
+    flex-shrink: 0;
+  }
+
+  .custom-checkbox-container input:checked ~ .checkmark {
+    background-color: var(--color-primary);
+    border-color: var(--color-primary);
+  }
+
+  .checkmark:after {
+    content: "";
+    display: none;
+    width: 5px;
+    height: 10px;
+    border: solid white;
+    border-width: 0 2px 2px 0;
+    transform: rotate(45deg);
+    margin-bottom: 2px;
+  }
+
+  .custom-checkbox-container input:checked ~ .checkmark:after {
+    display: block;
+  }
+
+  .checkbox-label {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .checkbox-label strong {
+    font-size: 0.88rem;
+    color: var(--color-text-main);
+  }
+
+  .checkbox-label small {
+    font-size: 0.75rem;
+    color: var(--color-text-muted);
+  }
+
+  /* Presets */
+  .presets-wrap {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    flex-wrap: wrap;
+  }
+  .presets-lbl {
+    font-size: 0.8rem;
+    font-weight: 700;
+    color: var(--color-text-muted);
+    text-transform: uppercase;
+  }
+  .preset-chips {
+    display: flex;
+    gap: 0.4rem;
+    flex-wrap: wrap;
+  }
+  .chip-btn {
+    background: var(--color-bg);
+    border: 1px dashed var(--color-border);
+    color: var(--color-text-main);
+    padding: 0.3rem 0.7rem;
+    border-radius: 9999px;
+    font-size: 0.78rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+  }
+  .chip-btn:hover {
+    border-color: var(--color-primary);
+    color: var(--color-primary);
+    background: rgba(99, 102, 241, 0.08);
+  }
+
+  /* Screening Questions List & Dynamic Elements */
+  .questions-list {
+    display: flex;
+    flex-direction: column;
+    gap: 1.25rem;
+  }
+
+  :global(.question-item-card) {
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: 12px;
+    padding: 1.25rem 1.5rem;
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+    position: relative;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.02);
+    transition: all 0.2s ease;
+  }
+  :global(.question-item-card:hover) {
+    border-color: rgba(99, 102, 241, 0.4);
+    box-shadow: 0 4px 16px rgba(99, 102, 241, 0.08);
+  }
+
+  :global(.q-card-header) {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding-bottom: 0.75rem;
+    border-bottom: 1px dashed var(--color-border);
+  }
+  :global(.q-badge) {
+    font-size: 0.78rem;
+    font-weight: 800;
+    color: var(--color-primary);
+    background: rgba(99, 102, 241, 0.12);
+    padding: 0.25rem 0.65rem;
+    border-radius: 6px;
+    letter-spacing: 0.03em;
+  }
+  :global(.q-actions) {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+  }
+  :global(.btn-q-icon) {
+    background: var(--color-bg);
+    border: 1px solid var(--color-border);
+    width: 32px;
+    height: 32px;
+    border-radius: 8px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    font-size: 0.85rem;
+    color: var(--color-text-main);
+    transition: all 0.2s ease;
+  }
+  :global(.btn-q-icon:hover) {
+    background: var(--color-surface);
+    border-color: var(--color-primary);
+    color: var(--color-primary);
+    transform: translateY(-1px);
+  }
+  :global(.btn-q-delete:hover) {
+    background: rgba(239, 68, 68, 0.15);
+    border-color: #ef4444;
+    color: #ef4444;
+  }
+
+  :global(.q-card-grid) {
+    display: grid;
+    grid-template-columns: 2fr 1.3fr 0.9fr;
+    gap: 1rem;
+    align-items: end;
+  }
+  :global(.q-options-row) {
+    grid-column: 1 / -1;
+    margin-top: 0.25rem;
+  }
+
+  :global(.q-field-label) {
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--color-text-main);
+    margin-bottom: 0.4rem;
+    display: block;
+  }
+
+  :global(.q-text-input),
+  :global(.q-options-input) {
+    width: 100%;
+    box-sizing: border-box;
+    padding: 0.75rem 1rem;
+    border: 1px solid var(--color-border);
+    border-radius: 10px;
+    font-size: 0.92rem;
+    font-family: inherit;
+    background: var(--color-bg);
+    color: var(--color-text-main);
+    transition: all 0.2s ease;
+  }
+  :global(.q-type-select) {
+    width: 100%;
+    box-sizing: border-box;
+    padding: 0.75rem 2.5rem 0.75rem 0.85rem !important;
+    border: 1px solid var(--color-border);
+    border-radius: 10px;
+    font-size: 0.92rem;
+    font-family: inherit;
+    background-color: var(--color-bg);
+    color: var(--color-text-main);
+    transition: all 0.2s ease;
+    text-overflow: ellipsis !important;
+    white-space: nowrap !important;
+  }
+  :global(.q-text-input:focus),
+  :global(.q-type-select:focus),
+  :global(.q-options-input:focus) {
+    outline: none;
+    border-color: var(--color-primary);
+    box-shadow: 0 0 0 3px var(--color-primary-light);
+  }
+
+  :global(.q-checkbox-pill) {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.6rem;
+    padding: 0.72rem 1rem;
+    background: var(--color-bg);
+    border: 1px solid var(--color-border);
+    border-radius: 10px;
+    cursor: pointer;
+    user-select: none;
+    transition: all 0.2s ease;
+    width: 100%;
+    box-sizing: border-box;
+    height: 44px;
+  }
+  :global(.q-checkbox-pill:hover) {
+    border-color: var(--color-primary);
+  }
+  :global(.q-checkbox-pill input) {
+    width: 16px;
+    height: 16px;
+    cursor: pointer;
+    accent-color: var(--color-primary);
+    margin: 0;
+  }
+  :global(.q-req-label) {
+    font-size: 0.85rem;
+    font-weight: 700;
+    color: var(--color-text-main);
+  }
+
+  .btn-add-q {
+    border-style: dashed;
+    justify-content: center;
+    padding: 0.85rem;
+    font-weight: 600;
+    border-radius: 10px;
+    margin-top: 0.5rem;
+  }
+
+  .form-actions-bar {
+    display: flex;
+    justify-content: flex-end;
+    align-items: center;
+    gap: 1rem;
+    padding: 1.5rem 0;
+  }
+
+  .btn-glow {
+    box-shadow: 0 4px 14px rgba(99, 102, 241, 0.35);
+  }
+
+  @media (max-width: 768px) {
+    .form-grid, .form-grid-3, :global(.q-card-grid) {
+      grid-template-columns: 1fr;
+    }
+  }
+
+  /* CKEditor 5 Custom Styling & Theme Support */
+  :global(.ck-editor__editable_inline) {
+    min-height: 240px !important;
+    max-height: 500px !important;
+    background-color: var(--color-bg) !important;
+    color: var(--color-text-main) !important;
+    font-family: inherit !important;
+    font-size: 0.95rem !important;
+    border-radius: 0 0 var(--border-radius-md) var(--border-radius-md) !important;
+  }
+  :global(.ck) {
+    --ck-color-button-default-hover-background: rgba(128, 128, 128, 0.15) !important;
+    --ck-color-button-default-active-background: rgba(128, 128, 128, 0.2) !important;
+    --ck-color-button-on-background: rgba(128, 128, 128, 0.2) !important;
+    --ck-color-button-on-hover-background: rgba(128, 128, 128, 0.25) !important;
+    --ck-color-button-default-text: var(--color-text-main) !important;
+    --ck-color-button-on-text: var(--color-text-main) !important;
+    --ck-color-dropdown-panel-background: #14151f !important;
+    --ck-color-dropdown-panel-border: var(--color-border) !important;
+    --ck-color-list-background: #14151f !important;
+    --ck-color-list-button-hover-background: rgba(255, 255, 255, 0.08) !important;
+    --ck-color-list-button-on-background: #8b5cf6 !important;
+    --ck-color-list-button-on-text: #ffffff !important;
+  }
+  :global([data-theme="light"] .ck) {
+    --ck-color-dropdown-panel-background: #ffffff !important;
+    --ck-color-list-background: #ffffff !important;
+    --ck-color-list-button-hover-background: rgba(0, 0, 0, 0.05) !important;
+  }
+  :global(.ck.ck-toolbar) {
+    background-color: var(--color-surface) !important;
+    border-color: var(--color-border) !important;
+    border-radius: var(--border-radius-md) var(--border-radius-md) 0 0 !important;
+  }
+  :global(.ck.ck-toolbar__items) {
+    flex-wrap: wrap !important;
+  }
+  :global(.ck.ck-toolbar .ck-button),
+  :global(.ck.ck-dropdown__button) {
+    color: var(--color-text-main) !important;
+    border-radius: 6px !important;
+    transition: all 0.2s ease !important;
+  }
+  :global(.ck.ck-toolbar .ck-button:hover),
+  :global(.ck.ck-toolbar .ck-button.ck-on),
+  :global(.ck.ck-button.ck-dropdown__button:hover),
+  :global(.ck.ck-button.ck-dropdown__button.ck-on),
+  :global(.ck.ck-button.ck-dropdown__button.ck-focused) {
+    background-color: rgba(128, 128, 128, 0.15) !important;
+    color: var(--color-text-main) !important;
+  }
+  :global(.ck.ck-editor__main > .ck-editor__editable:not(.ck-focused)) {
+    border-color: var(--color-border) !important;
+  }
+  :global(.ck.ck-editor__main > .ck-editor__editable.ck-focused) {
+    border-color: var(--color-primary) !important;
+    box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.15) !important;
+  }
+  :global(.ck.ck-dropdown__panel) {
+    background-color: #14151f !important;
+    border: 1px solid var(--color-border) !important;
+    border-radius: 12px !important;
+    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.5) !important;
+    margin-top: 8px !important;
+    z-index: 1000 !important;
+  }
+  :global([data-theme="light"] .ck.ck-dropdown__panel) {
+    background-color: #ffffff !important;
+    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1) !important;
+  }
+  :global(.ck.ck-list) {
+    background-color: transparent !important;
+    border: none !important;
+    padding: 8px !important;
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 4px !important;
+  }
+  :global(.ck.ck-list__item) {
+    min-width: 160px !important;
+  }
+  :global(.ck.ck-list__item .ck-button) {
+    color: var(--color-text-main) !important;
+    border-radius: 8px !important;
+    margin: 0 !important;
+    transition: all 0.2s ease !important;
+    padding: 8px 14px !important;
+  }
+  :global(.ck.ck-list__item .ck-button:hover) {
+    background-color: rgba(128, 128, 128, 0.15) !important;
+    color: var(--color-text-main) !important;
+  }
+  :global(.ck.ck-list__item .ck-button.ck-on) {
+    background-color: #8b5cf6 !important;
+    color: #ffffff !important;
+    font-weight: 600 !important;
+  }
+</style>
+
+<!-- CKEditor 5 CDN Script -->
+<script is:inline src="https://cdn.ckeditor.com/ckeditor5/39.0.1/classic/ckeditor.js"></script>
+
+<script define:vars={{ initialQuestions: existingQuestions }}>
+  let questions = Array.isArray(initialQuestions) ? initialQuestions : [];
+
+  const questionsContainer = document.getElementById('questions-container');
+  const addQuestionBtn = document.getElementById('add-question-btn');
+
+  function renderQuestions() {
+    if (!questionsContainer) return;
+    questionsContainer.innerHTML = '';
+
+    if (questions.length === 0) {
+      questionsContainer.innerHTML = `
+        <div style="text-align: center; padding: 1.5rem; border: 1px dashed var(--color-border); border-radius: 10px; color: var(--color-text-muted); font-size: 0.88rem;">
+          No screening questions configured for this job. Click one of the presets above or "+ Add Another Screening Question" to add one.
+        </div>
+      `;
+      return;
+    }
+
+    questions.forEach((q, idx) => {
+      const card = document.createElement('div');
+      card.className = 'question-item-card';
+      card.innerHTML = `
+        <div class="q-card-header">
+          <span class="q-badge">Question #${idx + 1}</span>
+          <div class="q-actions">
+            ${idx > 0 ? `<button type="button" class="btn-q-icon btn-move-up" data-idx="${idx}" title="Move Up">↑</button>` : ''}
+            ${idx < questions.length - 1 ? `<button type="button" class="btn-q-icon btn-move-down" data-idx="${idx}" title="Move Down">↓</button>` : ''}
+            <button type="button" class="btn-q-icon btn-q-delete" data-idx="${idx}" title="Delete Question">🗑️</button>
+          </div>
+        </div>
+
+        <div class="q-card-grid">
+          <div class="form-group" style="margin: 0;">
+            <label class="q-field-label">Question Prompt <span class="req">*</span></label>
+            <input type="text" class="q-text-input" data-idx="${idx}" value="${q.text}" placeholder="e.g. How many years of experience do you have with TypeScript?" required />
+          </div>
+
+          <div class="form-group" style="margin: 0;">
+            <label class="q-field-label">Response Type</label>
+            <select class="q-type-select" data-idx="${idx}">
+              <option value="text" ${q.type === 'text' ? 'selected' : ''}>Short Text</option>
+              <option value="paragraph" ${q.type === 'paragraph' ? 'selected' : ''}>Detailed Paragraph</option>
+              <option value="yes_no" ${q.type === 'yes_no' ? 'selected' : ''}>Yes / No</option>
+              <option value="number" ${q.type === 'number' ? 'selected' : ''}>Numeric (Number/Years)</option>
+              <option value="select" ${q.type === 'select' ? 'selected' : ''}>Dropdown (Multiple Choice)</option>
+            </select>
+          </div>
+
+          <div class="form-group" style="margin: 0;">
+            <label class="q-checkbox-pill">
+              <input type="checkbox" class="q-req-checkbox" data-idx="${idx}" ${q.required ? 'checked' : ''} />
+              <span class="q-req-label">Mandatory Question</span>
+            </label>
+          </div>
+
+          ${q.type === 'select' ? `
+            <div class="form-group q-options-row">
+              <label class="q-field-label">Choice Options (Comma separated) <span class="req">*</span></label>
+              <input type="text" class="q-options-input" data-idx="${idx}" value="${(q.options || []).join(', ')}" placeholder="e.g. Immediate, 2 Weeks, 1 Month, 2+ Months" required />
+            </div>
+          ` : ''}
+        </div>
+      `;
+      questionsContainer.appendChild(card);
+    });
+
+    attachQuestionEvents();
+  }
+
+  function attachQuestionEvents() {
+    document.querySelectorAll('.q-text-input').forEach(input => {
+      input.addEventListener('input', (e) => {
+        const idx = parseInt(e.target.dataset.idx || '0');
+        if (questions[idx]) questions[idx].text = e.target.value;
+      });
+    });
+
+    document.querySelectorAll('.q-type-select').forEach(select => {
+      select.addEventListener('change', (e) => {
+        const idx = parseInt(e.target.dataset.idx || '0');
+        const val = e.target.value;
+        if (questions[idx]) {
+          questions[idx].type = val;
+          if (val === 'select' && (!questions[idx].options || questions[idx].options?.length === 0)) {
+            questions[idx].options = ['Option 1', 'Option 2'];
+          }
+          renderQuestions();
+        }
+      });
+    });
+
+    document.querySelectorAll('.q-options-input').forEach(input => {
+      input.addEventListener('input', (e) => {
+        const idx = parseInt(e.target.dataset.idx || '0');
+        const raw = e.target.value;
+        if (questions[idx]) {
+          questions[idx].options = raw.split(',').map(s => s.trim()).filter(Boolean);
+        }
+      });
+    });
+
+    document.querySelectorAll('.q-req-checkbox').forEach(box => {
+      box.addEventListener('change', (e) => {
+        const idx = parseInt(e.target.dataset.idx || '0');
+        if (questions[idx]) questions[idx].required = e.target.checked;
+      });
+    });
+
+    document.querySelectorAll('.btn-q-delete').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        const idx = parseInt(e.currentTarget.dataset.idx || '0');
+        questions.splice(idx, 1);
+        renderQuestions();
+      });
+    });
+
+    document.querySelectorAll('.btn-move-up').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        const idx = parseInt(e.currentTarget.dataset.idx || '0');
+        if (idx > 0) {
+          const temp = questions[idx];
+          questions[idx] = questions[idx - 1];
+          questions[idx - 1] = temp;
+          renderQuestions();
+        }
+      });
+    });
+
+    document.querySelectorAll('.btn-move-down').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        const idx = parseInt(e.currentTarget.dataset.idx || '0');
+        if (idx < questions.length - 1) {
+          const temp = questions[idx];
+          questions[idx] = questions[idx + 1];
+          questions[idx + 1] = temp;
+          renderQuestions();
+        }
+      });
+    });
+  }
+
+  function addQuestion(preset) {
+    const id = 'q_' + Math.random().toString(36).substr(2, 9);
+    let newQ = {
+      id,
+      text: '',
+      type: 'text',
+      required: true
+    };
+
+    if (preset === 'exp') {
+      newQ.text = 'How many years of professional experience do you have in this role?';
+      newQ.type = 'number';
+    } else if (preset === 'notice') {
+      newQ.text = 'What is your notice period or earliest start date?';
+      newQ.type = 'select';
+      newQ.options = ['Immediately available', '1 - 2 weeks', '1 month', '2+ months'];
+    } else if (preset === 'auth') {
+      newQ.text = 'Are you legally authorized to work in this location without sponsorship?';
+      newQ.type = 'yes_no';
+    } else if (preset === 'salary') {
+      newQ.text = 'What is your expected annual / monthly compensation range?';
+      newQ.type = 'text';
+    }
+
+    questions.push(newQ);
+    renderQuestions();
+  }
+
+  addQuestionBtn?.addEventListener('click', () => addQuestion());
+
+  document.querySelectorAll('.chip-btn').forEach(chip => {
+    chip.addEventListener('click', (e) => {
+      const preset = e.currentTarget.dataset.preset;
+      addQuestion(preset);
+    });
+  });
+
+  renderQuestions();
+
+  // CKEditor 5 Initialization for Job Description
+  let jobDescriptionEditor = null;
+  const descEl = document.querySelector('#description');
+
+  if (descEl && typeof ClassicEditor !== 'undefined') {
+    ClassicEditor
+      .create(descEl, {
+        placeholder: 'Outline key expectations, role responsibilities, tech stack, and ideal qualification criteria...',
+        toolbar: [
+          'heading', '|',
+          'bold', 'italic', 'underline', 'strikethrough', '|',
+          'bulletedList', 'numberedList', 'blockQuote', '|',
+          'insertTable', 'undo', 'redo'
+        ]
+      })
+      .then(editor => {
+        jobDescriptionEditor = editor;
+        editor.model.document.on('change:data', () => {
+          const descInput = document.querySelector('#description');
+          if (descInput) descInput.value = editor.getData();
+        });
+      })
+      .catch(err => {
+        console.error('CKEditor init error:', err);
+      });
+  }
+
+  const form = document.getElementById('edit-job-form');
+  const submitBtn = document.getElementById('submit-job-btn');
+
+  if (form && submitBtn) {
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+
+      if (jobDescriptionEditor) {
+        const descInput = document.querySelector('#description');
+        if (descInput) descInput.value = jobDescriptionEditor.getData();
+      }
+      
+      const formData = new FormData(e.target);
+      const data = Object.fromEntries(formData.entries());
+      
+      data.locationRemote = formData.has('locationRemote');
+
+      const validQuestions = questions.filter(q => q.text.trim().length > 0);
+      if (validQuestions.length > 0) {
+        data.applicationFormConfig = JSON.stringify({ questions: validQuestions });
+      } else {
+        data.applicationFormConfig = null;
+      }
+
+      const originalText = submitBtn.innerText;
+      submitBtn.innerText = 'Saving Changes...';
+      submitBtn.disabled = true;
+      
+      try {
+        const res = await fetch('/api/employer/jobs/update', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'same-origin',
+          body: JSON.stringify(data)
+        });
+        
+        const result = await res.json();
+        
+        if (res.ok) {
+          if (window.showToast) window.showToast('Job updated successfully!');
+          window.location.href = '/employer/jobs';
+        } else {
+          if (window.showToast) window.showToast(result.error || 'Failed to update job', 'error');
+        }
+      } catch (err) {
+        if (window.showToast) window.showToast('A network error occurred. Please check your connection.', 'error');
+      } finally {
+        submitBtn.innerText = originalText;
+        submitBtn.disabled = false;
+      }
+    });
+  }
+</script>

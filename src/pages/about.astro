@@ -1,0 +1,469 @@
+---
+import Layout from '../layouts/Layout.astro';
+---
+
+<Layout
+  title="About Us - Transforming Tech Recruitment | RecruitNest"
+  description="Learn how RecruitNest connects top tech talent with innovative companies using AI candidate matching, automated screening, and streamlined interview workflows."
+  keywords="about recruitnest, tech hiring platform, AI candidate matching, recruitment technology"
+  schemaType="Organization"
+>
+  <!-- Navigation Header (Consistent with Landing Page) -->
+  <header class="landing-nav">
+    <div class="nav-container">
+      <div class="logo">
+        <a href="/" style="display: flex; align-items: center; gap: 0.5rem;">
+          <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" class="logo-icon">
+            <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path>
+            <polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline>
+            <line x1="12" y1="22.08" x2="12" y2="12"></line>
+          </svg>
+          <span>RecruitNest</span>
+        </a>
+      </div>
+      <nav class="nav-links">
+        <a href="/">Home</a>
+        <a href="/pricing">Pricing</a>
+        <a href="/about" class="active">About</a>
+      </nav>
+      <div class="nav-actions">
+        <button type="button" class="theme-toggle-btn" aria-label="Toggle Light/Dark Theme" title="Toggle Light/Dark Theme">
+          <svg class="sun-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"></circle><line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line><line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line></svg>
+          <svg class="moon-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>
+        </button>
+        <a href="/login" class="btn btn-outline">Log in</a>
+        <a href="/register" class="btn btn-primary">Sign up</a>
+      </div>
+    </div>
+  </header>
+
+  <main>
+    <!-- About Hero -->
+    <section class="about-hero">
+      <div class="about-hero-container">
+        <div class="badge-pill">
+          <span class="dot-green"></span> Our Mission
+        </div>
+        <h1 class="hero-title">
+          Connecting the World's Best Talent with <span class="text-primary">Visionary Companies</span>
+        </h1>
+        <p class="hero-subtitle">
+          At RecruitNest, we believe that finding the right job—or the right candidate—shouldn't be a struggle. We are building the most intuitive, powerful, and transparent hiring platform on the internet.
+        </p>
+      </div>
+    </section>
+
+    <!-- Story Section -->
+    <section class="story-section">
+      <div class="story-container">
+        <div class="story-content">
+          <h2>Our Story</h2>
+          <p>
+            Founded in 2024, RecruitNest started with a simple observation: the traditional hiring process is broken. Job seekers send hundreds of applications into the void, while employers struggle to filter through thousands of mismatched resumes.
+          </p>
+          <p>
+            We decided to fix it. By leveraging smart algorithms, clean design, and a user-first approach, we've created an ecosystem where talent meets opportunity seamlessly. Today, thousands of companies trust RecruitNest to build their dream teams, and millions of professionals use our platform to accelerate their careers.
+          </p>
+        </div>
+        <div class="story-image">
+          <img src="/images/nilesh.jpg" alt="CEO & Founder" class="story-img" />
+        </div>
+      </div>
+    </section>
+
+    <!-- Core Values -->
+    <section class="values-section">
+      <div class="values-header">
+        <h2>What Drives Us</h2>
+        <p>The core principles behind everything we build.</p>
+      </div>
+      
+      <div class="values-grid">
+        <div class="value-card">
+          <div class="value-icon">🎯</div>
+          <h3>Precision Matching</h3>
+          <p>We believe in quality over quantity. Our platform is designed to put the most relevant opportunities and candidates front and center.</p>
+        </div>
+        <div class="value-card">
+          <div class="value-icon">🔒</div>
+          <h3>Trust & Transparency</h3>
+          <p>Every company on RecruitNest is verified, and we maintain complete transparency about job requirements, salaries, and application status.</p>
+        </div>
+        <div class="value-card">
+          <div class="value-icon">⚡</div>
+          <h3>Frictionless Experience</h3>
+          <p>Time is valuable. From one-click applications to instant resume parsing, we remove the hurdles from the hiring process.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- Impact Stats Section -->
+    <section class="impact-section">
+      <div class="impact-container">
+        <div class="impact-header">
+          <h2>Our Impact</h2>
+          <p>We're proud of the numbers that represent real careers launched and companies built.</p>
+        </div>
+        <div class="impact-grid">
+          <div class="impact-stat">
+            <h3>1M+</h3>
+            <p>Job Matches</p>
+          </div>
+          <div class="impact-stat">
+            <h3>50k+</h3>
+            <p>Companies</p>
+          </div>
+          <div class="impact-stat">
+            <h3>100+</h3>
+            <p>Countries</p>
+          </div>
+          <div class="impact-stat">
+            <h3>98%</h3>
+            <p>Success Rate</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Meet the Team Section -->
+    <section class="team-section">
+      <div class="team-header">
+        <h2>Meet the Team</h2>
+        <p>The visionaries building the future of hiring.</p>
+      </div>
+      <div class="team-grid">
+        <div class="team-member card">
+          <div class="member-photo">
+            <img src="/images/nilesh.jpg" alt="Nilesh Bajpai" />
+          </div>
+          <h3>Nilesh Bajpai</h3>
+          <p class="role">CEO & Founder</p>
+        </div>
+        <div class="team-member card">
+          <div class="member-photo">
+            <img src="/images/pankhuri.webp" alt="Pankhuri Bajpai" />
+          </div>
+          <h3>Pankhuri Bajpai</h3>
+          <p class="role">COO</p>
+        </div>
+        <div class="team-member card">
+          <div class="member-photo">
+            <img src="/images/kuldeep.jpg" alt="Kuldeep Singh" />
+          </div>
+          <h3>Kuldeep Singh</h3>
+          <p class="role">Senior OPS Manager</p>
+        </div>
+        <div class="team-member card">
+          <div class="member-photo">
+            <img src="/images/ashutosh.png" alt="Ashutosh Dubey" />
+          </div>
+          <h3>Ashutosh Dubey</h3>
+          <p class="role">Senior Developer</p>
+        </div>
+        <div class="team-member card">
+          <div class="member-photo">
+            <img src="/images/prashant.jpg" alt="Prashant Singh" />
+          </div>
+          <h3>Prashant Singh</h3>
+          <p class="role">Junior Developer</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- Call to action -->
+    <section class="cta-section">
+      <div class="cta-container">
+        <h2>Ready to get started?</h2>
+        <p>Join the thousands of professionals and companies already using RecruitNest.</p>
+        <div class="cta-buttons">
+          <a href="/pricing" class="btn btn-primary btn-lg">I want to hire</a>
+          <a href="/pricing" class="btn btn-outline-white btn-lg">I'm looking for jobs</a>
+        </div>
+      </div>
+    </section>
+  </main>
+</Layout>
+
+<style>
+  /* About Hero */
+  .about-hero {
+    padding: 6rem 2rem 4rem;
+    background: var(--color-surface);
+    text-align: center;
+  }
+  .about-hero-container {
+    max-width: 800px;
+    margin: 0 auto;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+  .badge-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    background: var(--color-primary-light);
+    color: var(--color-primary-dark);
+    padding: 0.4rem 1rem;
+    border-radius: 2rem;
+    font-size: 0.875rem;
+    font-weight: 500;
+    margin-bottom: 1.5rem;
+  }
+  .dot-green {
+    width: 6px;
+    height: 6px;
+    background: var(--color-primary);
+    border-radius: 50%;
+  }
+  .hero-title {
+    font-size: 3.5rem;
+    font-weight: 700;
+    line-height: 1.1;
+    letter-spacing: -0.02em;
+    margin: 0 0 1.25rem 0;
+  }
+  .text-primary { color: var(--color-primary); }
+  .hero-subtitle {
+    font-size: 1.15rem;
+    color: var(--color-text-muted);
+    line-height: 1.6;
+  }
+
+  /* Story Section */
+  .story-section {
+    padding: 5rem 2rem;
+    background: var(--color-bg);
+  }
+  .story-container {
+    max-width: 1000px;
+    margin: 0 auto;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 4rem;
+    align-items: center;
+  }
+  .story-content h2 {
+    font-size: 2.25rem;
+    margin: 0 0 1.5rem 0;
+  }
+  .story-content p {
+    font-size: 1.05rem;
+    line-height: 1.7;
+    color: var(--color-text-muted);
+    margin: 0 0 1.5rem 0;
+  }
+  .story-image .story-img {
+    width: 100%;
+    height: 350px;
+    object-fit: cover;
+    border-radius: 1rem;
+    box-shadow: var(--shadow-md);
+  }
+
+  /* Values Section */
+  .values-section {
+    padding: 5rem 2rem;
+    background: var(--color-surface);
+  }
+  .values-header {
+    text-align: center;
+    margin-bottom: 4rem;
+  }
+  .values-header h2 {
+    font-size: 2.5rem;
+    margin: 0 0 0.5rem 0;
+  }
+  .values-header p {
+    color: var(--color-text-muted);
+    font-size: 1.1rem;
+    margin: 0;
+  }
+  .values-grid {
+    max-width: 1100px;
+    margin: 0 auto;
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 2rem;
+  }
+  .value-card {
+    background: var(--color-bg);
+    padding: 2.5rem 2rem;
+    border-radius: 1rem;
+    text-align: center;
+    transition: transform 0.2s, box-shadow 0.2s;
+  }
+  .value-card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 10px 25px -5px rgba(0,0,0,0.05);
+  }
+  .value-icon {
+    font-size: 2.5rem;
+    margin-bottom: 1.25rem;
+  }
+  .value-card h3 {
+    margin: 0 0 1rem 0;
+    font-size: 1.25rem;
+  }
+  .value-card p {
+    margin: 0;
+    color: var(--color-text-muted);
+    line-height: 1.6;
+  }
+
+  /* Impact Section */
+  .impact-section {
+    padding: 5rem 2rem;
+    background: var(--color-bg);
+  }
+  .impact-container {
+    max-width: 1000px;
+    margin: 0 auto;
+  }
+  .impact-header {
+    text-align: center;
+    margin-bottom: 3rem;
+  }
+  .impact-header h2 {
+    font-size: 2.5rem;
+    margin-bottom: 0.5rem;
+  }
+  .impact-header p {
+    color: var(--color-text-muted);
+    font-size: 1.1rem;
+  }
+  .impact-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 2rem;
+    text-align: center;
+  }
+  .impact-stat h3 {
+    font-size: 3rem;
+    font-weight: 700;
+    color: var(--color-primary);
+    margin: 0 0 0.5rem 0;
+  }
+  .impact-stat p {
+    color: var(--color-text-main);
+    font-weight: 500;
+    font-size: 1.1rem;
+    margin: 0;
+  }
+  @media (max-width: 768px) {
+    .impact-grid {
+      grid-template-columns: repeat(2, 1fr);
+    }
+  }
+
+  /* Team Section */
+  .team-section {
+    padding: 5rem 2rem;
+    background: var(--color-surface);
+  }
+  .team-header {
+    text-align: center;
+    margin-bottom: 4rem;
+  }
+  .team-header h2 {
+    font-size: 2.5rem;
+    margin-bottom: 0.5rem;
+  }
+  .team-header p {
+    color: var(--color-text-muted);
+    font-size: 1.1rem;
+  }
+  .team-grid {
+    max-width: 1100px;
+    margin: 0 auto;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 2rem;
+  }
+  .team-member {
+    text-align: center;
+    padding: 2.5rem 2rem;
+  }
+  .member-photo {
+    width: 100%;
+    aspect-ratio: 1;
+    border-radius: 1rem;
+    margin: 0 auto 1.5rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: var(--shadow-sm);
+    overflow: hidden;
+  }
+  .member-photo img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+  .team-member h3 {
+    margin: 0 0 0.5rem 0;
+    font-size: 1.25rem;
+  }
+  .team-member .role {
+    color: var(--color-primary);
+    font-weight: 500;
+    margin: 0;
+  }
+  @media (max-width: 768px) {
+    .team-grid {
+      grid-template-columns: 1fr;
+    }
+  }
+
+  /* CTA Section */
+  .cta-section {
+    padding: 5rem 2rem;
+    background: var(--gradient-brand);
+    color: #FFFFFF;
+    text-align: center;
+  }
+  .cta-container {
+    max-width: 600px;
+    margin: 0 auto;
+  }
+  .cta-container h2 {
+    color: #FFFFFF;
+    font-size: 2.5rem;
+    margin: 0 0 1rem 0;
+  }
+  .cta-container p {
+    color: #FFFFFF;
+    font-size: 1.1rem;
+    opacity: 0.9;
+    margin: 0 0 2.5rem 0;
+  }
+  .cta-buttons {
+    display: flex;
+    gap: 1rem;
+    justify-content: center;
+    flex-wrap: wrap;
+  }
+  .cta-buttons .btn-outline-white {
+    background: rgba(255, 255, 255, 0.15);
+    border: 1px solid rgba(255, 255, 255, 0.4);
+    color: #FFFFFF !important;
+    backdrop-filter: blur(8px);
+  }
+  .cta-buttons .btn-outline-white:hover {
+    background: rgba(255, 255, 255, 0.3);
+    border-color: #FFFFFF;
+    color: #FFFFFF !important;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 15px rgba(255, 255, 255, 0.2);
+  }
+
+  @media (max-width: 768px) {
+    .story-container {
+      grid-template-columns: 1fr;
+      gap: 2rem;
+    }
+    .values-grid {
+      grid-template-columns: 1fr;
+    }
+  }
+</style>
